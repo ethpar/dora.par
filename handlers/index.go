@@ -200,6 +200,14 @@ func buildIndexPageData() (*models.IndexPageData, time.Duration) {
 			Active:  uint64(currentEpoch) >= *specs.DenebForkEpoch,
 		})
 	}
+	if specs.AlphaForkEpoch != nil && *specs.DenebForkEpoch < uint64(18446744073709551615) {
+		pageData.NetworkForks = append(pageData.NetworkForks, &models.IndexPageDataForks{
+			Name:    "Alpha",
+			Epoch:   *specs.AlphaForkEpoch,
+			Version: specs.AlphaForkVersion[:],
+			Active:  uint64(currentEpoch) >= *specs.AlphaForkEpoch,
+		})
+	}
 	if specs.ElectraForkEpoch != nil && *specs.ElectraForkEpoch < uint64(18446744073709551615) {
 		pageData.NetworkForks = append(pageData.NetworkForks, &models.IndexPageDataForks{
 			Name:    "Electra",

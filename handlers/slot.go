@@ -659,6 +659,28 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 				BlockNumber:   uint64(executionPayload.BlockNumber),
 			}
 			getSlotPageTransactions(pageData, executionPayload.Transactions)
+		case spec.DataVersionAlpha:
+			if blockData.Block.Alpha == nil {
+				break
+			}
+			executionPayload := blockData.Block.Alpha.Message.Body.ExecutionPayload
+			pageData.ExecutionData = &models.SlotPageExecutionData{
+				ParentHash:    executionPayload.ParentHash[:],
+				FeeRecipient:  executionPayload.FeeRecipient[:],
+				StateRoot:     executionPayload.StateRoot[:],
+				ReceiptsRoot:  executionPayload.ReceiptsRoot[:],
+				LogsBloom:     executionPayload.LogsBloom[:],
+				Random:        executionPayload.PrevRandao[:],
+				GasLimit:      uint64(executionPayload.GasLimit),
+				GasUsed:       uint64(executionPayload.GasUsed),
+				Timestamp:     uint64(executionPayload.Timestamp),
+				Time:          time.Unix(int64(executionPayload.Timestamp), 0),
+				ExtraData:     executionPayload.ExtraData,
+				BaseFeePerGas: executionPayload.BaseFeePerGas.Uint64(),
+				BlockHash:     executionPayload.BlockHash[:],
+				BlockNumber:   uint64(executionPayload.BlockNumber),
+			}
+			getSlotPageTransactions(pageData, executionPayload.Transactions)
 		case spec.DataVersionElectra:
 			if blockData.Block.Electra == nil {
 				break
@@ -714,6 +736,18 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 	}
 
 	if specs.DenebForkEpoch != nil && uint64(epoch) >= *specs.DenebForkEpoch {
+		pageData.BlobsCount = uint64(len(blobKzgCommitments))
+		pageData.Blobs = make([]*models.SlotPageBlob, pageData.BlobsCount)
+		for i := range blobKzgCommitments {
+			blobData := &models.SlotPageBlob{
+				Index:         uint64(i),
+				KzgCommitment: blobKzgCommitments[i][:],
+			}
+			pageData.Blobs[i] = blobData
+		}
+	}
+
+	if specs.AlphaForkEpoch != nil && uint64(epoch) >= *specs.AlphaForkEpoch {
 		pageData.BlobsCount = uint64(len(blobKzgCommitments))
 		pageData.Blobs = make([]*models.SlotPageBlob, pageData.BlobsCount)
 		for i := range blobKzgCommitments {

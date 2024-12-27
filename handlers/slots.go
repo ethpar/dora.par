@@ -163,6 +163,7 @@ func buildSlotsPageData(firstSlot uint64, pageSize uint64) (*models.SlotsPageDat
 				BlockRoot:             dbSlot.Root,
 				ParentRoot:            dbSlot.ParentRoot,
 				ForkGraph:             make([]*models.SlotsPageDataForkGraph, 0),
+				Rank:                  dbSlot.Rank,
 			}
 			if dbSlot.EthBlockNumber != nil {
 				slotData.WithEthBlock = true

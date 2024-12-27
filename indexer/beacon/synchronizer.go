@@ -3,6 +3,7 @@ package beacon
 import (
 	"context"
 	"fmt"
+	"github.com/ethpandaops/dora/clients/execution"
 	"math/rand/v2"
 	"sort"
 	"sync"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethpandaops/dora/clients/consensus"
 	"github.com/ethpandaops/dora/db"
 	"github.com/ethpandaops/dora/dbtypes"
@@ -32,6 +34,8 @@ type synchronizer struct {
 
 	cachedSlot   phase0.Slot
 	cachedBlocks map[phase0.Slot]*Block
+
+	cachedParallelBlocks map[phase0.Slot]map[uint64]*types.Block
 }
 
 func (indexer *Indexer) startSynchronizer(startEpoch phase0.Epoch) {
@@ -125,6 +129,7 @@ func (sync *synchronizer) runSync() {
 	}()
 
 	sync.cachedBlocks = make(map[phase0.Slot]*Block)
+	sync.cachedParallelBlocks = make(map[phase0.Slot]map[uint64]*types.Block)
 	sync.cachedSlot = 0
 	isComplete := false
 	retryCount := 0
@@ -249,11 +254,53 @@ func (sync *synchronizer) getSyncClients(epoch phase0.Epoch) []*Client {
 	return append(archiveClients, normalClients...)
 }
 
+func (sync *synchronizer) loadParallelBlock(client *Client, slot phase0.Slot, block *Block, rank uint64) *types.Block {
+	_blockNumber, bError := block.block.ExecutionBlockNumber()
+	if bError != nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(sync.syncCtx, beaconHeaderRequestTimeout)
+	defer cancel()
+	////////////////
+	parallelBlock, err := sync.indexer.executionPool.GetReadyEndpoint(execution.AnyClient).GetRPCClient().GetBlockByNumberAndRank(ctx, _blockNumber, rank)
+
+	if err != nil {
+		if err.Error() != "not found" {
+			sync.logger.Errorf("parallel error: %v %v", _blockNumber, err)
+		}
+		err = nil
+		return nil
+	}
+	if parallelBlock != nil {
+		parallelBlocks := sync.cachedParallelBlocks[slot]
+
+		if parallelBlocks == nil {
+			parallelBlocks = make(map[uint64]*types.Block)
+			sync.cachedParallelBlocks[slot] = parallelBlocks
+			parallelBlocks[rank] = parallelBlock
+		}
+
+		sync.logger.Infof("parallel block %v %v", parallelBlock.Number(), slot)
+		/*err = db.RunDBTransaction(func(tx *sqlx.Tx) error {
+			err := db.InsertUnfinalizedBlock(_pBlock, tx)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		})*/
+	}
+	////////////////
+
+	return parallelBlock
+}
+
 func (sync *synchronizer) loadBlockHeader(client *Client, slot phase0.Slot) (*phase0.SignedBeaconBlockHeader, phase0.Root, error) {
 	ctx, cancel := context.WithTimeout(sync.syncCtx, beaconHeaderRequestTimeout)
 	defer cancel()
 
-	header, root, orphaned, err := LoadBeaconHeaderBySlot(ctx, client, slot)
+	header, root, orphaned, err := LoadBeaconHeaderBySlot(ctx, client, slot) //
 	if orphaned {
 		return nil, root, nil
 	}
@@ -311,8 +358,12 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 
 				block.SetBlock(blockBody)
 			}
-
 			sync.cachedBlocks[slot] = block
+
+			sync.loadParallelBlock(client, slot, block, 1)
+			sync.loadParallelBlock(client, slot, block, 2)
+			sync.loadParallelBlock(client, slot, block, 3)
+
 		}
 
 		if firstBlock == nil && sync.cachedBlocks[slot] != nil {
@@ -382,7 +433,7 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 
 	// save blocks
 	err = db.RunDBTransaction(func(tx *sqlx.Tx) error {
-		err = sync.indexer.dbWriter.persistEpochData(tx, syncEpoch, canonicalBlocks, epochStats, epochVotes)
+		err = sync.indexer.dbWriter.persistEpochData(tx, syncEpoch, canonicalBlocks, epochStats, epochVotes, sync.cachedParallelBlocks)
 		if err != nil {
 			return fmt.Errorf("error persisting epoch data to db: %v", err)
 		}

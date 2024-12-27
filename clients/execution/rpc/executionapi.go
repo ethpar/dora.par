@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"net/url"
@@ -225,6 +226,45 @@ func (ec *ExecutionClient) GetHeaderByNumber(ctx context.Context, number uint64)
 func (ec *ExecutionClient) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	block, err := ec.ethClient.BlockByHash(ctx, hash)
 	if err != nil {
+		return nil, err
+	}
+
+	return block, nil
+}
+
+func (ec *ExecutionClient) GetBlockByNumberAndRank(ctx context.Context, number uint64, rank uint64) (*types.Block, error) {
+	block, err := ec.ethClient.BlockByNumberAndRank(ctx, big.NewInt(0).SetUint64(number), rank)
+	if err != nil {
+		return nil, err
+	}
+
+	return block, nil
+}
+
+func (ec *ExecutionClient) DecodeBlockRaw(ctx context.Context, raw *json.RawMessage) (*types.Block, error) {
+	block, err := ec.ethClient.DecodeBlockRaw(*raw, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return block, nil
+}
+
+func (ec *ExecutionClient) GetBlockByNumberAndRankRaw(ctx context.Context, number uint64, rank uint64) (*json.RawMessage, error) {
+	parallelExecutionBlock, err := ec.ethClient.BlockByNumberAndRankRaw(ctx, big.NewInt(0).SetUint64(number), 1)
+	if err != nil {
+		return nil, err
+	}
+	/*if json.Unmarshal(parallelExecutionBlock) == "null" {
+		return nil, nil
+	}*/
+	return parallelExecutionBlock, nil
+}
+
+func (ec *ExecutionClient) GetBlocksByNumber(ctx context.Context, number uint64) (*types.Block, error) {
+	block, err := ec.ethClient.BlockByNumberAndRank(ctx, big.NewInt(0).SetUint64(number), 1)
+	if err != nil {
+
 		return nil, err
 	}
 

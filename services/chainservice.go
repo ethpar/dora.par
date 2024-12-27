@@ -44,7 +44,7 @@ func InitChainService(ctx context.Context, logger logrus.FieldLogger) {
 	// initialize client pools & indexers
 	consensusPool := consensus.NewPool(ctx, logger.WithField("service", "cl-pool"))
 	executionPool := execution.NewPool(ctx, logger.WithField("service", "el-pool"))
-	beaconIndexer := beacon.NewIndexer(logger.WithField("service", "cl-indexer"), consensusPool)
+	beaconIndexer := beacon.NewIndexer(logger.WithField("service", "cl-indexer"), consensusPool, executionPool)
 	chainState := consensusPool.GetChainState()
 	validatorNames := NewValidatorNames(beaconIndexer, chainState)
 	mevRelayIndexer := mevrelay.NewMevIndexer(logger.WithField("service", "mev-relay"), beaconIndexer, chainState)

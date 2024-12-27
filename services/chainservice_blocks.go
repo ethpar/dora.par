@@ -523,68 +523,77 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 		slot := phase0.Slot(slotIdx)
 		blocks := bs.beaconIndexer.GetBlocksBySlot(slot)
 		for _, block := range blocks {
-			blockHeader := block.GetHeader()
-			if blockHeader == nil {
-				continue
-			}
-			blockIndex := block.GetBlockIndex()
-			if blockIndex == nil {
-				continue
-			}
-
-			isOrphaned := !bs.beaconIndexer.IsCanonicalBlock(block, nil)
-			if filter.WithOrphaned != 1 {
-				if filter.WithOrphaned == 0 && isOrphaned {
-					// only canonical blocks, skip
+			if block.Rank == 0 {
+				blockHeader := block.GetHeader()
+				if blockHeader == nil {
 					continue
 				}
-				if filter.WithOrphaned == 2 && !isOrphaned {
-					// only orphaned blocks, skip
+				blockIndex := block.GetBlockIndex()
+				if blockIndex == nil {
 					continue
 				}
-			}
 
-			if filter.WithMissing == 2 {
-				// only missing blocks, skip
-				continue
-			}
+				isOrphaned := !bs.beaconIndexer.IsCanonicalBlock(block, nil)
+				if filter.WithOrphaned != 1 {
+					if filter.WithOrphaned == 0 && isOrphaned {
+						// only canonical blocks, skip
+						continue
+					}
+					if filter.WithOrphaned == 2 && !isOrphaned {
+						// only orphaned blocks, skip
+						continue
+					}
+				}
 
-			// filter by graffiti
-			if filter.Graffiti != "" {
-				blockGraffiti := string(blockIndex.Graffiti[:])
-				if !strings.Contains(blockGraffiti, filter.Graffiti) {
+				if filter.WithMissing == 2 {
+					// only missing blocks, skip
 					continue
 				}
-			}
 
-			// filter by extra data
-			if filter.ExtraData != "" {
-				blockExtraData := string(blockIndex.ExecutionExtraData)
-				if !strings.Contains(blockExtraData, filter.ExtraData) {
-					continue
+				// filter by graffiti
+				if filter.Graffiti != "" {
+					blockGraffiti := string(blockIndex.Graffiti[:])
+					if !strings.Contains(blockGraffiti, filter.Graffiti) {
+						continue
+					}
 				}
-			}
 
-			// filter by proposer
-			proposer := uint64(blockHeader.Message.ProposerIndex)
-			if filter.ProposerIndex != nil {
-				if proposer != *filter.ProposerIndex {
-					continue
+				// filter by extra data
+				if filter.ExtraData != "" {
+					blockExtraData := string(blockIndex.ExecutionExtraData)
+					if !strings.Contains(blockExtraData, filter.ExtraData) {
+						continue
+					}
 				}
-			}
-			if filter.ProposerName != "" {
-				proposerName := bs.validatorNames.GetValidatorName(proposer)
-				if !strings.Contains(proposerName, filter.ProposerName) {
-					continue
-				}
-			}
 
-			cachedMatches = append(cachedMatches, cachedDbBlock{
-				slot:     uint64(block.Slot),
-				proposer: uint64(blockHeader.Message.ProposerIndex),
-				orphaned: isOrphaned,
-				block:    block,
-			})
+				// filter by proposer
+				proposer := uint64(blockHeader.Message.ProposerIndex)
+				if filter.ProposerIndex != nil {
+					if proposer != *filter.ProposerIndex {
+						continue
+					}
+				}
+				if filter.ProposerName != "" {
+					proposerName := bs.validatorNames.GetValidatorName(proposer)
+					if !strings.Contains(proposerName, filter.ProposerName) {
+						continue
+					}
+				}
+
+				cachedMatches = append(cachedMatches, cachedDbBlock{
+					slot:     uint64(block.Slot),
+					proposer: uint64(blockHeader.Message.ProposerIndex),
+					orphaned: isOrphaned,
+					block:    block,
+				})
+			} else {
+				cachedMatches = append(cachedMatches, cachedDbBlock{
+					slot:     uint64(block.Slot),
+					proposer: 0,
+					orphaned: false,
+					block:    block,
+				})
+			}
 		}
 
 		// reconstruct missing blocks from epoch duties

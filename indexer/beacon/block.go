@@ -2,6 +2,7 @@ package beacon
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand/v2"
 	"sync"
@@ -35,6 +36,8 @@ type Block struct {
 	processingStatus  dbtypes.UnfinalizedBlockStatus
 	seenMutex         sync.RWMutex
 	seenMap           map[uint16]*Client
+	Rank              uint64
+	parallelBlock     *json.RawMessage
 }
 
 // BlockBodyIndex holds important block propoerties that are used as index for cache lookups.
@@ -230,6 +233,10 @@ func (block *Block) EnsureBlock(loadBlock func() (*spec.VersionedSignedBeaconBlo
 		block.blockChan = nil
 	}
 
+	//rank, _ := blockBody.Rank();
+	//block.rank = rank;
+	block.Rank = 0
+
 	return true, nil
 }
 
@@ -279,6 +286,7 @@ func (block *Block) buildUnfinalizedBlock(compress bool) (*dbtypes.UnfinalizedBl
 		BlockSSZ:  blockSSZ,
 		Status:    0,
 		ForkId:    uint64(block.forkId),
+		Rank:      0,
 	}, nil
 }
 

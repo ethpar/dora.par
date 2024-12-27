@@ -643,7 +643,7 @@ func (es *EpochStats) GetDbEpoch(indexer *Indexer, headBlock *Block) *dbtypes.Ep
 	// compute epoch votes
 	epochVotes := es.GetEpochVotes(indexer, headBlock)
 
-	return indexer.dbWriter.buildDbEpoch(es.epoch, epochBlocks, es, epochVotes, nil)
+	return indexer.dbWriter.buildDbEpoch(es.epoch, epochBlocks, es, epochVotes, nil, nil)
 }
 
 // GetEpochVotes aggregates & returns the EpochVotes for the EpochStats.

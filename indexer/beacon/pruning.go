@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethpandaops/dora/db"
 	"github.com/ethpandaops/dora/dbtypes"
 	"github.com/jmoiron/sqlx"
@@ -194,7 +195,7 @@ func (indexer *Indexer) processEpochPruning(pruneEpoch phase0.Epoch) (uint64, ui
 		persistedBlocks := map[phase0.Root]bool{}
 
 		for _, epochData := range epochData {
-			dbEpoch := indexer.dbWriter.buildDbEpoch(pruneEpoch, epochData.chain, epochData.epochStats, epochData.epochVotes, func(block *Block, depositIndex *uint64) {
+			dbEpoch := indexer.dbWriter.buildDbEpoch(pruneEpoch, epochData.chain, epochData.epochStats, epochData.epochVotes, nil, func(block *Block, depositIndex *uint64, parallelBlocks map[phase0.Slot]map[uint64]*types.Block) {
 				if persistedBlocks[block.Root] {
 					return
 				}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/ethpandaops/dora/clients/execution"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -359,7 +360,7 @@ func (c *Client) processBlock(slot phase0.Slot, root phase0.Root, header *phase0
 		}
 
 	} else {
-		block, _ = c.indexer.blockCache.createOrGetBlock(root, slot)
+		block, _ = c.indexer.blockCache.createOrGetBlock(root, slot, 0)
 	}
 
 	err = block.EnsureHeader(func() (*phase0.SignedBeaconBlockHeader, error) {
@@ -436,7 +437,56 @@ func (c *Client) processBlock(slot phase0.Slot, root phase0.Root, header *phase0
 
 		c.logger.Errorf("new orphaned block in finalized epoch %v: %v [%v] - OPEN TODO", chainState.EpochOfSlot(slot), slot, root.String())
 	}
+	c.processParallelBlock(block, 1)
+	c.processParallelBlock(block, 2)
 
+	//rpc.NewExecutionClient(endpoint.Name, endpoint.URL, endpoint.Headers, endpoint.SshConfig, logger)
+	return
+}
+
+func (c *Client) processParallelBlock(block *Block, rank uint64) (isExists bool, isNew bool, processingTimes []time.Duration, err error) {
+	var _blockNumber uint64
+	//var _pBlock *Block
+	_blockNumber, err = block.block.ExecutionBlockNumber()
+	isExists = false
+	parallelExecutionBlock, err := c.indexer.executionPool.GetReadyEndpoint(execution.AnyClient).GetRPCClient().GetBlockByNumberAndRankRaw(c.getContext(), _blockNumber, rank)
+
+	if err != nil {
+		if err.Error() != "not found" {
+			c.logger.Errorf("paralle error: %v %v", _blockNumber, err)
+		}
+		err = nil
+	}
+	if parallelExecutionBlock != nil {
+		parallelBlock, isNew := c.indexer.blockCache.createOrGetParallelBlock(block.Root, block.Slot, rank)
+		parallelBlock.parallelBlock = parallelExecutionBlock
+		isExists = true
+		c.logger.Infof("parallel block %v %v", _blockNumber, block.Slot) //json.
+		//byteBlock, nil := json.Marshal(_pBlock)
+		//byteBlock, nil := _pBlock.MarshalJSON()
+		if isNew {
+			var headerSSZ []byte = make([]byte, 0, 1)
+			parallelDbBlock := &dbtypes.UnfinalizedBlock{
+				Root:      block.Root[:],
+				Slot:      uint64(block.Slot),
+				HeaderVer: 1,
+				HeaderSSZ: headerSSZ,
+				BlockVer:  536870918,
+				BlockSSZ:  *parallelExecutionBlock,
+				Status:    0,
+				ForkId:    uint64(block.forkId),
+				Rank:      rank,
+			}
+			err = db.RunDBTransaction(func(tx *sqlx.Tx) error {
+				err := db.InsertUnfinalizedBlock(parallelDbBlock, tx)
+				if err != nil {
+					return err
+				}
+
+				return nil
+			})
+		}
+	}
 	return
 }
 

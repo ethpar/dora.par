@@ -48,6 +48,7 @@ type Slot struct {
 	EthBlockExtraText     string     `db:"eth_block_extra_text"`
 	SyncParticipation     float32    `db:"sync_participation"`
 	ForkId                uint64     `db:"fork_id"`
+	Rank                  uint64     `db:"rank"`
 }
 
 type Epoch struct {
@@ -108,6 +109,19 @@ type UnfinalizedBlock struct {
 	BlockSSZ  []byte                 `db:"block_ssz"`
 	Status    UnfinalizedBlockStatus `db:"status"`
 	ForkId    uint64                 `db:"fork_id"`
+	Rank      uint64                 `db:"rank"`
+}
+
+type UnfinalizedParallelBlock struct {
+	Root      []byte                 `db:"root"`
+	Slot      uint64                 `db:"slot"`
+	HeaderVer uint64                 `db:"header_ver"`
+	HeaderSSZ []byte                 `db:"header_ssz"`
+	BlockVer  uint64                 `db:"block_ver"`
+	BlockSSZ  []byte                 `db:"block_ssz"`
+	Status    UnfinalizedBlockStatus `db:"status"`
+	ForkId    uint64                 `db:"fork_id"`
+	Rank      uint64                 `db:"rank"`
 }
 
 type UnfinalizedEpoch struct {

@@ -125,6 +125,14 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-replace github.com/attestantio/go-eth2-client => github.com/attestantio/go-eth2-client v0.0.0-20240701211822-0a60485fce68
+//require github.com/ethpar/go-eth2-client.par v0.0.0-20241213183944-7ae48f58b3a5 // indirect
 
-replace github.com/ethereum/go-ethereum => github.com/lightclient/go-ethereum v0.0.0-20240907155054-183e7b702a00
+//replace github.com/attestantio/go-eth2-client => github.com/attestantio/go-eth2-client v0.0.0-20240701211822-0a60485fce68
+
+//replace github.com/attestantio/go-eth2-client => github.com/ethpar/go-eth2-client.par@d86e2d0a
+//replace github.com/attestantio/go-eth2-client => github.com/ethpar/go-eth2-client.par v0.0.0-20241213183944-7ae48f58b3a5
+
+replace github.com/attestantio/go-eth2-client => d:/projects/ethpar/go-eth2-client.par
+
+//replace github.com/ethereum/go-ethereum => github.com/lightclient/go-ethereum v0.0.0-20240907155054-183e7b702a00
+replace github.com/ethereum/go-ethereum => d:/projects/ethpar/go-ethereum.par

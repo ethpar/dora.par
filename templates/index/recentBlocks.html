@@ -13,6 +13,7 @@
             <tr>
               <th>Epoch</th>
               <th>Slot</th>
+              <th>Rank</th>
               <th data-toggle="tooltip" title="Execution Layer Block Number">Block</th>
               <th>Status</th>
               <th data-timecol="duration">Time</th>
@@ -25,7 +26,10 @@
               <td><a data-bind="attr: {href: '/epoch/'+epoch}, text: $root.formatAddCommas(epoch)"></a></td>
               <td>
                 <div data-bind="if: (status == 2)"><a data-bind="attr: {href: '/slot/' + $root.hexstr(blockRoot)}, text: $root.formatAddCommas(slot)"></a></div>
-                <div data-bind="ifnot: (status == 2)"><a data-bind="attr: {href: '/slot/' + slot}, text: $root.formatAddCommas(slot)"></a></div>
+                <div data-bind="ifnot: (status == 2)"><a data-bind="attr: {href: '/slot/' + slot + '/rank/' + rank}, text: $root.formatAddCommas(slot)"></a></div>
+              </td>
+              <td>
+                <span data-bind="text: $root.formatAddCommas(rank)"></span>
               </td>
               <td>
                 <div data-bind="if: has_block">
@@ -65,8 +69,11 @@
                   {{ if eq .Status 2 }}
                   <td><a href="/slot/0x{{ printf "%x" $block.BlockRoot }}">{{ formatAddCommas $block.Slot }}</a></td>
                   {{ else }}
-                    <td><a href="/slot/{{ $block.Slot }}">{{ formatAddCommas $block.Slot }}</a></td>
+                    <td><a href="/slot/{{ $block.Slot }}/rank/{{ $block.Rank }}">{{ formatAddCommas $block.Slot }}</a></td>
                   {{ end }}
+                  <td>
+                    <span data-bind="text: $root.formatAddCommas(rank)"></span>
+                  </td>
                   <td>{{ if $block.WithEthBlock }}{{ ethBlockLink $block.EthBlock }}{{ else }}-{{ end }}</td>
                   <td>
                     {{ if eq $block.Slot 0 }}

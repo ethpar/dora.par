@@ -287,6 +287,7 @@ func buildIndexPageRecentBlocksData(pageData *models.IndexPageData, recentBlockC
 		blockModel := &models.IndexPageDataBlocks{
 			Epoch:        uint64(chainState.EpochOfSlot(phase0.Slot(blockData.Slot))),
 			Slot:         blockData.Slot,
+			Rank:         blockData.Rank,
 			Ts:           chainState.SlotToTime(phase0.Slot(blockData.Slot)),
 			Proposer:     blockData.Proposer,
 			ProposerName: services.GlobalBeaconService.GetValidatorName(blockData.Proposer),
@@ -331,6 +332,7 @@ func buildIndexPageRecentSlotsData(pageData *models.IndexPageData, firstSlot pha
 
 			slotData := &models.IndexPageDataSlots{
 				Slot:         slot,
+				Rank:         dbSlot.Rank,
 				Epoch:        uint64(chainState.EpochOfSlot(phase0.Slot(dbSlot.Slot))),
 				Ts:           chainState.SlotToTime(phase0.Slot(slot)),
 				Status:       uint64(dbSlot.Status),

@@ -54,6 +54,8 @@ func Slot(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	slotOrHash := strings.Replace(vars["slotOrHash"], "0x", "", -1)
+	//rankString := vars["rank"]
+
 	blockSlot := int64(-1)
 	blockRootHash, err := hex.DecodeString(slotOrHash)
 	if err != nil || len(slotOrHash) != 64 {
@@ -68,6 +70,7 @@ func Slot(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	rank, err := strconv.ParseUint(vars["rank"], 10, 64)
 
 	urlArgs := r.URL.Query()
 
@@ -75,7 +78,7 @@ func Slot(w http.ResponseWriter, r *http.Request) {
 	var pageError error
 	pageError = services.GlobalCallRateLimiter.CheckCallLimit(r, 1)
 	if pageError == nil {
-		pageData, pageError = getSlotPageData(blockSlot, blockRootHash)
+		pageData, pageError = getSlotPageData(blockSlot, blockRootHash, rank)
 	}
 	if pageError != nil {
 		handlePageError(w, r, pageError)
@@ -160,9 +163,9 @@ func SlotBlob(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getSlotPageData(blockSlot int64, blockRoot []byte) (*models.SlotPageData, error) {
+func getSlotPageData(blockSlot int64, blockRoot []byte, rank uint64) (*models.SlotPageData, error) {
 	pageData := &models.SlotPageData{}
-	pageCacheKey := fmt.Sprintf("slot:%v:%x", blockSlot, blockRoot)
+	pageCacheKey := fmt.Sprintf("slot:%v:%x:%v", blockSlot, blockRoot, rank)
 	pageRes, pageErr := services.GlobalFrontendCache.ProcessCachedPage(pageCacheKey, true, pageData, func(pageCall *services.FrontendCacheProcessingPage) interface{} {
 		pageData, cacheTimeout := buildSlotPageData(pageCall.CallCtx, blockSlot, blockRoot)
 		pageCall.CacheTimeout = cacheTimeout

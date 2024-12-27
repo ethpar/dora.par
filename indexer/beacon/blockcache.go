@@ -34,7 +34,7 @@ func newBlockCache(indexer *Indexer) *blockCache {
 
 // createOrGetBlock creates a new block with the given root and slot, or returns an existing block if it already exists.
 // It returns the created block and a boolean indicating whether the block was newly created or not.
-func (cache *blockCache) createOrGetBlock(root phase0.Root, slot phase0.Slot) (*Block, bool) {
+func (cache *blockCache) createOrGetBlock(root phase0.Root, slot phase0.Slot, rank uint64) (*Block, bool) {
 	cache.cacheMutex.Lock()
 	defer cache.cacheMutex.Unlock()
 
@@ -60,6 +60,28 @@ func (cache *blockCache) createOrGetBlock(root phase0.Root, slot phase0.Slot) (*
 	}
 
 	return cacheBlock, true
+}
+
+func (cache *blockCache) createOrGetParallelBlock(root phase0.Root, slot phase0.Slot, rank uint64) (*Block, bool) {
+	cache.cacheMutex.Lock()
+	defer cache.cacheMutex.Unlock()
+
+	if cache.slotMap[slot] == nil {
+		cacheBlock := newBlock(cache.indexer.dynSsz, root, slot)
+		cacheBlock.Rank = rank
+		cache.slotMap[slot] = []*Block{cacheBlock}
+		return cacheBlock, true
+	} else {
+		for _, block := range cache.slotMap[slot] {
+			if block.Rank == rank {
+				return block, false
+			}
+		}
+		cacheBlock := newBlock(cache.indexer.dynSsz, root, slot)
+		cacheBlock.Rank = rank
+		cache.slotMap[slot] = append(cache.slotMap[slot], cacheBlock)
+		return cacheBlock, true
+	}
 }
 
 // addBlockToParentMap adds the given block to the parent map.

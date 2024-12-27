@@ -306,7 +306,7 @@ func (indexer *Indexer) finalizeEpoch(epoch phase0.Epoch, justifiedRoot phase0.R
 	deleteBeforeSlot := chainState.EpochToSlot(epoch + 1)
 	err := db.RunDBTransaction(func(tx *sqlx.Tx) error {
 		// persist canonical epoch data
-		if err := indexer.dbWriter.persistEpochData(tx, epoch, canonicalBlocks, epochStats, epochVotes); err != nil {
+		if err := indexer.dbWriter.persistEpochData(tx, epoch, canonicalBlocks, epochStats, epochVotes, nil); err != nil { //todo
 			return fmt.Errorf("failed persisting epoch data for epoch %v: %v", epoch, err)
 		}
 

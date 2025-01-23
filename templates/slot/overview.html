@@ -253,6 +253,10 @@
           <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Amount of validators that changed their withdrawal address from 0x00 to 0x01">BLS Address Changes:</span></div>
           <div class="col-md-10"><b>{{ formatAddCommas .Block.BLSChangesCount }}</b></div>
         </div>
+        <div class="row border-bottom p-2 mx-0">
+          <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="ConnectedProposers">ConnectedProposers:</span></div>
+          <div class="col-md-10"><b>{{ .Block.ConnectedProposers }}</b></div>
+        </div>
       {{ end }}
     {{ end }}
   </div>

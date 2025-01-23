@@ -256,6 +256,8 @@ func parseAssignedSlots(rows *sql.Rows, fields []string, fieldsOffset int) []*db
 			decoder, _ := mapstructure.NewDecoder(cfg)
 			decoder.Decode(blockValMap)
 			blockAssignment.Block = &block
+			block.ExecutionBlocks = GetExecutionBlocks(block.Root)
+
 		}
 
 		blockAssignments = append(blockAssignments, &blockAssignment)

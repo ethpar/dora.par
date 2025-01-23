@@ -65,6 +65,7 @@ type SlotPageBlockData struct {
 	DepositRequestsCount       uint64                 `json:"deposit_receipts_count"`
 	WithdrawalRequestsCount    uint64                 `json:"withdrawal_requests_count"`
 	ConsolidationRequestsCount uint64                 `json:"consolidation_requests_count"`
+	ConnectedProposers         string                 `json:"connected_proposers"`
 
 	ExecutionData         *SlotPageExecutionData          `json:"execution_data"`
 	Attestations          []*SlotPageAttestation          `json:"attestations"`           // Attestations included in this block
@@ -109,11 +110,12 @@ type SlotPageAttestation struct {
 
 	Signature []byte `json:"signature"`
 
-	BeaconBlockRoot []byte `json:"beaconblockroot"`
-	SourceEpoch     uint64 `json:"source_epoch"`
-	SourceRoot      []byte `json:"source_root"`
-	TargetEpoch     uint64 `json:"target_epoch"`
-	TargetRoot      []byte `json:"target_root"`
+	BeaconBlockRoot []byte   `json:"beaconblockroot"`
+	SourceEpoch     uint64   `json:"source_epoch"`
+	SourceRoot      []byte   `json:"source_root"`
+	TargetEpoch     uint64   `json:"target_epoch"`
+	TargetRoot      []byte   `json:"target_root"`
+	ExecutionHashes []string `json:"execution_hashes"`
 }
 
 type SlotPageDeposit struct {

@@ -106,7 +106,7 @@ func (indexer *Indexer) aggregateEpochVotes(epoch phase0.Epoch, chainState *cons
 				indexer.logger.Debugf("aggregateEpochVotes slot %v failed, can't get data for attestation %v: %v", slot, attIdx, err)
 				continue
 			}
-			if chainState.EpochOfSlot(attData.Slot) != epoch {
+			if chainState.EpochOfSlot(attData.Slot()) != epoch { //attData.Slot
 				continue
 			}
 
@@ -117,7 +117,7 @@ func (indexer *Indexer) aggregateEpochVotes(epoch phase0.Epoch, chainState *cons
 			}
 
 			voteAmount := phase0.Gwei(0)
-			slotIndex := chainState.SlotToSlotIndex(attData.Slot)
+			slotIndex := chainState.SlotToSlotIndex(attData.Slot()) //attData.Slot)
 
 			if attVersioned.Version >= spec.DataVersionElectra {
 				// EIP-7549 changes the attestation aggregation
@@ -149,15 +149,15 @@ func (indexer *Indexer) aggregateEpochVotes(epoch phase0.Epoch, chainState *cons
 			} else {
 				// pre electra attestation aggregation
 				if epochStatsValues != nil {
-					voteAmt, _ := votes.aggregateVotes(epochStatsValues, slotIndex, uint64(attData.Index), attAggregationBits, 0)
+					voteAmt, _ := votes.aggregateVotes(epochStatsValues, slotIndex, uint64(attData.Index()), attAggregationBits, 0)
 					voteAmount += voteAmt
 				} else {
-					voteAmt := votes.aggregateVotesWithoutDuties(deduplicationMap, slotIndex, uint64(attData.Index), attAggregationBits, 1, 0)
+					voteAmt := votes.aggregateVotesWithoutDuties(deduplicationMap, slotIndex, uint64(attData.Index()), attAggregationBits, 1, 0)
 					voteAmount += voteAmt
 				}
 			}
 
-			if bytes.Equal(attData.Target.Root[:], targetRoot[:]) {
+			if bytes.Equal(attData.Target().Root[:], targetRoot[:]) {
 				if isNextEpoch {
 					votes.NextEpoch.TargetVoteAmount += voteAmount
 				} else {
@@ -168,7 +168,8 @@ func (indexer *Indexer) aggregateEpochVotes(epoch phase0.Epoch, chainState *cons
 			}*/
 			parentRoot := block.GetParentRoot()
 
-			if parentRoot != nil && bytes.Equal(attData.BeaconBlockRoot[:], parentRoot[:]) {
+			var d = attData.BeaconBlockRoot()
+			if parentRoot != nil && bytes.Equal(d[:], parentRoot[:]) {
 				if isNextEpoch {
 					votes.NextEpoch.HeadVoteAmount += voteAmount
 				} else {

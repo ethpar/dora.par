@@ -232,6 +232,24 @@ func (ec *ExecutionClient) GetBlockByHash(ctx context.Context, hash common.Hash)
 	return block, nil
 }
 
+func (ec *ExecutionClient) GetBlockByStringHash(ctx context.Context, hash string) (*types.Block, error) {
+	block, err := ec.ethClient.BlockByStringHash(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return block, nil
+}
+
+func (ec *ExecutionClient) GetBlockByStringHashRaw(ctx context.Context, hash string) (*json.RawMessage, error) {
+	block, err := ec.ethClient.BlockByStringHashRaw(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return block, nil
+}
+
 func (ec *ExecutionClient) GetBlockByNumberAndRank(ctx context.Context, number uint64, rank uint64) (*types.Block, error) {
 	block, err := ec.ethClient.BlockByNumberAndRank(ctx, big.NewInt(0).SetUint64(number), rank)
 	if err != nil {
@@ -251,7 +269,7 @@ func (ec *ExecutionClient) DecodeBlockRaw(ctx context.Context, raw *json.RawMess
 }
 
 func (ec *ExecutionClient) GetBlockByNumberAndRankRaw(ctx context.Context, number uint64, rank uint64) (*json.RawMessage, error) {
-	parallelExecutionBlock, err := ec.ethClient.BlockByNumberAndRankRaw(ctx, big.NewInt(0).SetUint64(number), 1)
+	parallelExecutionBlock, err := ec.ethClient.BlockByNumberAndRankRaw(ctx, big.NewInt(0).SetUint64(number), rank)
 	if err != nil {
 		return nil, err
 	}

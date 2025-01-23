@@ -2,7 +2,6 @@ package beacon
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/rand/v2"
 	"sync"
@@ -37,7 +36,7 @@ type Block struct {
 	seenMutex         sync.RWMutex
 	seenMap           map[uint16]*Client
 	Rank              uint64
-	parallelBlock     *json.RawMessage
+	ExecutionBlocks   map[uint64]ExecutionBlock
 }
 
 // BlockBodyIndex holds important block propoerties that are used as index for cache lookups.
@@ -52,12 +51,13 @@ type BlockBodyIndex struct {
 // newBlock creates a new Block instance.
 func newBlock(dynSsz *dynssz.DynSsz, root phase0.Root, slot phase0.Slot) *Block {
 	return &Block{
-		Root:       root,
-		Slot:       slot,
-		dynSsz:     dynSsz,
-		seenMap:    make(map[uint16]*Client),
-		headerChan: make(chan bool),
-		blockChan:  make(chan bool),
+		Root:            root,
+		Slot:            slot,
+		dynSsz:          dynSsz,
+		seenMap:         make(map[uint16]*Client),
+		headerChan:      make(chan bool),
+		blockChan:       make(chan bool),
+		ExecutionBlocks: make(map[uint64]ExecutionBlock),
 	}
 }
 

@@ -2,11 +2,9 @@ package beacon
 
 import (
 	"fmt"
-	"github.com/ethpandaops/dora/clients/execution"
 	"math"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethpandaops/dora/clients/consensus"
 	"github.com/ethpandaops/dora/db"
 	"github.com/ethpandaops/dora/dbtypes"
@@ -88,35 +86,6 @@ func (dbw *dbWriter) persistBlockData(tx *sqlx.Tx, block *Block, epochStats *Epo
 	return dbBlock, nil
 }
 
-func (dbw *dbWriter) persistParallelBlockData(tx *sqlx.Tx, block *Block, parallelBlock *types.Block, rank uint64, epochStats *EpochStats, depositIndex *uint64, orphaned bool, overrideForkId *ForkKey) (*dbtypes.Slot, error) {
-	// insert block
-	dbBlock := dbw.buildDbParallelBlock(block, parallelBlock, rank, epochStats, overrideForkId)
-	if dbBlock == nil {
-		return nil, fmt.Errorf("error while building db parallel block: %v", block.Slot)
-	}
-
-	/*if orphaned {
-		dbBlock.Status = dbtypes.Orphaned
-	}*/
-
-	err := db.InsertSlot(dbBlock, tx)
-	if err != nil {
-		return nil, fmt.Errorf("error inserting slot: %v", err)
-	}
-
-	//block.isInFinalizedDb = true
-
-	// insert child objects
-	/*if block.Slot > 0 {
-		err = dbw.persistBlockChildObjects(tx, block, depositIndex, orphaned, overrideForkId)
-		if err != nil {
-			return nil, err
-		}
-	}*/
-
-	return dbBlock, nil
-}
-
 func (dbw *dbWriter) persistBlockChildObjects(tx *sqlx.Tx, block *Block, depositIndex *uint64, orphaned bool, overrideForkId *ForkKey) error {
 	var err error
 
@@ -159,28 +128,20 @@ func (dbw *dbWriter) persistBlockChildObjects(tx *sqlx.Tx, block *Block, deposit
 	return nil
 }
 
-func (dbw *dbWriter) persistEpochData(tx *sqlx.Tx, epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes, parallelBlocks map[phase0.Slot]map[uint64]*types.Block) error {
+func (dbw *dbWriter) persistEpochData(tx *sqlx.Tx, epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes) error {
 	if tx == nil {
 		return db.RunDBTransaction(func(tx *sqlx.Tx) error {
-			return dbw.persistEpochData(tx, epoch, blocks, epochStats, epochVotes, parallelBlocks)
+			return dbw.persistEpochData(tx, epoch, blocks, epochStats, epochVotes)
 		})
 	}
 	canonicalForkId := ForkKey(0)
 
-	dbEpoch := dbw.buildDbEpoch(epoch, blocks, epochStats, epochVotes, parallelBlocks, func(block *Block, depositIndex *uint64, parallelBlocks map[phase0.Slot]map[uint64]*types.Block) {
+	dbEpoch := dbw.buildDbEpoch(epoch, blocks, epochStats, epochVotes, func(block *Block, depositIndex *uint64) {
 		_, err := dbw.persistBlockData(tx, block, epochStats, depositIndex, false, &canonicalForkId)
 		if err != nil {
 			dbw.indexer.logger.Errorf("error persisting slot: %v", err)
 		}
 
-		if parallelBlocks != nil && parallelBlocks[block.Slot] != nil {
-			for rank, parallelBlock := range parallelBlocks[block.Slot] {
-				_, err := dbw.persistParallelBlockData(tx, block, parallelBlock, rank, epochStats, depositIndex, false, &canonicalForkId)
-				if err != nil {
-					dbw.indexer.logger.Errorf("error persisting parallel slot: %v", err)
-				}
-			}
-		}
 	})
 
 	// insert missing slots
@@ -234,10 +195,10 @@ func (dbw *dbWriter) persistSyncAssignments(tx *sqlx.Tx, epoch phase0.Epoch, epo
 }
 
 func (dbw *dbWriter) buildDbBlock(block *Block, epochStats *EpochStats, overrideForkId *ForkKey) *dbtypes.Slot {
-	if block.Rank > 0 {
-		parallelBlock, _ := dbw.indexer.executionPool.GetReadyEndpoint(execution.AnyClient).GetRPCClient().DecodeBlockRaw(nil, block.parallelBlock)
-		return dbw.buildDbParallelBlock(block, parallelBlock, block.Rank, epochStats, overrideForkId)
-	}
+	//if block.Rank > 0 {
+	//parallelBlock, _ := dbw.indexer.executionPool.GetReadyEndpoint(execution.AnyClient).GetRPCClient().DecodeBlockRaw(nil, block.parallelBlock)
+	//return dbw.buildDbParallelBlock(block, parallelBlock, block.Rank, epochStats, overrideForkId)
+	//}
 	if block.Slot == 0 {
 		// genesis block
 		header := block.GetHeader()
@@ -345,128 +306,7 @@ func (dbw *dbWriter) buildDbBlock(block *Block, epochStats *EpochStats, override
 	return &dbBlock
 }
 
-func (dbw *dbWriter) buildDbParallelBlock(block *Block, parallelBlock *types.Block, rank uint64, epochStats *EpochStats, overrideForkId *ForkKey) *dbtypes.Slot {
-	/*if block.Slot == 0 {
-		// genesis block
-		header := block.GetHeader()
-		if header == nil {
-			// some clients do not serve the genesis block header, so add a fallback here
-			header = &phase0.SignedBeaconBlockHeader{
-				Message: &phase0.BeaconBlockHeader{
-					Slot:          0,
-					ProposerIndex: math.MaxInt64,
-					ParentRoot:    consensus.NullRoot,
-					StateRoot:     consensus.NullRoot,
-				},
-			}
-		}
-
-		return &dbtypes.Slot{
-			Slot:       0,
-			Proposer:   math.MaxInt64,
-			Status:     dbtypes.Canonical,
-			Root:       block.Root[:],
-			ParentRoot: header.Message.ParentRoot[:],
-			StateRoot:  header.Message.StateRoot[:],
-		}
-	}*/
-
-	//blockBody := block.GetBlock()
-	/*if blockBody == nil {
-		dbw.indexer.logger.Warnf("error while building db blocks: block body not found: %v", block.Slot)
-		return nil
-	}*/
-
-	/*var epochStatsValues *EpochStatsValues
-	if epochStats != nil {
-		epochStatsValues = epochStats.GetValues(true)
-	}*/
-
-	/*graffiti, _ := blockBody.Graffiti()
-	attestations, _ := blockBody.Attestations()
-	deposits, _ := blockBody.Deposits()
-	voluntaryExits, _ := blockBody.VoluntaryExits()
-	attesterSlashings, _ := blockBody.AttesterSlashings()
-	proposerSlashings, _ := blockBody.ProposerSlashings()
-	blsToExecChanges, _ := blockBody.BLSToExecutionChanges()
-	syncAggregate, _ := blockBody.SyncAggregate()*/
-	executionBlockNumber := parallelBlock.Number().Uint64()
-	//executionBlockHash, _ := blockBody.ExecutionBlockHash()
-	//executionExtraData, _ := getBlockExecutionExtraData(blockBody)
-	//executionTransactions, _ := blockBody.ExecutionTransactions()
-	//executionWithdrawals, _ := blockBody.Withdrawals()
-
-	executionTransactions := parallelBlock.Transactions()
-	executionWithdrawals := parallelBlock.Withdrawals()
-	var dbBlock dbtypes.Slot
-
-	if block.header != nil {
-		dbBlock = dbtypes.Slot{
-			Slot:       uint64(block.header.Message.Slot),
-			Proposer:   uint64(block.header.Message.ProposerIndex),
-			Status:     dbtypes.Canonical,
-			ForkId:     uint64(block.forkId),
-			Root:       block.Root[:],
-			ParentRoot: block.header.Message.ParentRoot[:],
-			StateRoot:  block.header.Message.StateRoot[:],
-			//	Graffiti:              graffiti[:],
-			//	GraffitiText:          utils.GraffitiToString(graffiti[:]),
-			//	AttestationCount:      uint64(len(attestations)),
-			//	DepositCount:          uint64(len(deposits)),
-			//		ExitCount:             uint64(len(voluntaryExits)),
-			//		AttesterSlashingCount: uint64(len(attesterSlashings)),
-			//		ProposerSlashingCount: uint64(len(proposerSlashings)),
-			//	BLSChangeCount:        uint64(len(blsToExecChanges)),
-		}
-	} else {
-		dbBlock = dbtypes.Slot{
-			Slot:     uint64(block.Slot),
-			Proposer: uint64(0),
-			Status:   dbtypes.Canonical,
-			ForkId:   uint64(block.forkId),
-			Root:     block.Root[:],
-		}
-	}
-
-	if overrideForkId != nil {
-		dbBlock.ForkId = uint64(*overrideForkId)
-	}
-
-	/*if syncAggregate != nil {
-		var assignedCount int
-		if epochStatsValues != nil {
-			assignedCount = len(epochStatsValues.SyncCommitteeDuties)
-		} else {
-			// this is not accurate, but best we can get without epoch assignments
-			assignedCount = len(syncAggregate.SyncCommitteeBits) * 8
-		}
-
-		votedCount := 0
-		for i := 0; i < assignedCount; i++ {
-			if utils.BitAtVector(syncAggregate.SyncCommitteeBits, i) {
-				votedCount++
-			}
-		}
-		dbBlock.SyncParticipation = float32(votedCount) / float32(assignedCount)
-	}*/
-
-	if executionBlockNumber > 0 {
-		dbBlock.EthTransactionCount = uint64(len(executionTransactions))
-		dbBlock.EthBlockNumber = &executionBlockNumber
-		//dbBlock.EthBlockHash = executionBlockHash[:]
-		//dbBlock.EthBlockExtra = executionExtraData
-		//dbBlock.EthBlockExtraText = utils.GraffitiToString(executionExtraData[:])
-		dbBlock.WithdrawCount = uint64(len(executionWithdrawals))
-		for _, withdrawal := range executionWithdrawals {
-			dbBlock.WithdrawAmount += uint64(withdrawal.Amount)
-		}
-		dbBlock.Rank = rank
-	}
-
-	return &dbBlock
-}
-
-func (dbw *dbWriter) buildDbEpoch(epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes, parallelBlocks map[phase0.Slot]map[uint64]*types.Block, blockFn func(block *Block, depositIndex *uint64, parallelBlocks map[phase0.Slot]map[uint64]*types.Block)) *dbtypes.Epoch {
+func (dbw *dbWriter) buildDbEpoch(epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes, blockFn func(block *Block, depositIndex *uint64)) *dbtypes.Epoch {
 	chainState := dbw.indexer.consensusPool.GetChainState()
 
 	var epochStatsValues *EpochStatsValues
@@ -511,7 +351,7 @@ func (dbw *dbWriter) buildDbEpoch(epoch phase0.Epoch, blocks []*Block, epochStat
 			dbEpoch.BlockCount++
 			if block.Slot == 0 {
 				if blockFn != nil {
-					blockFn(block, depositIndex, parallelBlocks)
+					blockFn(block, depositIndex)
 				}
 
 				continue
@@ -523,7 +363,7 @@ func (dbw *dbWriter) buildDbEpoch(epoch phase0.Epoch, blocks []*Block, epochStat
 				continue
 			}
 			if blockFn != nil {
-				blockFn(block, depositIndex, parallelBlocks)
+				blockFn(block, depositIndex)
 			}
 
 			attestations, _ := blockBody.Attestations()

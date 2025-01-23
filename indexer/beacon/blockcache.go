@@ -12,14 +12,15 @@ import (
 
 // blockCache is a cache for storing blocks.
 type blockCache struct {
-	indexer     *Indexer
-	cacheMutex  sync.RWMutex
-	highestSlot int64
-	lowestSlot  int64
-	slotMap     map[phase0.Slot][]*Block
-	rootMap     map[phase0.Root]*Block
-	parentMap   map[phase0.Root][]*Block
-	latestBlock *Block // latest added block (might not be the head block, just a marker for cache changes)
+	indexer          *Indexer
+	cacheMutex       sync.RWMutex
+	highestSlot      int64
+	lowestSlot       int64
+	slotMap          map[phase0.Slot][]*Block
+	slotExecutionMap map[phase0.Slot][]*Block
+	rootMap          map[phase0.Root]*Block
+	parentMap        map[phase0.Root][]*Block
+	latestBlock      *Block // latest added block (might not be the head block, just a marker for cache changes)
 }
 
 // newBlockCache creates a new instance of blockCache.
@@ -60,28 +61,6 @@ func (cache *blockCache) createOrGetBlock(root phase0.Root, slot phase0.Slot, ra
 	}
 
 	return cacheBlock, true
-}
-
-func (cache *blockCache) createOrGetParallelBlock(root phase0.Root, slot phase0.Slot, rank uint64) (*Block, bool) {
-	cache.cacheMutex.Lock()
-	defer cache.cacheMutex.Unlock()
-
-	if cache.slotMap[slot] == nil {
-		cacheBlock := newBlock(cache.indexer.dynSsz, root, slot)
-		cacheBlock.Rank = rank
-		cache.slotMap[slot] = []*Block{cacheBlock}
-		return cacheBlock, true
-	} else {
-		for _, block := range cache.slotMap[slot] {
-			if block.Rank == rank {
-				return block, false
-			}
-		}
-		cacheBlock := newBlock(cache.indexer.dynSsz, root, slot)
-		cacheBlock.Rank = rank
-		cache.slotMap[slot] = append(cache.slotMap[slot], cacheBlock)
-		return cacheBlock, true
-	}
 }
 
 // addBlockToParentMap adds the given block to the parent map.

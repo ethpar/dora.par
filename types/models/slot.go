@@ -9,6 +9,7 @@ import (
 // SlotPageData is a struct to hold info for the slot details page
 type SlotPageData struct {
 	Slot                   uint64                `json:"slot"`
+	Rank                   uint64                `json:"rank"`
 	Epoch                  uint64                `json:"epoch"`
 	EpochFinalized         bool                  `json:"epoch_finalized"`
 	EpochParticipationRate float64               `json:"epoch_participation_rate"`

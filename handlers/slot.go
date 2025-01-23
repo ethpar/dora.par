@@ -213,6 +213,7 @@ func buildSlotPageData(ctx context.Context, blockSlot int64, blockRoot []byte, r
 
 	pageData := &models.SlotPageData{
 		Slot:           uint64(slot),
+		Rank:           rank,
 		Epoch:          uint64(chainState.EpochOfSlot(slot)),
 		Ts:             chainState.SlotToTime(slot),
 		NextSlot:       uint64(slot + 1),

@@ -299,16 +299,19 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 				if dbBlock != nil {
 
 					if block.ExecutionBlocks != nil && len(block.ExecutionBlocks) > 0 {
-						for u, executionBlock := range block.ExecutionBlocks {
-							resBlocks = append(resBlocks, &dbtypes.Slot{
-								Rank:                u,
-								Slot:                uint64(slot),
-								Proposer:            dbBlock.Proposer,
-								Status:              dbBlock.Status,
-								Root:                executionBlock.Root[:],
-								ForkId:              dbBlock.ForkId,
-								EthTransactionCount: uint64(executionBlock.Block.Transactions().Len()),
-							})
+						for i := 5; i >= 0; i-- {
+							var executionBlock, ok = block.ExecutionBlocks[uint64(i)]
+							if ok {
+								resBlocks = append(resBlocks, &dbtypes.Slot{
+									Rank:                uint64(i),
+									Slot:                uint64(slot),
+									Proposer:            dbBlock.Proposer,
+									Status:              dbBlock.Status,
+									Root:                executionBlock.Root[:],
+									ForkId:              dbBlock.ForkId,
+									EthTransactionCount: uint64(executionBlock.Block.Transactions().Len()),
+								})
+							}
 						}
 					} else {
 						resBlocks = append(resBlocks, dbBlock)

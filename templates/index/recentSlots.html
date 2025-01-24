@@ -96,7 +96,7 @@
                     <td><a href="/slot/{{ $slot.Slot }}/rank/{{ $slot.Rank }}">{{ formatAddCommas $slot.Slot }}</a></td>
                   {{ end }}
                   <td>
-                    <span data-bind="text: $root.formatAddCommas(rank)"></span>
+                    <span data-bind="text: $root.formatAddCommas($slot.Rank)">{{ $slot.Rank }}</span>
                   </td>
                   <td>
                     {{ if eq $slot.Slot 0 }}

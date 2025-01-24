@@ -72,7 +72,7 @@
                     <td><a href="/slot/{{ $block.Slot }}/rank/{{ $block.Rank }}">{{ formatAddCommas $block.Slot }}</a></td>
                   {{ end }}
                   <td>
-                    <span data-bind="text: $root.formatAddCommas(rank)"></span>
+                    <span data-bind="text: $root.formatAddCommas(rank)">{{ $block.Rank }}</span>
                   </td>
                   <td>{{ if $block.WithEthBlock }}{{ ethBlockLink $block.EthBlock }}{{ else }}-{{ end }}</td>
                   <td>

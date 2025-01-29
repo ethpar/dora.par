@@ -436,9 +436,9 @@ func (c *Client) processBlock(slot phase0.Slot, root phase0.Root, header *phase0
 
 		c.logger.Errorf("new orphaned block in finalized epoch %v: %v [%v] - OPEN TODO", chainState.EpochOfSlot(slot), slot, root.String())
 	}
-	//c.processParallelBlock(block, 1)
-	//c.processParallelBlock(block, 2)
-	processExecutionBlocks(c, block)
+	if block.block != nil && block.block.Alpha != nil {
+		processExecutionBlocks(c, block)
+	}
 
 	//rpc.NewExecutionClient(endpoint.Name, endpoint.URL, endpoint.Headers, endpoint.SshConfig, logger)
 	return

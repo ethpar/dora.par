@@ -12,15 +12,14 @@ import (
 
 // blockCache is a cache for storing blocks.
 type blockCache struct {
-	indexer          *Indexer
-	cacheMutex       sync.RWMutex
-	highestSlot      int64
-	lowestSlot       int64
-	slotMap          map[phase0.Slot][]*Block
-	slotExecutionMap map[phase0.Slot][]*Block
-	rootMap          map[phase0.Root]*Block
-	parentMap        map[phase0.Root][]*Block
-	latestBlock      *Block // latest added block (might not be the head block, just a marker for cache changes)
+	indexer     *Indexer
+	cacheMutex  sync.RWMutex
+	highestSlot int64
+	lowestSlot  int64
+	slotMap     map[phase0.Slot][]*Block
+	rootMap     map[phase0.Root]*Block
+	parentMap   map[phase0.Root][]*Block
+	latestBlock *Block // latest added block (might not be the head block, just a marker for cache changes)
 }
 
 // newBlockCache creates a new instance of blockCache.

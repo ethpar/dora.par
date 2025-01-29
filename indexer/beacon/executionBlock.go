@@ -149,7 +149,8 @@ func processExecutionBlock(c *Client, block *Block, parallelExecutionBlock *type
 					c.logger.Errorf("!paralle error:  %v", err)
 					return err
 				}
-				c.logger.Infof("saved execution block: slot: %v  %v:%v", block.Slot, parallelExecutionBlock.Number(), rank)
+				c.logger.Debugf("saved execution block: slot: %v  %v:%v", block.Slot, parallelExecutionBlock.Number(), rank)
+				//c.logger.Infof("saved execution block: slot: %v  %v:%v", block.Slot, parallelExecutionBlock.Number(), rank)
 				return nil
 			})
 		}

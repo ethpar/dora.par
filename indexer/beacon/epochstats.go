@@ -47,7 +47,7 @@ type EpochStatsValues struct {
 	RandaoMix           phase0.Hash32
 	NextRandaoMix       phase0.Hash32
 	ActiveIndices       []phase0.ValidatorIndex
-	EffectiveBalances   []uint16
+	EffectiveBalances   []uint64
 	ProposerDuties      []phase0.ValidatorIndex
 	AttesterDuties      [][][]duties.ActiveIndiceIndex
 	SyncCommitteeDuties []phase0.ValidatorIndex
@@ -72,7 +72,7 @@ type EpochStatsPacked struct {
 // EpochStatsPackedValidator holds the packed values for an active validator.
 type EpochStatsPackedValidator struct {
 	ValidatorIndexOffset uint32 // offset to the previous index in the list (this is smaller than storing the full validator index)
-	EffectiveBalanceEth  uint16 // effective balance in full ETHPAR
+	EffectiveBalanceEth  uint64 // effective balance in full ETHPAR
 }
 
 // newEpochStats creates a new EpochStats instance.
@@ -207,7 +207,7 @@ func (es *EpochStats) parsePackedSSZ(dynSsz *dynssz.DynSsz, chainState *consensu
 		RandaoMix:           packedValues.RandaoMix,
 		NextRandaoMix:       packedValues.NextRandaoMix,
 		ActiveIndices:       make([]phase0.ValidatorIndex, len(packedValues.ActiveValidators)),
-		EffectiveBalances:   make([]uint16, len(packedValues.ActiveValidators)),
+		EffectiveBalances:   make([]uint64, len(packedValues.ActiveValidators)),
 		SyncCommitteeDuties: packedValues.SyncCommitteeDuties,
 		TotalBalance:        packedValues.TotalBalance,
 		ActiveBalance:       packedValues.ActiveBalance,
@@ -326,7 +326,7 @@ func (es *EpochStats) processState(indexer *Indexer) {
 	chainState := indexer.consensusPool.GetChainState()
 	values := &EpochStatsValues{
 		ActiveIndices:       make([]phase0.ValidatorIndex, 0),
-		EffectiveBalances:   make([]uint16, 0),
+		EffectiveBalances:   make([]uint64, 0),
 		SyncCommitteeDuties: es.dependentState.syncCommittee,
 		TotalBalance:        0,
 		ActiveBalance:       0,
@@ -339,7 +339,8 @@ func (es *EpochStats) processState(indexer *Indexer) {
 		values.TotalBalance += es.dependentState.validatorBalances[index]
 		if es.epoch >= validator.ActivationEpoch && es.epoch < validator.ExitEpoch {
 			values.ActiveIndices = append(values.ActiveIndices, phase0.ValidatorIndex(index))
-			values.EffectiveBalances = append(values.EffectiveBalances, uint16(validator.EffectiveBalance/EtherGweiFactor))
+			var balance = uint64(validator.EffectiveBalance) / uint64(EtherGweiFactor)
+			values.EffectiveBalances = append(values.EffectiveBalances, balance)
 			values.EffectiveBalance += validator.EffectiveBalance
 			values.ActiveBalance += es.dependentState.validatorBalances[index]
 		}

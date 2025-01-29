@@ -311,13 +311,10 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 
 				block.SetBlock(blockBody)
 			}
-			processExecutionBlocks(client, block)
+			if block.block != nil && block.block.Alpha != nil {
+				processExecutionBlocks(client, block)
+			}
 			sync.cachedBlocks[slot] = block
-			//processExecutionBlocks(client, block)
-			//	sync.loadParallelBlock(client, slot, block, 1)
-			//	sync.loadParallelBlock(client, slot, block, 2)
-			//	sync.loadParallelBlock(client, slot, block, 3)
-
 		}
 
 		if firstBlock == nil && sync.cachedBlocks[slot] != nil {

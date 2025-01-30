@@ -322,13 +322,12 @@ func buildIndexPageRecentSlotsData(pageData *models.IndexPageData, firstSlot pha
 	dbIdx := 0
 	dbCnt := len(dbSlots)
 	blockCount := uint64(0)
-	openForks := map[int][]byte{}
+	//openForks := map[int][]byte{}
 	maxOpenFork := 0
 	for slotIdx := int64(firstSlot); slotIdx >= int64(lastSlot); slotIdx-- {
 		slot := uint64(slotIdx)
 		for dbIdx < dbCnt && dbSlots[dbIdx] != nil && dbSlots[dbIdx].Slot == slot {
 			dbSlot := dbSlots[dbIdx]
-			dbIdx++
 
 			slotData := &models.IndexPageDataSlots{
 				Slot:         slot,
@@ -344,8 +343,9 @@ func buildIndexPageRecentSlotsData(pageData *models.IndexPageData, firstSlot pha
 			}
 			pageData.RecentSlots = append(pageData.RecentSlots, slotData)
 			blockCount++
-			buildIndexPageSlotGraph(slotData, &maxOpenFork, openForks)
-
+			//buildIndexPageSlotGraph(slotData, &maxOpenFork, openForks)
+			buildIndexSlotsPageSlotGraphParallel(pageData, slotData, dbSlot.ExecutionBlocksCount, &maxOpenFork, dbSlot.ExecutionBlocksIdx)
+			dbIdx++
 			if blockCount >= uint64(slotLimit) {
 				break
 			}
@@ -353,6 +353,115 @@ func buildIndexPageRecentSlotsData(pageData *models.IndexPageData, firstSlot pha
 	}
 	pageData.RecentSlotCount = uint64(blockCount)
 	pageData.ForkTreeWidth = (maxOpenFork * 20) + 20
+}
+
+func buildIndexSlotsPageSlotGraphParallel(pageData *models.IndexPageData, slotData *models.IndexPageDataSlots, executionBlocksCount int, maxOpenFork *int, executionBlocksIdx int) {
+	// fork tree
+	getForkGraph := func(slotData *models.IndexPageDataSlots, forkIdx int) *models.IndexPageDataForkGraph {
+		forkGraph := &models.IndexPageDataForkGraph{}
+		graphCount := len(slotData.ForkGraph)
+		if graphCount > forkIdx {
+			forkGraph = slotData.ForkGraph[forkIdx]
+		} else {
+			for graphCount <= forkIdx {
+				forkGraph = &models.IndexPageDataForkGraph{
+					Index: graphCount,
+					Left:  10 + (graphCount * 20),
+					Tiles: map[string]bool{},
+				}
+				slotData.ForkGraph = append(slotData.ForkGraph, forkGraph)
+				graphCount++
+			}
+		}
+		if *maxOpenFork < forkIdx {
+			*maxOpenFork = forkIdx
+		}
+		return forkGraph
+	}
+
+	if slotData.Rank == 0 {
+		forkGraph := getForkGraph(slotData, 1)
+		forkGraph.Block = true
+		forkGraph.Tiles["vline"] = true
+
+		for i := 2; i <= executionBlocksCount; i++ {
+			forkGraph.Tiles["rline"] = true
+
+			forkGraph = getForkGraph(slotData, i)
+			forkGraph.Block = false
+			forkGraph.Tiles["fork"] = true
+			forkGraph.Tiles["tline"] = true
+		}
+
+	} else {
+		forkGraph := getForkGraph(slotData, 1)
+		forkGraph.Tiles["vline"] = true
+		for i := 2; i <= executionBlocksCount; i++ {
+			forkGraph = getForkGraph(slotData, i)
+			if i+executionBlocksIdx > executionBlocksCount {
+				forkGraph.BlockParallel = false
+				forkGraph.Tiles["vline"] = true
+			} else if i+executionBlocksIdx == executionBlocksCount {
+				forkGraph.BlockParallel = true
+				forkGraph.Tiles["bline"] = true
+			}
+		}
+	}
+
+	for _, slot := range pageData.RecentSlots {
+		if bytes.Equal(slot.BlockRoot, slotData.BlockRoot) {
+			continue
+		}
+		for idx := executionBlocksCount; idx < *maxOpenFork; idx++ {
+			getForkGraph(slot, idx)
+		}
+	}
+}
+
+func buildIndexSlotsPageSlotGraphParallelV(pageData *models.IndexPageData, slotData *models.IndexPageDataSlots, dbSlots []*dbtypes.Slot, dbIdx int) {
+	getForkGraph := func(slotData *models.IndexPageDataSlots, forkIdx int) *models.IndexPageDataForkGraph {
+		forkGraph := &models.IndexPageDataForkGraph{}
+		graphCount := len(slotData.ForkGraph)
+		if graphCount > forkIdx {
+			forkGraph = slotData.ForkGraph[forkIdx]
+		} else {
+			for graphCount <= forkIdx {
+				forkGraph = &models.IndexPageDataForkGraph{
+					Index: graphCount,
+					Left:  10 + (graphCount * 20),
+					Tiles: map[string]bool{},
+				}
+				slotData.ForkGraph = append(slotData.ForkGraph, forkGraph)
+				graphCount++
+			}
+		}
+		return forkGraph
+	}
+
+	if slotData.Rank == 0 {
+		forkGraph := getForkGraph(slotData, 1)
+		forkGraph.Block = true
+		forkGraph.Tiles["vline"] = true
+		if dbIdx > 0 && dbSlots[dbIdx-1] != nil && dbSlots[dbIdx-1].Slot == slotData.Slot {
+			forkGraph.Tiles["rline"] = true
+
+			forkGraph = getForkGraph(slotData, 2)
+			forkGraph.Block = false
+			forkGraph.Tiles["fork"] = true
+			forkGraph.Tiles["tline"] = true
+		}
+	} else {
+		forkGraph := getForkGraph(slotData, 1)
+		forkGraph.Tiles["vline"] = true
+
+		forkGraph = getForkGraph(slotData, 2)
+		forkGraph.Block = true
+		if dbIdx > 0 && dbSlots[dbIdx-1] != nil && dbSlots[dbIdx-1].Slot == slotData.Slot {
+			forkGraph.Tiles["vline"] = true
+		} else {
+			forkGraph.Tiles["bline"] = true
+		}
+	}
 }
 
 func buildIndexPageSlotGraph(slotData *models.IndexPageDataSlots, maxOpenFork *int, openForks map[int][]byte) {

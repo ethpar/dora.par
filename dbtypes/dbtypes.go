@@ -50,6 +50,8 @@ type Slot struct {
 	ForkId                uint64     `db:"fork_id"`
 	Rank                  uint64     `db:"rank"`
 	ExecutionBlocks       []*UnfinalizedExecutionBlock
+	ExecutionBlocksCount  int
+	ExecutionBlocksIdx    int
 }
 
 type Epoch struct {

@@ -299,18 +299,22 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 				if dbBlock != nil {
 
 					if block.ExecutionBlocks != nil && len(block.ExecutionBlocks) > 0 {
+						var j = 0
 						for i := 5; i >= 0; i-- {
 							var executionBlock, ok = block.ExecutionBlocks[uint64(i)]
 							if ok {
 								resBlocks = append(resBlocks, &dbtypes.Slot{
-									Rank:                uint64(i),
-									Slot:                uint64(slot),
-									Proposer:            dbBlock.Proposer,
-									Status:              dbBlock.Status,
-									Root:                executionBlock.Root[:],
-									ForkId:              dbBlock.ForkId,
-									EthTransactionCount: uint64(executionBlock.Block.Transactions().Len()),
+									Rank:                 uint64(i),
+									Slot:                 uint64(slot),
+									Proposer:             dbBlock.Proposer,
+									Status:               dbBlock.Status,
+									Root:                 executionBlock.Root[:],
+									ForkId:               dbBlock.ForkId,
+									EthTransactionCount:  uint64(executionBlock.Block.Transactions().Len()),
+									ExecutionBlocksCount: len(block.ExecutionBlocks),
+									ExecutionBlocksIdx:   j,
 								})
+								j++
 							}
 						}
 					} else {
@@ -465,13 +469,15 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 					for i := range dbBlock.Block.ExecutionBlocks {
 						var executionBlock = dbBlock.Block.ExecutionBlocks[i]
 						resBlocks = append(resBlocks, &dbtypes.Slot{
-							Rank:                executionBlock.Rank,
-							Slot:                uint64(slot),
-							Proposer:            dbBlock.Proposer,
-							Status:              dbBlock.Block.Status,
-							Root:                executionBlock.Root[:],
-							ForkId:              dbBlock.Block.ForkId,
-							EthTransactionCount: dbBlock.Block.EthTransactionCount,
+							Rank:                 executionBlock.Rank,
+							Slot:                 uint64(slot),
+							Proposer:             dbBlock.Proposer,
+							Status:               dbBlock.Block.Status,
+							Root:                 executionBlock.Root[:],
+							ForkId:               dbBlock.Block.ForkId,
+							EthTransactionCount:  dbBlock.Block.EthTransactionCount,
+							ExecutionBlocksCount: len(dbBlock.Block.ExecutionBlocks),
+							ExecutionBlocksIdx:   i,
 						})
 					}
 				} else {

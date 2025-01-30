@@ -84,8 +84,9 @@ type IndexPageDataSlots struct {
 }
 
 type IndexPageDataForkGraph struct {
-	Index int             `json:"index"`
-	Left  int             `json:"left"`
-	Tiles map[string]bool `json:"tiles"`
-	Block bool            `json:"block"`
+	Index         int             `json:"index"`
+	Left          int             `json:"left"`
+	Tiles         map[string]bool `json:"tiles"`
+	Block         bool            `json:"block"`
+	BlockParallel bool            `json:"block_parallel"`
 }

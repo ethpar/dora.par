@@ -341,6 +341,7 @@ func (indexer *Indexer) StartIndexer() {
 					blockFork.headBlock = block
 				}
 			}
+			restoreExecutionBlocksFromDB(indexer, block)
 
 			restoredBlockCount++
 

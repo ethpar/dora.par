@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS public."unfinalized_execution_blocks"
     CONSTRAINT "unfinalized_execution_blocks_pkey" PRIMARY KEY ("slot", "rank")
     );
 
+CREATE INDEX IF NOT EXISTS "unfinalized_execution_blocks_root_idx"
+    ON public."unfinalized_execution_blocks"
+        ("root" ASC NULLS LAST);
 
 -- +goose StatementEnd
 -- +goose Down

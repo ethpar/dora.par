@@ -152,6 +152,7 @@ func (sync *synchronizer) runSync() {
 		if retryLimit < 30 {
 			retryLimit = 30
 		}
+		retryLimit = 5
 		lastRetry := retryCount >= retryLimit
 		syncClient := syncClients[retryCount%len(syncClients)]
 

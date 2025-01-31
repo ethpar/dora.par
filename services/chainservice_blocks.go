@@ -297,29 +297,31 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 				}
 				dbBlock := block.GetDbBlock(bs.beaconIndexer)
 				if dbBlock != nil {
-
+					var j = 0
+					var blocksCount = 1
 					if block.ExecutionBlocks != nil && len(block.ExecutionBlocks) > 0 {
-						var j = 0
+						blocksCount = len(block.ExecutionBlocks) + 1
 						for i := 5; i >= 0; i-- {
 							var executionBlock, ok = block.ExecutionBlocks[uint64(i)]
 							if ok {
 								resBlocks = append(resBlocks, &dbtypes.Slot{
 									Rank:                 uint64(i),
-									Slot:                 uint64(slot),
+									Slot:                 dbBlock.Slot,
 									Proposer:             dbBlock.Proposer,
 									Status:               dbBlock.Status,
 									Root:                 executionBlock.Root[:],
 									ForkId:               dbBlock.ForkId,
 									EthTransactionCount:  uint64(executionBlock.Block.Transactions().Len()),
-									ExecutionBlocksCount: len(block.ExecutionBlocks),
+									ExecutionBlocksCount: blocksCount,
 									ExecutionBlocksIdx:   j,
 								})
 								j++
 							}
 						}
-					} else {
-						resBlocks = append(resBlocks, dbBlock)
 					}
+					dbBlock.ExecutionBlocksCount = blocksCount
+					dbBlock.ExecutionBlocksIdx = j
+					resBlocks = append(resBlocks, dbBlock)
 				}
 			}
 
@@ -465,25 +467,29 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 			}
 
 			if dbBlock.Block != nil {
+				var j = 0
+				var blocksCount = 1
 				if dbBlock.Block.ExecutionBlocks != nil && len(dbBlock.Block.ExecutionBlocks) > 0 {
+					blocksCount = len(dbBlock.Block.ExecutionBlocks) + 1
 					for i := range dbBlock.Block.ExecutionBlocks {
 						var executionBlock = dbBlock.Block.ExecutionBlocks[i]
 						resBlocks = append(resBlocks, &dbtypes.Slot{
 							Rank:                 executionBlock.Rank,
-							Slot:                 uint64(slot),
+							Slot:                 dbBlock.Slot,
 							Proposer:             dbBlock.Proposer,
 							Status:               dbBlock.Block.Status,
 							Root:                 executionBlock.Root[:],
 							ForkId:               dbBlock.Block.ForkId,
-							EthTransactionCount:  dbBlock.Block.EthTransactionCount,
-							ExecutionBlocksCount: len(dbBlock.Block.ExecutionBlocks),
+							EthTransactionCount:  executionBlock.EthTransactionCount,
+							ExecutionBlocksCount: blocksCount,
 							ExecutionBlocksIdx:   i,
 						})
+						j++
 					}
-				} else {
-					resBlocks = append(resBlocks, dbBlock.Block)
 				}
-				//resBlocks = append(resBlocks, dbBlock.Block)
+				dbBlock.Block.ExecutionBlocksCount = blocksCount
+				dbBlock.Block.ExecutionBlocksIdx = j
+				resBlocks = append(resBlocks, dbBlock.Block)
 			} else {
 				resBlocks = append(resBlocks, &dbtypes.Slot{
 					Slot:     dbBlock.Slot,

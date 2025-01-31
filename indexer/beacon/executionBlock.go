@@ -83,7 +83,7 @@ func processExecutionBlocks(c *Client, block *Block) (isExists bool, isNew bool,
 		return false, false, nil
 	}
 
-	for rank := 0; rank < 5; rank++ {
+	for rank := 1; rank < 5; rank++ {
 		parallelExecutionBlockRaw, err := executionClient.GetRPCClient().GetBlockByNumberAndRankRaw(c.getContext(), blockNumber, uint64(rank))
 		if err != nil {
 			if err.Error() != "not found" {
@@ -173,6 +173,24 @@ type rpcBlock struct {
 	UncleHashes  []common.Hash       `json:"uncles"`
 	Withdrawals  []*types.Withdrawal `json:"withdrawals,omitempty"`
 	Requests     []*types.Request    `json:"requests,omitempty"`
+}
+
+func restoreExecutionBlocksFromDB(indexer *Indexer, block *Block) {
+	for _, dbBlock := range db.GetExecutionBlocks(block.Root[:]) {
+		var raw = json.RawMessage(dbBlock.Block)
+		var parallelExecutionBlock, err = DecodeBlockRaw(raw)
+		if err != nil {
+			indexer.logger.Errorf("restoreExecutionBlocksFromDB %v", err)
+		}
+		var executionBlock = ExecutionBlock{
+			Root:     phase0.Root(dbBlock.Root),
+			Slot:     phase0.Slot(dbBlock.Slot),
+			Block:    parallelExecutionBlock,
+			blockRaw: &raw,
+			Rank:     dbBlock.Rank,
+		}
+		block.ExecutionBlocks[dbBlock.Rank] = executionBlock
+	}
 }
 
 func DecodeBlockRaw(raw json.RawMessage /*, ctx context.Context*/) (*types.Block, error) {

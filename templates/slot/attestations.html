@@ -51,12 +51,6 @@
           <div class="col-md-2">Signature:</div>
           <div class="col-md-10 text-monospace text-break">0x{{ printf "%x" $attestation.Signature }}</div>
         </div>
-        <div class="row p-1 mx-0">
-          <div class="col-md-2">Eexecution hashes:</div>
-          {{ range $i1, $eh := $attestation.ExecutionHashes }}
-          <div class="col-md-10 text-monospace text-break">{{ $eh }}</div>
-          {{ end }}
-        </div>
 
       </div>
     </div>

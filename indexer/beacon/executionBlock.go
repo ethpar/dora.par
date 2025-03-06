@@ -68,10 +68,10 @@ func getExecutionHashes(block *Block) (hashes []string) {
 	return hashes
 }
 
-func processExecutionBlocks(c *Client, block *Block) (isExists bool, isNew bool, err error) {
+func processExecutionBlocks(c *Client, block *Block) (err error) {
 	var executionClient = c.indexer.executionPool.GetReadyEndpoint(execution.AnyClient)
 	if executionClient == nil {
-		return false, false, fmt.Errorf("could not get execution client")
+		return fmt.Errorf("processExecutionBlocks: could not get execution client")
 	}
 	if block.block == nil {
 		c.logger.Warn("processExecutionBlocks: block.block == nil")
@@ -79,21 +79,27 @@ func processExecutionBlocks(c *Client, block *Block) (isExists bool, isNew bool,
 	}
 	var blockNumber, err1 = block.block.ExecutionBlockNumber()
 	if err1 != nil {
-		c.logger.Errorf("processExecutionBlocks:  %v", err)
-		return false, false, nil
+		c.logger.Errorf("processExecutionBlocks:  %v", err1)
+		return err1
 	}
 
+	c.logger.Infof("check parallel Blocks: %v", blockNumber)
 	for rank := 1; rank < 5; rank++ {
+		c.logger.Debugf("check GetBlockByNumberAndRank: %v:%v", blockNumber, rank)
 		parallelExecutionBlockRaw, err := executionClient.GetRPCClient().GetBlockByNumberAndRankRaw(c.getContext(), blockNumber, uint64(rank))
 		if err != nil {
 			if err.Error() != "not found" {
-				c.logger.Errorf("processExecutionBlocks: %v:%v %v", blockNumber, rank, err)
+				c.logger.Errorf("GetBlockByNumberAndRank: %v:%v %v", blockNumber, rank, err)
+			} else {
+				c.logger.Infof("GetBlockByNumberAndRank not found: %v:%v", blockNumber, rank)
 			}
 			continue
 		}
 		parallelExecutionBlock, err := executionClient.GetRPCClient().DecodeBlockRaw(nil, parallelExecutionBlockRaw)
 		if err == nil {
 			processExecutionBlock(c, block, parallelExecutionBlock, parallelExecutionBlockRaw, uint64(rank))
+		} else {
+			c.logger.Errorf("DecodeBlockRaw: %v:%v %v", blockNumber, rank, err)
 		}
 	}
 	return
@@ -146,11 +152,11 @@ func processExecutionBlock(c *Client, block *Block, parallelExecutionBlock *type
 			err = db.RunDBTransaction(func(tx *sqlx.Tx) error {
 				err := db.InsertUnfinalizedExecutionBlock(parallelDbBlock, tx)
 				if err != nil {
-					c.logger.Errorf("!paralle error:  %v", err)
+					c.logger.Errorf("!parallel block save error:  %v", err)
 					return err
 				}
-				c.logger.Debugf("saved execution block: slot: %v  %v:%v", block.Slot, parallelExecutionBlock.Number(), rank)
-				//c.logger.Infof("saved execution block: slot: %v  %v:%v", block.Slot, parallelExecutionBlock.Number(), rank)
+				//c.logger.Debugf("saved execution block: slot: %v  %v:%v", block.Slot, parallelExecutionBlock.Number(), rank)
+				c.logger.Infof("saved execution block: slot: %v  %v:%v", block.Slot, parallelExecutionBlock.Number(), rank)
 				return nil
 			})
 		}

@@ -31,6 +31,9 @@ func UpdateUnfinalizedBlockStatus(roots [][]byte, blockStatus dbtypes.Unfinalize
 	var sql strings.Builder
 	args := []any{}
 
+	if len(roots) == 0 {
+		return nil
+	}
 	fmt.Fprint(&sql, `UPDATE unfinalized_blocks SET status = $1 WHERE root IN (`)
 	args = append(args, blockStatus)
 

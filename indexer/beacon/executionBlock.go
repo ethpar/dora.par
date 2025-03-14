@@ -4,15 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethpandaops/dora/clients/execution"
 	"github.com/ethpandaops/dora/db"
 	"github.com/ethpandaops/dora/dbtypes"
 	"github.com/jmoiron/sqlx"
 	dynssz "github.com/pk910/dynamic-ssz"
-
-	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type ExecutionBlock struct {
@@ -69,6 +68,7 @@ func getExecutionHashes(block *Block) (hashes []string) {
 }
 
 func processExecutionBlocks(c *Client, block *Block) (err error) {
+	//processPendingTransactions(c, block.Slot)
 	var executionClient = c.indexer.executionPool.GetReadyEndpoint(execution.AnyClient)
 	if executionClient == nil {
 		return fmt.Errorf("processExecutionBlocks: could not get execution client")

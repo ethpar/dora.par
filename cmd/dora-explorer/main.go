@@ -152,6 +152,7 @@ func startFrontend(webserver *http.Server) {
 	router.HandleFunc("/slot/{slotOrHash}/rank/{rank}", handlers.Slot).Methods("GET")
 	router.HandleFunc("/slot/{root}/blob/{commitment}", handlers.SlotBlob).Methods("GET")
 	router.HandleFunc("/mev/blocks", handlers.MevBlocks).Methods("GET")
+	router.HandleFunc("/pool/{slot}", handlers.Pool).Methods("GET")
 
 	router.HandleFunc("/search", handlers.Search).Methods("GET")
 	router.HandleFunc("/search/{type}", handlers.SearchAhead).Methods("GET")

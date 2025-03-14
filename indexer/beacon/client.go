@@ -428,6 +428,7 @@ func (c *Client) processBlock(slot phase0.Slot, root phase0.Root, header *phase0
 
 		block.isInUnfinalizedDb = true
 		c.indexer.blockCache.latestBlock = block
+		processPendingTransactions(c, block.Slot)
 	}
 
 	if slot < finalizedSlot && !block.isInFinalizedDb {

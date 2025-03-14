@@ -36,6 +36,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
+require github.com/senseyeio/roger v0.0.0-20191009211040-43e330bee47f // indirect
+
 require (
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect

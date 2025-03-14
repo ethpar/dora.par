@@ -304,3 +304,7 @@ func (ec *ExecutionClient) GetTransactionReceipt(ctx context.Context, txHash com
 func (ec *ExecutionClient) SendTransaction(ctx context.Context, tx *types.Transaction) error {
 	return ec.ethClient.SendTransaction(ctx, tx)
 }
+
+func (ec *ExecutionClient) GetPendingTransactions(ctx context.Context) (json.RawMessage, error) {
+	return ec.ethClient.GetPendingTransactions(ctx)
+}

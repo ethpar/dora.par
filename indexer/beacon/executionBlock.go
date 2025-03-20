@@ -12,6 +12,7 @@ import (
 	"github.com/ethpandaops/dora/dbtypes"
 	"github.com/jmoiron/sqlx"
 	dynssz "github.com/pk910/dynamic-ssz"
+	"time"
 )
 
 type ExecutionBlock struct {
@@ -66,13 +67,7 @@ func getExecutionHashes(block *Block) (hashes []string) {
 	}
 	return hashes
 }
-
 func processExecutionBlocks(c *Client, block *Block) (err error) {
-	//processPendingTransactions(c, block.Slot)
-	var executionClient = c.indexer.executionPool.GetReadyEndpoint(execution.AnyClient)
-	if executionClient == nil {
-		return fmt.Errorf("processExecutionBlocks: could not get execution client")
-	}
 	if block.block == nil {
 		c.logger.Warn("processExecutionBlocks: block.block == nil")
 		return
@@ -83,7 +78,22 @@ func processExecutionBlocks(c *Client, block *Block) (err error) {
 		return err1
 	}
 
-	c.logger.Infof("check parallel Blocks: %v", blockNumber)
+	c.logger.Infof("add check parallel Blocks for: %v", blockNumber)
+	go processExecutionBlocksTi(c, block, blockNumber)
+	return err1
+}
+
+func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64) (err error) {
+	//processPendingTransactions(c, block.Slot)
+	time.Sleep(12 * time.Second)
+	var executionClient = c.indexer.executionPool.GetReadyEndpoint(execution.AnyClient)
+	if executionClient == nil {
+		return fmt.Errorf("processExecutionBlocks: could not get execution client")
+	}
+
+	//blockNumber = 22064102
+	c.logger.Infof("start check parallel Blocks for: %v", blockNumber)
+
 	for rank := 1; rank < 5; rank++ {
 		c.logger.Debugf("check GetBlockByNumberAndRank: %v:%v", blockNumber, rank)
 		parallelExecutionBlockRaw, err := executionClient.GetRPCClient().GetBlockByNumberAndRankRaw(c.getContext(), blockNumber, uint64(rank))

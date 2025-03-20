@@ -62,6 +62,7 @@ type SlotPageBlockData struct {
 	VoluntaryExitsCount        uint64                 `json:"voluntaryexits_count"`
 	SlashingsCount             uint64                 `json:"slashings_count"`
 	BlobsCount                 uint64                 `json:"blobs_count"`
+	ParallelBlocksCount        uint64                 `json:"parallel_blocks_count"`
 	TransactionsCount          uint64                 `json:"transactions_count"`
 	DepositRequestsCount       uint64                 `json:"deposit_receipts_count"`
 	WithdrawalRequestsCount    uint64                 `json:"withdrawal_requests_count"`
@@ -77,6 +78,7 @@ type SlotPageBlockData struct {
 	BLSChanges            []*SlotPageBLSChange            `json:"bls_changes"`            // BLSChanges included in this block
 	Withdrawals           []*SlotPageWithdrawal           `json:"withdrawals"`            // Withdrawals included in this block
 	Blobs                 []*SlotPageBlob                 `json:"blobs"`                  // Blob sidecars included in this block
+	ParallelBlocks        []*SlotPageParallelBlock        `json:"parallel_blocks"`        // Transactions included in this block
 	Transactions          []*SlotPageTransaction          `json:"transactions"`           // Transactions included in this block
 	DepositRequests       []*SlotPageDepositRequest       `json:"deposit_receipts"`       // DepositRequests included in this block
 	WithdrawalRequests    []*SlotPageWithdrawalRequest    `json:"withdrawal_requests"`    // WithdrawalRequests included in this block
@@ -218,6 +220,25 @@ type SlotPageTransaction struct {
 	FuncName      string  `json:"func_name"`
 	FuncSig       string  `json:"func_sig"`
 	Type          uint64  `json:"type"`
+}
+
+type SlotPageParallelBlock struct {
+	Rank              uint64    `json:"rank"`
+	ParentHash        []byte    `json:"parent_hash"`
+	FeeRecipient      []byte    `json:"fee_recipient"`
+	StateRoot         []byte    `json:"state_root"`
+	ReceiptsRoot      []byte    `json:"receipts_root"`
+	LogsBloom         []byte    `json:"logs_bloom"`
+	Random            []byte    `json:"random"`
+	GasLimit          uint64    `json:"gas_limit"`
+	GasUsed           uint64    `json:"gas_used"`
+	Timestamp         uint64    `json:"timestamp"`
+	Time              time.Time `json:"time"`
+	ExtraData         []byte    `json:"extra_data"`
+	BaseFeePerGas     uint64    `json:"base_fee_per_gas"`
+	BlockHash         []byte    `json:"block_hash"`
+	BlockNumber       uint64    `json:"block_number"`
+	TransactionsCount uint64    `json:"transactions_count"`
 }
 
 type SlotPageDepositRequest struct {

@@ -1,0 +1,74 @@
+{{ define "parallel_blocks" }}
+  {{ range $i, $parallel_block := .Block.ParallelBlocks }}
+    <div class="card my-2">
+      <div class="card-body px-0 py-1">
+        <div class="row border-bottom p-1 mx-0">
+          <div class="col-md-12 text-center"><b>Block Rank {{ $parallel_block.Rank }}</b></div>
+        </div>
+        <!-- -->
+
+          <div class="row border-bottom p-1 mx-0">
+            <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Block Number, the height, not the slot">Block Number:</span></div>
+            <div class="col-md-10 text-monospace text-break">{{ ethBlockLink $parallel_block.BlockNumber }}</div>
+          </div>
+
+          <div class="row border-bottom p-1 mx-0">
+            <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="The Execution Block Hash">Block Hash:</span></div>
+            <div class="col-md-10 text-monospace text-break">
+              {{ ethBlockHashLink $parallel_block.BlockHash }}
+            </div>
+          </div>
+
+          <div class="row border-bottom p-1 mx-0">
+            <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Parent Execution Block Hash">Parent Hash:</span></div>
+            <div class="col-md-10 text-monospace text-break">
+              0x{{ printf "%x" $parallel_block.ParentHash }}
+            </div>
+          </div>
+
+          <div class="row border-bottom p-1 mx-0">
+            <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Fee recipient">Fee Recipient:</span></div>
+            <div class="col-md-10 text-monospace text-break">
+              {{ ethAddressLink $parallel_block.FeeRecipient }}
+            </div>
+          </div>
+
+          <div class="row border-bottom p-1 mx-0">
+            <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Gas Used">Gas Used:</span></div>
+            <div class="col-md-10 text-monospace text-break">{{ $parallel_block.GasUsed }}</div>
+          </div>
+
+          <div class="row border-bottom p-1 mx-0">
+            <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Gas Limit">Gas Limit:</span></div>
+            <div class="col-md-10 text-monospace text-break">{{ $parallel_block.GasLimit }}</div>
+          </div>
+
+          <div class="row border-bottom p-1 mx-0">
+            <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Base fee per gas">Base fee per gas:</span></div>
+            <div class="col-md-10 text-monospace text-break">{{ $parallel_block.BaseFeePerGas }}</div>
+          </div>
+
+          <div class="row border-bottom p-1 mx-0">
+            <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Transactions">Transactions:</span></div>
+            <div class="col-md-10 text-monospace text-break">{{ $parallel_block.TransactionsCount }}</div>
+          </div>
+
+          <div class="row border-bottom p-1 mx-0">
+            <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Timestamp">Timestamp:</span></div>
+            <div class="col-md-5 text-monospace text-break">
+              <span aria-ethereum-date="{{ .Time.Unix }}" aria-ethereum-date-format="FROMNOW">{{ $parallel_block.Time }}</span>
+              (<span id="timestamp" aria-ethereum-date="{{ $parallel_block.Time.Unix }}" aria-ethereum-date-format="LOCAL" data-timer="{{ $parallel_block.Time.Unix }}">{{ formatRecentTimeShort $parallel_block.Time }}</span>)
+            </div>
+          </div>
+
+        <div class="row p-1 mx-0">
+          <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Block Extra Data">Block Extra Data</span></div>
+          <div class="col-md-10 text-monospace text-break d-flex justify-between flex-wrap">
+            <div id="extra-data" class="mw-100" aria-hex-data="0x{{ printf "%x" $parallel_block.ExtraData }}" data-graffiti="{{ printf "%x" $parallel_block.ExtraData }}">{{ formatGraffiti $parallel_block.ExtraData }}</div>
+          </div>
+        </div>
+        <!-- -->
+      </div>
+    </div>
+  {{ end }}
+{{ end }}

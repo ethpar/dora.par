@@ -47,6 +47,7 @@ func Slot(w http.ResponseWriter, r *http.Request) {
 		"slot/deposit_requests.html",
 		"slot/withdrawal_requests.html",
 		"slot/consolidation_requests.html",
+		"slot/parallel_blocks.html",
 	)
 	var notfoundTemplateFiles = append(layoutTemplateFiles,
 		"slot/notfound.html",
@@ -680,12 +681,16 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 			if blockData.Block.Alpha == nil {
 				break
 			}
-			var executionBlock beacon.ExecutionBlock
-			var ok bool
+			//var executionBlock beacon.ExecutionBlock
+			//var ok bool
+			pageData.ParallelBlocksCount = 0
+
 			if blockData.ExecutionBlocks != nil {
-				executionBlock, ok = blockData.ExecutionBlocks[rank]
+				pageData.ParallelBlocksCount = uint64(len(blockData.ExecutionBlocks))
+				getSlotPageParallelBlocks(pageData, blockData.ExecutionBlocks)
+				//executionBlock, ok = blockData.ExecutionBlocks[rank]
 			}
-			if ok {
+			/*if ok {
 				executionPayload := executionBlock.Block
 				//executionPayload.p
 				var parentHash = executionPayload.ParentHash()
@@ -709,7 +714,7 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 					BlockNumber:   executionPayload.Number().Uint64(), //
 				}
 				getSlotPageTransactionsEx(pageData, executionBlock)
-			} else {
+			} else*/{
 				executionPayload := blockData.Block.Alpha.Message.Body.ExecutionPayload
 				pageData.ExecutionData = &models.SlotPageExecutionData{
 					ParentHash:    executionPayload.ParentHash[:],
@@ -809,6 +814,32 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 	}
 
 	return pageData
+}
+
+func getSlotPageParallelBlocks(pageData *models.SlotPageBlockData, parallelBlocks map[uint64]beacon.ExecutionBlock) {
+	pageData.ParallelBlocks = make([]*models.SlotPageParallelBlock, 0)
+	for idx, parallelBlcosk := range parallelBlocks {
+		var executionPayload = parallelBlcosk.Block
+
+		var slotPageParallelBlock = &models.SlotPageParallelBlock{
+			Rank:       idx,
+			ParentHash: executionPayload.ParentHash().Bytes(), //parentHash[:],
+			//FeeRecipient:  executionPayload.FeeRecipient[:],
+			//StateRoot:     executionPayload.StateRoot[:],
+			//ReceiptsRoot:  executionPayload.ReceiptsRoot[:],
+			//LogsBloom:     executionPayload.LogsBloom[:],
+			//Random:        executionPayload.PrevRandao[:],
+			GasLimit:  executionPayload.GasLimit(),
+			GasUsed:   executionPayload.GasUsed(),
+			Timestamp: executionPayload.Time(),
+			Time:      time.Unix(int64(executionPayload.Time()), 0),
+			//ExtraData:     executionPayload.ExtraData,
+			BaseFeePerGas: executionPayload.Header().BaseFee.Uint64(),
+			BlockHash:     executionPayload.Hash().Bytes(),    //[:]
+			BlockNumber:   executionPayload.Number().Uint64(), //
+		}
+		pageData.ParallelBlocks = append(pageData.ParallelBlocks, slotPageParallelBlock)
+	}
 }
 
 func getSlotPageTransactions(pageData *models.SlotPageBlockData, tranactions []bellatrix.Transaction) {

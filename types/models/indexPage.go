@@ -70,17 +70,18 @@ type IndexPageDataBlocks struct {
 }
 
 type IndexPageDataSlots struct {
-	Epoch        uint64                    `json:"epoch"`
-	Slot         uint64                    `json:"slot"`
-	Rank         uint64                    `json:"rank"`
-	EthBlock     uint64                    `json:"eth_block"`
-	Ts           time.Time                 `json:"ts"`
-	Proposer     uint64                    `json:"proposer"`
-	ProposerName string                    `json:"proposer_name"`
-	Status       uint64                    `json:"status"`
-	BlockRoot    []byte                    `json:"block_root"`
-	ParentRoot   []byte                    `json:"-"`
-	ForkGraph    []*IndexPageDataForkGraph `json:"fork_graph"`
+	Epoch               uint64                    `json:"epoch"`
+	Slot                uint64                    `json:"slot"`
+	Rank                uint64                    `json:"rank"`
+	ParallelBlocksCount uint64                    `json:"parallel_blocks_count"`
+	EthBlock            uint64                    `json:"eth_block"`
+	Ts                  time.Time                 `json:"ts"`
+	Proposer            uint64                    `json:"proposer"`
+	ProposerName        string                    `json:"proposer_name"`
+	Status              uint64                    `json:"status"`
+	BlockRoot           []byte                    `json:"block_root"`
+	ParentRoot          []byte                    `json:"-"`
+	ForkGraph           []*IndexPageDataForkGraph `json:"fork_graph"`
 }
 
 type IndexPageDataForkGraph struct {

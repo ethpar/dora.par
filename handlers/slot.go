@@ -820,7 +820,6 @@ func getSlotPageParallelBlocks(pageData *models.SlotPageBlockData, parallelBlock
 	pageData.ParallelBlocks = make([]*models.SlotPageParallelBlock, 0)
 	for idx, parallelBlcosk := range parallelBlocks {
 		var executionPayload = parallelBlcosk.Block
-
 		var slotPageParallelBlock = &models.SlotPageParallelBlock{
 			Rank:       idx,
 			ParentHash: executionPayload.ParentHash().Bytes(), //parentHash[:],
@@ -834,9 +833,10 @@ func getSlotPageParallelBlocks(pageData *models.SlotPageBlockData, parallelBlock
 			Timestamp: executionPayload.Time(),
 			Time:      time.Unix(int64(executionPayload.Time()), 0),
 			//ExtraData:     executionPayload.ExtraData,
-			BaseFeePerGas: executionPayload.Header().BaseFee.Uint64(),
-			BlockHash:     executionPayload.Hash().Bytes(),    //[:]
-			BlockNumber:   executionPayload.Number().Uint64(), //
+			BaseFeePerGas:     executionPayload.Header().BaseFee.Uint64(),
+			BlockHash:         executionPayload.Hash().Bytes(),    //[:]
+			BlockNumber:       executionPayload.Number().Uint64(), //
+			TransactionsCount: uint64(len(executionPayload.Transactions())),
 		}
 		pageData.ParallelBlocks = append(pageData.ParallelBlocks, slotPageParallelBlock)
 	}

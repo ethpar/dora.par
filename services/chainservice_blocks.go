@@ -298,10 +298,10 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 				dbBlock := block.GetDbBlock(bs.beaconIndexer)
 				if dbBlock != nil {
 					var j = 0
-					var blocksCount = 1
+					var blocksCount = 0 //1
 					if block.ExecutionBlocks != nil && len(block.ExecutionBlocks) > 0 {
-						blocksCount = len(block.ExecutionBlocks) + 1
-						for i := 5; i >= 0; i-- {
+						blocksCount = len(block.ExecutionBlocks) //+ 1
+						/*for i := 5; i >= 0; i-- {
 							var executionBlock, ok = block.ExecutionBlocks[uint64(i)]
 							if ok {
 								resBlocks = append(resBlocks, &dbtypes.Slot{
@@ -317,7 +317,7 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 								})
 								j++
 							}
-						}
+						}*/
 					}
 					dbBlock.ExecutionBlocksCount = blocksCount
 					dbBlock.ExecutionBlocksIdx = j
@@ -468,10 +468,10 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 
 			if dbBlock.Block != nil {
 				var j = 0
-				var blocksCount = 1
+				var blocksCount = 0 //1
 				if dbBlock.Block.ExecutionBlocks != nil && len(dbBlock.Block.ExecutionBlocks) > 0 {
-					blocksCount = len(dbBlock.Block.ExecutionBlocks) + 1
-					for i := range dbBlock.Block.ExecutionBlocks {
+					blocksCount = len(dbBlock.Block.ExecutionBlocks) //+ 1
+					/*for i := range dbBlock.Block.ExecutionBlocks {
 						var executionBlock = dbBlock.Block.ExecutionBlocks[i]
 						resBlocks = append(resBlocks, &dbtypes.Slot{
 							Rank:                 executionBlock.Rank,
@@ -485,7 +485,7 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 							ExecutionBlocksIdx:   i,
 						})
 						j++
-					}
+					}*/
 				}
 				dbBlock.Block.ExecutionBlocksCount = blocksCount
 				dbBlock.Block.ExecutionBlocksIdx = j
@@ -735,11 +735,38 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 			if block.block != nil {
 				if block.slot >= uint64(prunedSlot) {
 					assignedBlock.Block = block.block.GetDbBlock(bs.beaconIndexer)
+
 				} else {
 					blockRoots = append(blockRoots, block.block.Root[:])
 					blockRootsIdx = append(blockRootsIdx, resIdx)
 					blockRootsCachedId = append(blockRootsCachedId, cachedStart+uint64(cidx))
 				}
+				if block.block.ExecutionBlocks != nil {
+					var blocksCount = len(block.block.ExecutionBlocks)
+					for i := range block.block.ExecutionBlocks {
+						var executionBlock = block.block.ExecutionBlocks[i]
+						assignedBlock1 := dbtypes.AssignedSlot{
+							Slot:     block.slot,
+							Proposer: block.proposer,
+						}
+						var number = executionBlock.Block.NumberU64()
+						assignedBlock1.Block = &dbtypes.Slot{
+							Rank:                 executionBlock.Rank,
+							Slot:                 uint64(block.block.Slot),
+							Proposer:             assignedBlock.Block.Proposer,
+							Status:               assignedBlock.Block.Status,
+							Root:                 executionBlock.Root[:],
+							ForkId:               assignedBlock.Block.ForkId,
+							EthTransactionCount:  uint64(len(executionBlock.Block.Transactions())),
+							ExecutionBlocksCount: blocksCount,
+							ExecutionBlocksIdx:   0, //i,
+							EthBlockNumber:       &number,
+						}
+						resBlocks = append(resBlocks, &assignedBlock1)
+						//	j++
+					}
+				}
+
 			}
 			resBlocks = append(resBlocks, &assignedBlock)
 			resIdx++

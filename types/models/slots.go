@@ -48,6 +48,7 @@ type SlotsPageDataSlot struct {
 	ParentRoot            []byte                    `json:"parent_root"`
 	ForkGraph             []*SlotsPageDataForkGraph `json:"fork_graph"`
 	Rank                  uint64                    `json:"rank"`
+	ParallelBlocksCount   uint64                    `json:"parallel_blocks_count"`
 }
 
 type SlotsPageDataForkGraph struct {

@@ -12,9 +12,8 @@
           <thead>
             <tr>
               <th>Chain</th>
-              <th>Epoch</th>
               <th>Slot</th>
-              <th>Rank</th>
+              <th>Par. blocks</th>
               <th>Status</th>
               <th data-timecol="duration">Time</th>
               <th>Proposer</th>
@@ -38,13 +37,12 @@
                 </div>
                 {{ html "<!-- /ko -->" }}
               </td>
-              <td><a data-bind="attr: {href: '/epoch/'+epoch}, text: $root.formatAddCommas(epoch)"></a></td>
               <td>
                 <div data-bind="if: (status == 2)"><a data-bind="attr: {href: '/slot/' + $root.hexstr(block_root)}, text: $root.formatAddCommas(slot)"></a></div>
                 <div data-bind="ifnot: (status == 2)"><a data-bind="attr: {href: '/slot/' + slot + '/rank/' + rank}, text: $root.formatAddCommas(slot)"></a></div>
               </td>
               <td>
-                  <span data-bind="text: $root.formatAddCommas(rank)"></span>
+                  <span data-bind="text: $root.formatAddCommas(parallel_blocks_count)"></span>
               </td>
               <td>
                 <span data-bind="if: slot == 0" class="badge rounded-pill text-bg-info">Genesis</span>
@@ -97,14 +95,13 @@
                       </div>
                     {{ end }}
                   </td>
-                  <td><a href="/epoch/{{ $slot.Epoch }}">{{ formatAddCommas $slot.Epoch }}</a></td>
                   {{ if eq .Status 2 }}
                   <td><a href="/slot/0x{{ printf "%x" $slot.BlockRoot }}">{{ formatAddCommas $slot.Slot }}</a></td>
                   {{ else }}
                     <td><a href="/slot/{{ $slot.Slot }}/rank/{{ $slot.Rank }}">{{ formatAddCommas $slot.Slot }}</a></td>
                   {{ end }}
                   <td>
-                    <span data-bind="text: $root.formatAddCommas($slot.Rank)">{{ $slot.Rank }}</span>
+                    <span data-bind="text: $root.formatAddCommas($slot.ParallelBlocksCount)">{{ $slot.ParallelBlocksCount }}</span>
                   </td>
                   <td>
                     {{ if eq $slot.Slot 0 }}

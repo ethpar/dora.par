@@ -164,6 +164,7 @@ func buildSlotsPageData(firstSlot uint64, pageSize uint64) (*models.SlotsPageDat
 				ParentRoot:            dbSlot.ParentRoot,
 				ForkGraph:             make([]*models.SlotsPageDataForkGraph, 0),
 				Rank:                  dbSlot.Rank,
+				ParallelBlocksCount:   uint64(dbSlot.ExecutionBlocksCount),
 			}
 			if dbSlot.EthBlockNumber != nil {
 				slotData.WithEthBlock = true

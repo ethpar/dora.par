@@ -330,17 +330,16 @@ func buildIndexPageRecentSlotsData(pageData *models.IndexPageData, firstSlot pha
 			dbSlot := dbSlots[dbIdx]
 
 			slotData := &models.IndexPageDataSlots{
-				Slot:                slot,
-				Rank:                dbSlot.Rank,
-				ParallelBlocksCount: uint64(dbSlot.ExecutionBlocksCount),
-				Epoch:               uint64(chainState.EpochOfSlot(phase0.Slot(dbSlot.Slot))),
-				Ts:                  chainState.SlotToTime(phase0.Slot(slot)),
-				Status:              uint64(dbSlot.Status),
-				Proposer:            dbSlot.Proposer,
-				ProposerName:        services.GlobalBeaconService.GetValidatorName(dbSlot.Proposer),
-				BlockRoot:           dbSlot.Root,
-				ParentRoot:          dbSlot.ParentRoot,
-				ForkGraph:           make([]*models.IndexPageDataForkGraph, 0),
+				Slot:         slot,
+				Rank:         dbSlot.Rank,
+				Epoch:        uint64(chainState.EpochOfSlot(phase0.Slot(dbSlot.Slot))),
+				Ts:           chainState.SlotToTime(phase0.Slot(slot)),
+				Status:       uint64(dbSlot.Status),
+				Proposer:     dbSlot.Proposer,
+				ProposerName: services.GlobalBeaconService.GetValidatorName(dbSlot.Proposer),
+				BlockRoot:    dbSlot.Root,
+				ParentRoot:   dbSlot.ParentRoot,
+				ForkGraph:    make([]*models.IndexPageDataForkGraph, 0),
 			}
 			pageData.RecentSlots = append(pageData.RecentSlots, slotData)
 			blockCount++
@@ -358,7 +357,6 @@ func buildIndexPageRecentSlotsData(pageData *models.IndexPageData, firstSlot pha
 
 func buildIndexSlotsPageSlotGraphParallel(pageData *models.IndexPageData, slotData *models.IndexPageDataSlots, executionBlocksCount int, maxOpenFork *int, executionBlocksIdx int) {
 	// fork tree
-	executionBlocksCount = 0
 	getForkGraph := func(slotData *models.IndexPageDataSlots, forkIdx int) *models.IndexPageDataForkGraph {
 		forkGraph := &models.IndexPageDataForkGraph{}
 		graphCount := len(slotData.ForkGraph)

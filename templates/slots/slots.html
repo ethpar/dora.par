@@ -46,7 +46,7 @@
                 <th>Chain</th>
                 <th>Epoch</th>
                 <th>Slot</th>
-                <th>Par. blocks</th>
+                <th>Rank</th>
                 <th>Status</th>
                 <th style="min-width: 125px">Time</th>
                 <th>Prop<span class="d-none d-lg-inline">oser</span></th>
@@ -95,7 +95,7 @@
                     {{ else }}
                       <td><a href="/slot/{{ $slot.Slot }}/rank/{{ $slot.Rank }}">{{ formatAddCommas $slot.Slot }}</a></td>
                     {{ end }}
-                    <td>{{ if not (eq $slot.Status 0) }}{{ $slot.ParallelBlocksCount }}{{ end }}</td>
+                    <td>{{ if not (eq $slot.Status 0) }}{{ $slot.Rank }}{{ end }}</td>
                     <td>
                       {{ if eq $slot.Slot 0 }}
                         <span class="badge rounded-pill text-bg-info">Genesis</span>

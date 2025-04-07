@@ -13,7 +13,7 @@
             <tr>
               <th>Chain</th>
               <th>Slot</th>
-              <th>Par. blocks</th>
+              <th>Rank</th>
               <th>Status</th>
               <th data-timecol="duration">Time</th>
               <th>Proposer</th>
@@ -42,7 +42,7 @@
                 <div data-bind="ifnot: (status == 2)"><a data-bind="attr: {href: '/slot/' + slot + '/rank/' + rank}, text: $root.formatAddCommas(slot)"></a></div>
               </td>
               <td>
-                  <span data-bind="text: $root.formatAddCommas(parallel_blocks_count)"></span>
+                  <span data-bind="text: $root.formatAddCommas(rank)"></span>
               </td>
               <td>
                 <span data-bind="if: slot == 0" class="badge rounded-pill text-bg-info">Genesis</span>
@@ -101,7 +101,7 @@
                     <td><a href="/slot/{{ $slot.Slot }}/rank/{{ $slot.Rank }}">{{ formatAddCommas $slot.Slot }}</a></td>
                   {{ end }}
                   <td>
-                    <span data-bind="text: $root.formatAddCommas($slot.ParallelBlocksCount)">{{ $slot.ParallelBlocksCount }}</span>
+                    <span data-bind="text: $root.formatAddCommas($slot.Rank)">{{ $slot.Rank }}</span>
                   </td>
                   <td>
                     {{ if eq $slot.Slot 0 }}

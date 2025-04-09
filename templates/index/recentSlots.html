@@ -12,7 +12,6 @@
           <thead>
             <tr>
               <th>Chain</th>
-              <th>Epoch</th>
               <th>Slot</th>
               <th>Rank</th>
               <th>Status</th>
@@ -38,7 +37,6 @@
                 </div>
                 {{ html "<!-- /ko -->" }}
               </td>
-              <td><a data-bind="attr: {href: '/epoch/'+epoch}, text: $root.formatAddCommas(epoch)"></a></td>
               <td>
                 <div data-bind="if: (status == 2)"><a data-bind="attr: {href: '/slot/' + $root.hexstr(block_root)}, text: $root.formatAddCommas(slot)"></a></div>
                 <div data-bind="ifnot: (status == 2)"><a data-bind="attr: {href: '/slot/' + slot + '/rank/' + rank}, text: $root.formatAddCommas(slot)"></a></div>
@@ -97,7 +95,6 @@
                       </div>
                     {{ end }}
                   </td>
-                  <td><a href="/epoch/{{ $slot.Epoch }}">{{ formatAddCommas $slot.Epoch }}</a></td>
                   {{ if eq .Status 2 }}
                   <td><a href="/slot/0x{{ printf "%x" $slot.BlockRoot }}">{{ formatAddCommas $slot.Slot }}</a></td>
                   {{ else }}

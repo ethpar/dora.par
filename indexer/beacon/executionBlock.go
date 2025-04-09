@@ -101,7 +101,7 @@ func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64) (err 
 			if err.Error() != "not found" {
 				c.logger.Errorf("GetBlockByNumberAndRank: %v:%v %v", blockNumber, rank, err)
 			} else {
-				c.logger.Infof("GetBlockByNumberAndRank not found: %v:%v", blockNumber, rank)
+				//	c.logger.Infof("GetBlockByNumberAndRank not found: %v:%v", blockNumber, rank)
 			}
 			continue
 		}

@@ -735,11 +735,38 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 			if block.block != nil {
 				if block.slot >= uint64(prunedSlot) {
 					assignedBlock.Block = block.block.GetDbBlock(bs.beaconIndexer)
+
 				} else {
 					blockRoots = append(blockRoots, block.block.Root[:])
 					blockRootsIdx = append(blockRootsIdx, resIdx)
 					blockRootsCachedId = append(blockRootsCachedId, cachedStart+uint64(cidx))
 				}
+				if block.block.ExecutionBlocks != nil {
+					var blocksCount = len(block.block.ExecutionBlocks)
+					for i := range block.block.ExecutionBlocks {
+						var executionBlock = block.block.ExecutionBlocks[i]
+						assignedBlock1 := dbtypes.AssignedSlot{
+							Slot:     block.slot,
+							Proposer: block.proposer,
+						}
+						var number = executionBlock.Block.NumberU64()
+						assignedBlock1.Block = &dbtypes.Slot{
+							Rank:                 executionBlock.Rank,
+							Slot:                 uint64(block.block.Slot),
+							Proposer:             assignedBlock.Block.Proposer,
+							Status:               assignedBlock.Block.Status,
+							Root:                 executionBlock.Root[:],
+							ForkId:               assignedBlock.Block.ForkId,
+							EthTransactionCount:  uint64(len(executionBlock.Block.Transactions())),
+							ExecutionBlocksCount: blocksCount,
+							ExecutionBlocksIdx:   0, //i,
+							EthBlockNumber:       &number,
+						}
+						resBlocks = append(resBlocks, &assignedBlock1)
+						//	j++
+					}
+				}
+
 			}
 			resBlocks = append(resBlocks, &assignedBlock)
 			resIdx++

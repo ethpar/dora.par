@@ -110,7 +110,7 @@ func (client *Client) updateNodePeers(ctx context.Context) error {
 	client.nodeInfo, err = client.rpcClient.GetAdminNodeInfo(ctx)
 	if err != nil {
 		client.didFetchPeers = false
-		return fmt.Errorf("could not get node info: %v", err)
+		//	return fmt.Errorf("could not get node info: %v", err)
 	}
 
 	peers, err := client.rpcClient.GetAdminPeers(ctx)

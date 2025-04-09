@@ -71,7 +71,16 @@ func Slot(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	rank, err := strconv.ParseUint(vars["rank"], 10, 64)
+	var rank = uint64(0)
+	for s, s2 := range vars {
+		if s == "rank" {
+			rank, err = strconv.ParseUint(s2, 10, 64)
+			break
+		}
+	}
+	/*if vars["rank"] != '' {
+		rank, err = strconv.ParseUint(vars["rank"], 10, 64)
+	}*/
 
 	urlArgs := r.URL.Query()
 

@@ -313,7 +313,7 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 				block.SetBlock(blockBody)
 			}
 			if block.block != nil && block.block.Alpha != nil {
-				processExecutionBlocks(client, block)
+				processExecutionBlocks(client, block, false)
 			}
 			sync.cachedBlocks[slot] = block
 		}

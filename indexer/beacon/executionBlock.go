@@ -67,7 +67,7 @@ func getExecutionHashes(block *Block) (hashes []string) {
 	}
 	return hashes
 }
-func processExecutionBlocks(c *Client, block *Block) (err error) {
+func processExecutionBlocks(c *Client, block *Block, isAsync bool) (err error) {
 	if block.block == nil {
 		c.logger.Warn("processExecutionBlocks: block.block == nil")
 		return
@@ -78,12 +78,16 @@ func processExecutionBlocks(c *Client, block *Block) (err error) {
 		return err1
 	}
 
-	c.logger.Infof("add check parallel Blocks for: %v", blockNumber)
-	go processExecutionBlocksTi(c, block, blockNumber)
+	if isAsync {
+		c.logger.Infof("add check parallel Blocks for: %v", blockNumber)
+		go processExecutionBlocksTi(c, block, blockNumber, isAsync)
+	} else {
+		processExecutionBlocksTi(c, block, blockNumber, isAsync)
+	}
 	return err1
 }
 
-func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64) (err error) {
+func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64, isAsync bool) (err error) {
 	//processPendingTransactions(c, block.Slot)
 	time.Sleep(12 * time.Second)
 	var executionClient = c.indexer.executionPool.GetReadyEndpoint(execution.AnyClient)
@@ -107,7 +111,7 @@ func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64) (err 
 		}
 		parallelExecutionBlock, err := executionClient.GetRPCClient().DecodeBlockRaw(nil, parallelExecutionBlockRaw)
 		if err == nil {
-			processExecutionBlock(c, block, parallelExecutionBlock, parallelExecutionBlockRaw, uint64(rank))
+			processExecutionBlock(c, block, parallelExecutionBlock, parallelExecutionBlockRaw, uint64(rank), isAsync)
 		} else {
 			c.logger.Errorf("DecodeBlockRaw: %v:%v %v", blockNumber, rank, err)
 		}
@@ -115,35 +119,8 @@ func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64) (err 
 	return
 }
 
-func processExecutionBlocksWithHashes(c *Client, block *Block) (isExists bool, isNew bool, err error) {
-	//var _blockNumber uint64
-	//var _pBlock *Block
-	var hashes = getExecutionHashes(block)
-	if hashes != nil && len(hashes) > 0 {
-		var rank uint64 = 0
-		for _, s := range hashes {
-			//c.logger.Info("parallel hash: %v ", s)
-
-			var executionClient = c.indexer.executionPool.GetReadyEndpoint(execution.AnyClient)
-			if executionClient == nil {
-				return false, false, fmt.Errorf("could not get execution client")
-			}
-
-			parallelExecutionBlockRaw, err := executionClient.GetRPCClient().GetBlockByStringHashRaw(c.getContext(), s)
-			parallelExecutionBlock, err := executionClient.GetRPCClient().DecodeBlockRaw(nil, parallelExecutionBlockRaw)
-
-			if err == nil {
-				processExecutionBlock(c, block, parallelExecutionBlock, parallelExecutionBlockRaw, uint64(rank))
-			} else {
-				c.logger.Errorf("!paralle error:  %v", err)
-			}
-		}
-	}
-	return
-}
-
 func processExecutionBlock(c *Client, block *Block, parallelExecutionBlock *types.Block,
-	parallelExecutionBlockRaw *json.RawMessage, rank uint64) (isExists bool, isNew bool, err error) {
+	parallelExecutionBlockRaw *json.RawMessage, rank uint64, isAsync bool) (isExists bool, isNew bool, err error) {
 	if parallelExecutionBlock != nil {
 		isExists = true
 		//c.logger.Infof("parallel block %v %v %v", parallelExecutionBlock.Number(), block.Slot, rank) //json.
@@ -166,7 +143,7 @@ func processExecutionBlock(c *Client, block *Block, parallelExecutionBlock *type
 					return err
 				}
 				//c.logger.Debugf("saved execution block: slot: %v  %v:%v", block.Slot, parallelExecutionBlock.Number(), rank)
-				c.logger.Infof("saved execution block: slot: %v  %v:%v", block.Slot, parallelExecutionBlock.Number(), rank)
+				c.logger.Infof("saved slot: %v exec block:%v:%v %v", block.Slot, parallelExecutionBlock.Number(), rank, isAsync)
 				return nil
 			})
 		}

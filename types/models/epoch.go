@@ -57,4 +57,5 @@ type EpochPageDataSlot struct {
 	WithEthBlock          bool      `json:"with_eth_block"`
 	Graffiti              []byte    `json:"graffiti"`
 	BlockRoot             []byte    `json:"block_root"`
+	Rank                  uint64    `json:"rank"`
 }

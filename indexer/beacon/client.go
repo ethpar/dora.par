@@ -429,6 +429,10 @@ func (c *Client) processBlock(slot phase0.Slot, root phase0.Root, header *phase0
 		block.isInUnfinalizedDb = true
 		c.indexer.blockCache.latestBlock = block
 		processPendingTransactions(c, block.Slot)
+
+		if block.block != nil && block.block.Alpha != nil {
+			processExecutionBlocks(c, block, true)
+		}
 	}
 
 	if slot < finalizedSlot && !block.isInFinalizedDb {
@@ -436,9 +440,6 @@ func (c *Client) processBlock(slot phase0.Slot, root phase0.Root, header *phase0
 		// TODO: insert new orphaned block to db
 
 		c.logger.Errorf("new orphaned block in finalized epoch %v: %v [%v] - OPEN TODO", chainState.EpochOfSlot(slot), slot, root.String())
-	}
-	if block.block != nil && block.block.Alpha != nil {
-		processExecutionBlocks(c, block)
 	}
 
 	//rpc.NewExecutionClient(endpoint.Name, endpoint.URL, endpoint.Headers, endpoint.SshConfig, logger)

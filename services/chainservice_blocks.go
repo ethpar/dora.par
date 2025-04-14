@@ -574,77 +574,68 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 		slot := phase0.Slot(slotIdx)
 		blocks := bs.beaconIndexer.GetBlocksBySlot(slot)
 		for _, block := range blocks {
-			if block.Rank == 0 {
-				blockHeader := block.GetHeader()
-				if blockHeader == nil {
-					continue
-				}
-				blockIndex := block.GetBlockIndex()
-				if blockIndex == nil {
-					continue
-				}
-
-				isOrphaned := !bs.beaconIndexer.IsCanonicalBlock(block, nil)
-				if filter.WithOrphaned != 1 {
-					if filter.WithOrphaned == 0 && isOrphaned {
-						// only canonical blocks, skip
-						continue
-					}
-					if filter.WithOrphaned == 2 && !isOrphaned {
-						// only orphaned blocks, skip
-						continue
-					}
-				}
-
-				if filter.WithMissing == 2 {
-					// only missing blocks, skip
-					continue
-				}
-
-				// filter by graffiti
-				if filter.Graffiti != "" {
-					blockGraffiti := string(blockIndex.Graffiti[:])
-					if !strings.Contains(blockGraffiti, filter.Graffiti) {
-						continue
-					}
-				}
-
-				// filter by extra data
-				if filter.ExtraData != "" {
-					blockExtraData := string(blockIndex.ExecutionExtraData)
-					if !strings.Contains(blockExtraData, filter.ExtraData) {
-						continue
-					}
-				}
-
-				// filter by proposer
-				proposer := uint64(blockHeader.Message.ProposerIndex)
-				if filter.ProposerIndex != nil {
-					if proposer != *filter.ProposerIndex {
-						continue
-					}
-				}
-				if filter.ProposerName != "" {
-					proposerName := bs.validatorNames.GetValidatorName(proposer)
-					if !strings.Contains(proposerName, filter.ProposerName) {
-						continue
-					}
-				}
-
-				cachedMatches = append(cachedMatches, cachedDbBlock{
-					slot:     uint64(block.Slot),
-					proposer: uint64(blockHeader.Message.ProposerIndex),
-					orphaned: isOrphaned,
-					block:    block,
-				})
-			} else {
-				cachedMatches = append(cachedMatches, cachedDbBlock{
-					slot:     uint64(block.Slot),
-					proposer: 0,
-					orphaned: false,
-					block:    block,
-				})
+			blockHeader := block.GetHeader()
+			if blockHeader == nil {
+				continue
 			}
+			blockIndex := block.GetBlockIndex()
+			if blockIndex == nil {
+				continue
+			}
+
+			isOrphaned := !bs.beaconIndexer.IsCanonicalBlock(block, nil)
+			if filter.WithOrphaned != 1 {
+				if filter.WithOrphaned == 0 && isOrphaned {
+					// only canonical blocks, skip
+					continue
+				}
+				if filter.WithOrphaned == 2 && !isOrphaned {
+					// only orphaned blocks, skip
+					continue
+				}
+			}
+
+			if filter.WithMissing == 2 {
+				// only missing blocks, skip
+				continue
+			}
+
+			// filter by graffiti
+			if filter.Graffiti != "" {
+				blockGraffiti := string(blockIndex.Graffiti[:])
+				if !strings.Contains(blockGraffiti, filter.Graffiti) {
+					continue
+				}
+			}
+
+			// filter by extra data
+			if filter.ExtraData != "" {
+				blockExtraData := string(blockIndex.ExecutionExtraData)
+				if !strings.Contains(blockExtraData, filter.ExtraData) {
+					continue
+				}
+			}
+
+			// filter by proposer
+			proposer := uint64(blockHeader.Message.ProposerIndex)
+			if filter.ProposerIndex != nil {
+				if proposer != *filter.ProposerIndex {
+					continue
+				}
+			}
+			if filter.ProposerName != "" {
+				proposerName := bs.validatorNames.GetValidatorName(proposer)
+				if !strings.Contains(proposerName, filter.ProposerName) {
+					continue
+				}
+			}
+
+			cachedMatches = append(cachedMatches, cachedDbBlock{
+				slot:     uint64(block.Slot),
+				proposer: uint64(blockHeader.Message.ProposerIndex),
+				orphaned: isOrphaned,
+				block:    block,
+			})
 		}
 
 		// reconstruct missing blocks from epoch duties
@@ -743,26 +734,28 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 				}
 				if block.block.ExecutionBlocks != nil {
 					var blocksCount = len(block.block.ExecutionBlocks)
-					for i := range block.block.ExecutionBlocks {
-						var executionBlock = block.block.ExecutionBlocks[i]
-						assignedBlock1 := dbtypes.AssignedSlot{
-							Slot:     block.slot,
-							Proposer: block.proposer,
+					for i := 5; i >= 0; i-- {
+						var executionBlock, ok = block.block.ExecutionBlocks[uint64(i)]
+						if ok {
+							assignedBlock1 := dbtypes.AssignedSlot{
+								Slot:     block.slot,
+								Proposer: block.proposer,
+							}
+							var number = executionBlock.Block.NumberU64()
+							assignedBlock1.Block = &dbtypes.Slot{
+								Rank:                 executionBlock.Rank,
+								Slot:                 uint64(block.block.Slot),
+								Proposer:             assignedBlock.Block.Proposer,
+								Status:               assignedBlock.Block.Status,
+								Root:                 executionBlock.Root[:],
+								ForkId:               assignedBlock.Block.ForkId,
+								EthTransactionCount:  uint64(len(executionBlock.Block.Transactions())),
+								ExecutionBlocksCount: blocksCount,
+								ExecutionBlocksIdx:   0, //i,
+								EthBlockNumber:       &number,
+							}
+							resBlocks = append(resBlocks, &assignedBlock1)
 						}
-						var number = executionBlock.Block.NumberU64()
-						assignedBlock1.Block = &dbtypes.Slot{
-							Rank:                 executionBlock.Rank,
-							Slot:                 uint64(block.block.Slot),
-							Proposer:             assignedBlock.Block.Proposer,
-							Status:               assignedBlock.Block.Status,
-							Root:                 executionBlock.Root[:],
-							ForkId:               assignedBlock.Block.ForkId,
-							EthTransactionCount:  uint64(len(executionBlock.Block.Transactions())),
-							ExecutionBlocksCount: blocksCount,
-							ExecutionBlocksIdx:   0, //i,
-							EthBlockNumber:       &number,
-						}
-						resBlocks = append(resBlocks, &assignedBlock1)
 						//	j++
 					}
 				}

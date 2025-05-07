@@ -124,6 +124,7 @@ type UnfinalizedExecutionBlock struct {
 	EthTransactionCount uint64                 `db:"eth_transaction_count"`
 	Block               []byte                 `db:"block"`
 	Status              UnfinalizedBlockStatus `db:"status"`
+	Proposer            *uint64                `db:"proposer"`
 }
 
 type UnfinalizedEpoch struct {

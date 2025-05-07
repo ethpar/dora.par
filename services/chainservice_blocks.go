@@ -304,16 +304,25 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 						for i := 5; i >= 0; i-- {
 							var executionBlock, ok = block.ExecutionBlocks[uint64(i)]
 							if ok {
+								var number = executionBlock.Block.NumberU64()
+								var proposer uint64
+								if executionBlock.Proposer == nil {
+									proposer = math.MaxInt64
+								} else {
+									proposer = *executionBlock.Proposer
+								}
+
 								resBlocks = append(resBlocks, &dbtypes.Slot{
 									Rank:                 uint64(i),
 									Slot:                 dbBlock.Slot,
-									Proposer:             dbBlock.Proposer,
+									Proposer:             proposer,
 									Status:               dbBlock.Status,
 									Root:                 executionBlock.Root[:],
 									ForkId:               dbBlock.ForkId,
 									EthTransactionCount:  uint64(executionBlock.Block.Transactions().Len()),
 									ExecutionBlocksCount: blocksCount,
 									ExecutionBlocksIdx:   j,
+									EthBlockNumber:       &number,
 								})
 								j++
 							}
@@ -348,11 +357,11 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 				}
 
 				if !hasCanonicalProposer && slot > 0 {
-					/*	resBlocks = append(resBlocks, &dbtypes.Slot{
+					resBlocks = append(resBlocks, &dbtypes.Slot{
 						Slot:     uint64(slot),
 						Proposer: uint64(canonicalProposer),
 						Status:   dbtypes.Missing,
-					})*/
+					})
 				}
 			}
 		}
@@ -389,7 +398,7 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 
 				blockStatus := dbtypes.Canonical
 				if !isCanonical {
-					blockStatus = dbtypes.Orphaned
+					//blockStatus = dbtypes.Orphaned
 				}
 
 				blockRoots = append(blockRoots, block.Root[:])
@@ -473,16 +482,24 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 					blocksCount = len(dbBlock.Block.ExecutionBlocks) + 1
 					for i := range dbBlock.Block.ExecutionBlocks {
 						var executionBlock = dbBlock.Block.ExecutionBlocks[i]
+						var number = executionBlock.Eth_block_number
+						var proposer uint64
+						if executionBlock.Proposer == nil {
+							proposer = math.MaxInt64
+						} else {
+							proposer = *executionBlock.Proposer
+						}
 						resBlocks = append(resBlocks, &dbtypes.Slot{
 							Rank:                 executionBlock.Rank,
 							Slot:                 dbBlock.Slot,
-							Proposer:             dbBlock.Proposer,
+							Proposer:             proposer,
 							Status:               dbBlock.Block.Status,
 							Root:                 executionBlock.Root[:],
 							ForkId:               dbBlock.Block.ForkId,
 							EthTransactionCount:  executionBlock.EthTransactionCount,
 							ExecutionBlocksCount: blocksCount,
 							ExecutionBlocksIdx:   i,
+							EthBlockNumber:       &number,
 						})
 						j++
 					}

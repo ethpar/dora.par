@@ -12,6 +12,7 @@ import (
 	"github.com/ethpandaops/dora/dbtypes"
 	"github.com/jmoiron/sqlx"
 	dynssz "github.com/pk910/dynamic-ssz"
+	"strconv"
 	"time"
 )
 
@@ -22,9 +23,10 @@ type ExecutionBlock struct {
 	dynSsz   *dynssz.DynSsz
 	Block    *types.Block
 	blockRaw *json.RawMessage
+	Proposer *uint64
 }
 
-func (block *ExecutionBlock) buildUnfinalizedBlock(compress bool) *dbtypes.UnfinalizedExecutionBlock {
+func (block *ExecutionBlock) buildBlock(compress bool) *dbtypes.UnfinalizedExecutionBlock {
 
 	return &dbtypes.UnfinalizedExecutionBlock{
 		Root:                block.Root[:],
@@ -35,6 +37,7 @@ func (block *ExecutionBlock) buildUnfinalizedBlock(compress bool) *dbtypes.Unfin
 		Block:               *block.blockRaw,
 		Status:              0,
 		Rank:                block.Rank,
+		Proposer:            block.Proposer,
 	}
 }
 
@@ -97,8 +100,20 @@ func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64, isAsy
 
 	//blockNumber = 22064102
 	c.logger.Infof("start check parallel Blocks for: %v", blockNumber)
+	var proposers, _ = c.client.GetRPCClient().GetRewards(c.getContext(), block.Root)
 
 	for rank := 1; rank < 5; rank++ {
+		var proposer *uint64 = nil
+		if len(proposers) > rank {
+			if proposers[rank] != "" {
+				mayByPproposer, err := strconv.ParseUint(proposers[rank], 10, 64)
+				if err == nil {
+					proposer = &mayByPproposer
+				} else {
+					c.logger.Debugf("error on get proposers: %v", blockNumber)
+				}
+			}
+		}
 		c.logger.Debugf("check GetBlockByNumberAndRank: %v:%v", blockNumber, rank)
 		parallelExecutionBlockRaw, err := executionClient.GetRPCClient().GetBlockByNumberAndRankRaw(c.getContext(), blockNumber, uint64(rank))
 		if err != nil {
@@ -111,7 +126,7 @@ func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64, isAsy
 		}
 		parallelExecutionBlock, err := executionClient.GetRPCClient().DecodeBlockRaw(nil, parallelExecutionBlockRaw)
 		if err == nil {
-			processExecutionBlock(c, block, parallelExecutionBlock, parallelExecutionBlockRaw, uint64(rank), isAsync)
+			processExecutionBlock(c, block, parallelExecutionBlock, parallelExecutionBlockRaw, uint64(rank), proposer, isAsync)
 		} else {
 			c.logger.Errorf("DecodeBlockRaw: %v:%v %v", blockNumber, rank, err)
 		}
@@ -120,7 +135,7 @@ func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64, isAsy
 }
 
 func processExecutionBlock(c *Client, block *Block, parallelExecutionBlock *types.Block,
-	parallelExecutionBlockRaw *json.RawMessage, rank uint64, isAsync bool) (isExists bool, isNew bool, err error) {
+	parallelExecutionBlockRaw *json.RawMessage, rank uint64, proposer *uint64, isAsync bool) (isExists bool, isNew bool, err error) {
 	if parallelExecutionBlock != nil {
 		isExists = true
 		//c.logger.Infof("parallel block %v %v %v", parallelExecutionBlock.Number(), block.Slot, rank) //json.
@@ -132,10 +147,11 @@ func processExecutionBlock(c *Client, block *Block, parallelExecutionBlock *type
 				Block:    parallelExecutionBlock,
 				blockRaw: parallelExecutionBlockRaw,
 				Rank:     rank,
+				Proposer: proposer,
 			}
 
 			block.ExecutionBlocks[rank] = executionBlock
-			parallelDbBlock := executionBlock.buildUnfinalizedBlock(false)
+			parallelDbBlock := executionBlock.buildBlock(false)
 			err = db.RunDBTransaction(func(tx *sqlx.Tx) error {
 				err := db.InsertUnfinalizedExecutionBlock(parallelDbBlock, tx)
 				if err != nil {

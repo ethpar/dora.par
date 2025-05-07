@@ -332,6 +332,9 @@ func (cache *blockCache) isCanonicalBlock(blockRoot phase0.Root, head phase0.Roo
 // getCanonicalDistance returns the canonical distance between the block with the given blockRoot and the block with the given head.
 // It returns a boolean indicating whether the block with blockRoot is a canonical block, and the distance between the two blocks.
 func (cache *blockCache) getCanonicalDistance(blockRoot phase0.Root, head phase0.Root, maxDistance uint64) (bool, uint64) {
+	if bytes.Equal(head[:], blockRoot[:]) {
+		return true, 0
+	}
 	block := cache.getBlockByRoot(blockRoot)
 	if block == nil {
 		return false, 0

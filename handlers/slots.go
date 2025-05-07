@@ -141,7 +141,10 @@ func buildSlotsPageData(firstSlot uint64, pageSize uint64) (*models.SlotsPageDat
 		for dbIdx < dbCnt && dbSlots[dbIdx] != nil && dbSlots[dbIdx].Slot == slot {
 			dbSlot := dbSlots[dbIdx]
 			//dbIdx++
-
+			var blockNumber uint64
+			if dbSlot.EthBlockNumber != nil {
+				blockNumber = *dbSlot.EthBlockNumber
+			}
 			slotData := &models.SlotsPageDataSlot{
 				Slot:                  slot,
 				Epoch:                 uint64(chainState.EpochOfSlot(phase0.Slot(slot))),
@@ -164,6 +167,7 @@ func buildSlotsPageData(firstSlot uint64, pageSize uint64) (*models.SlotsPageDat
 				ParentRoot:            dbSlot.ParentRoot,
 				ForkGraph:             make([]*models.SlotsPageDataForkGraph, 0),
 				Rank:                  dbSlot.Rank,
+				EthBlockNumber:        blockNumber,
 			}
 			if dbSlot.EthBlockNumber != nil {
 				slotData.WithEthBlock = true

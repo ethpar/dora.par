@@ -2,193 +2,7 @@
 
 ## 1. Architecture Vision
 
-### 1.1 Deployment Architecture
-
-Dora's architecture is designed to be highly available and fault-tolerant when interacting with Ethereum nodes. It supports connections to both Consensus Layer (CL) and Execution Layer (EL) clients, with built-in failover capabilities.
-
-#### 1.1.1 Node Client Integration
-
-Dora connects to Ethereum nodes using the following client types:
-
-1. **Consensus Layer Clients**
-   - Connects to Beacon Node clients (e.g., Lighthouse, Prysm, Teku, Nimbus, Lodestar)
-   - Uses the standard Ethereum 2.0 Beacon Node API
-   - Supports multiple endpoints with failover
-
-2. **Execution Layer Clients**
-   - Connects to Execution clients (e.g., Geth, Nethermind, Erigon, Besu)
-   - Uses standard JSON-RPC over HTTP/HTTPS
-   - Supports WebSocket subscriptions for real-time updates
-   - Implements connection pooling for performance
-
-#### 1.1.2 RPC Endpoints and API Groups
-
-Dora interacts with the following RPC endpoint groups:
-
-**Consensus Layer (Beacon Node) Endpoints:**
-- `/eth/v1/beacon` - Beacon chain data
-- `/eth/v1/node` - Node information and health
-- `/eth/v1/config` - Network configuration
-- `/eth/v1/debug` - Debug endpoints
-- `/eth/v1/events` - Event subscriptions
-- `/eth/v1/validator` - Validator operations (optional)
-
-**Execution Layer Endpoints:**
-- `eth_*` - Standard Ethereum JSON-RPC methods
-- `net_*` - Network information
-- `web3_*` - Web3 client information
-- `debug_*` - Debug trace endpoints (if enabled)
-- `txpool_*` - Transaction pool inspection
-
-#### 1.1.3 Connection Management
-
-Dora implements sophisticated connection handling:
-
-1. **Connection Pooling**
-   - Maintains persistent connections to nodes
-   - Implements connection reuse for performance
-   - Handles reconnection on failure
-
-2. **Load Balancing**
-   - Distributes requests across available nodes
-   - Implements round-robin strategy for load distribution
-   - Supports priority-based routing
-
-3. **Failover**
-   - Automatic failover to backup nodes
-   - Health checks and node status monitoring
-   - Circuit breaker pattern to handle unresponsive nodes
-
-4. **SSH Tunneling**
-   - Secure remote node access via SSH tunneling
-   - Supports both password and key-based authentication
-   - Automatic tunnel management and reconnection
-
-#### 1.1.4 Configuration
-
-Dora's node configuration is highly configurable:
-
-```yaml
-# Beacon Node Configuration
-beacon_api:
-  # beacon node rpc endpoints
-  endpoints:
-    - name: "primary-beacon"
-      url: "http://localhost:5052"
-      headers: {}
-      priority: 1
-      archive: false
-      skip_validators: false
-    - name: "backup-beacon"
-      url: "https://backup-beacon.example.com"
-      headers:
-        Authorization: "Bearer API_KEY"
-      priority: 2
-      archive: true
-
-# Execution Node Configuration
-execution_api:
-  # execution node rpc endpoints
-  endpoints:
-    - name: "primary-execution"
-      url: "http://localhost:8545"
-      headers: {}
-      priority: 1
-    - name: "backup-execution"
-      url: "https://backup-execution.example.com"
-      headers:
-        Authorization: "Bearer API_KEY"
-      priority: 2
-
-# SSH Tunnel Configuration (optional)
-ssh_tunnels:
-  - name: "remote-node-tunnel"
-    host: "remote-host.example.com"
-    port: 22
-    user: "ssh-user"
-    keyfile: "/path/to/ssh/key"
-    # OR password: "ssh-password"
-    local_port: 8546
-    remote_host: "localhost"
-    remote_port: 8545
-```
-
-#### 1.1.5 Security Considerations
-
-- **Authentication**: Supports JWT tokens and API keys for node authentication
-- **Encryption**: All external communications use TLS/SSL
-- **Rate Limiting**: Implements request rate limiting to prevent overloading nodes
-- **SSH Security**: Uses strong encryption and key-based authentication for SSH tunnels
-- **Header Injection**: Allows custom headers for authentication and identification
-
-#### 1.1.6 Deployment Diagram
-
-The following diagram illustrates a typical Dora deployment from an operating system perspective:
-
-```mermaid
-graph TD
-    %% Clients
-    User[User Browser] -->|HTTPS| Dora[Dora Web Server]
-    
-    %% Dora Components
-    Dora -->|HTTP| DoraAPI[Dora API Service]
-    DoraAPI --> DoraDB[(Dora PostgreSQL)]
-    DoraAPI --> Redis[(Redis Cache)]
-    
-    %% Ethereum Node Connections
-    subgraph Ethereum Network
-        DoraAPI -->|Beacon API| BN1[Beacon Node 1]
-        DoraAPI -->|Beacon API| BN2[Beacon Node 2]
-        DoraAPI -->|JSON-RPC| EN1[Execution Node 1]
-        DoraAPI -->|JSON-RPC| EN2[Execution Node 2]
-    end
-    
-    %% SSH Tunnels (if configured)
-    subgraph Remote Network
-        DoraAPI -->|SSH Tunnel| SSH[SSH Gateway]
-        SSH -->|Local Forward| RemoteBN[Remote Beacon Node]
-        SSH -->|Local Forward| RemoteEN[Remote Execution Node]
-    end
-    
-    %% Style
-    classDef client fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef dora fill:#9cf,stroke:#333,stroke-width:2px;
-    classDef db fill:#cf9,stroke:#333,stroke-width:2px;
-    classDef eth fill:#f96,stroke:#333,stroke-width:2px;
-    classDef remote fill:#c9f,stroke:#333,stroke-width:2px;
-    
-    class User client;
-    class Dora,DoraAPI dora;
-    class DoraDB,Redis db;
-    class BN1,BN2,EN1,EN2 eth;
-    class SSH,RemoteBN,RemoteEN remote;
-```
-
-**Key Components**:
-
-1. **User Facing**:
-   - Users interact with Dora through a web browser
-   - HTTPS traffic is terminated at the Dora web server
-
-2. **Dora Services**:
-   - **Web Server**: Serves the frontend and handles API requests
-   - **API Service**: Processes all blockchain data requests
-   - **PostgreSQL**: Primary database for storing indexed blockchain data
-   - **Redis**: Caching layer for improved performance
-
-3. **Ethereum Node Connections**:
-   - **Primary/Backup Beacon Nodes**: For consensus layer data
-   - **Primary/Backup Execution Nodes**: For execution layer data
-   - Connections support automatic failover and load balancing
-
-4. **Remote Access (Optional)**:
-   - Secure SSH tunneling for accessing nodes in private networks
-   - Supports both password and key-based authentication
-   - Automatic reconnection on tunnel failure
-
-This deployment architecture ensures high availability, fault tolerance, and secure access to blockchain data while maintaining good performance through caching and connection pooling.
-
-### 1.2 Business Context
+### 1.1 Business Context
 Dora is a lightweight Ethereum Beacon Chain explorer that provides real-time insights into blockchain data without requiring expensive proprietary databases. It's designed to be resource-efficient while offering comprehensive blockchain exploration capabilities.
 
 #### 1.1.1 Open Source Block Explorer Landscape
@@ -464,6 +278,351 @@ erDiagram
     |                    |
     └── [Database] ←─────┘
 ```
+Deployment Architecture
+
+Dora's architecture is designed to be highly available and fault-tolerant when interacting with Ethereum nodes. It supports connections to both Consensus Layer (CL) and Execution Layer (EL) clients, with built-in failover capabilities.
+
+#### 4.2.1 Node Client Integration and Data Flow
+
+Dora maintains connections to multiple Ethereum node clients for data retrieval and processing:
+
+1. **Consensus Layer (CL) Clients**
+   - **Supported Clients**: Lighthouse, Prysm, Teku, Nimbus, Lodestar
+   - **Connection Protocol**: HTTP/HTTPS with Keep-Alive
+   - **Authentication**: JWT tokens (if required by the client)
+   - **Primary Use Cases**:
+     - Beacon chain data synchronization
+     - Validator monitoring
+     - Finality and justification tracking
+     - Committee and attestation data
+   - **Endpoint Groups**:
+     - `beacon`: Core beacon chain data
+     - `node`: Node health and version information
+     - `config`: Network configuration
+     - `debug`: Debug and monitoring endpoints
+     - `events`: Real-time event subscriptions
+     - `validator`: Validator operations and duties
+
+2. **Execution Layer (EL) Clients**
+   - **Supported Clients**: Geth, Nethermind, Erigon, Besu
+   - **Connection Protocol**: HTTP/HTTPS and WebSocket
+   - **Authentication**: API keys or JWT tokens
+   - **Primary Use Cases**:
+     - Transaction pool monitoring
+     - Smart contract interactions
+     - Account and balance lookups
+     - Block and transaction tracing
+   - **Endpoint Groups**:
+     - `eth`: Core Ethereum JSON-RPC methods
+     - `net`: Network information
+     - `web3`: Web3 client information
+     - `debug`: Execution layer debugging
+     - `txpool`: Transaction pool inspection
+     - `trace`: Transaction tracing (if supported)
+
+3. **Database Integration**
+   - **Primary Database**: PostgreSQL
+     - Used for storing indexed blockchain data
+     - Connection pool configuration optimized for read-heavy workload
+     - Regular vacuum and analyze jobs for performance
+   - **Cache Layer**: Redis
+     - Caches frequently accessed data
+     - Implements TTL for cache invalidation
+     - Connection pooling for high throughput
+   - **Connection Management**:
+     - Connection pooling for both read and write operations
+     - Configurable timeouts and retry policies
+     - Automatic reconnection on failure
+
+#### 4.2.2 Detailed RPC Endpoint Usage
+
+Dora's interaction with Ethereum nodes is comprehensive and covers the following endpoints:
+
+**Consensus Layer (Beacon Node) Endpoints:**
+
+1. **Beacon API (`/eth/v1/beacon`)**
+   - `GET /beacon/headers/{block_id}` - Retrieve block headers
+   - `GET /beacon/blocks/{block_id}` - Get full block data
+   - `GET /beacon/states/{state_id}/validators` - Validator information
+   - `GET /beacon/states/{state_id}/committees` - Committee data
+   - `GET /beacon/pool/attestations` - Pending attestations
+   - `GET /beacon/pool/attester_slashings` - Pending attester slashings
+   - `GET /beacon/pool/proposer_slashings` - Pending proposer slashings
+   - `GET /beacon/pool/voluntary_exits` - Pending voluntary exits
+
+2. **Node API (`/eth/v1/node`)**
+   - `GET /node/version` - Client version information
+   - `GET /node/syncing` - Synchronization status
+   - `GET /node/identity` - Node identity information
+   - `GET /node/peers` - Connected peers
+   - `GET /node/peer_count` - Number of connected peers
+
+3. **Config API (`/eth/v1/config`)**
+   - `GET /config/spec` - Chain specification
+   - `GET /config/fork_schedule` - Fork schedule
+   - `GET /config/deposit_contract` - Deposit contract information
+
+4. **Debug API (`/eth/v1/debug`)**
+   - `GET /debug/beacon/states/{state_id}` - Full state dump
+   - `GET /debug/beacon/heads` - Current chain heads
+
+5. **Events API (`/eth/v1/events`)**
+   - `GET /events` - SSE stream of events
+   - Event types: head, block, attestation, voluntary_exit, finalized_checkpoint, chain_reorg
+
+6. **Validator API (`/eth/v1/validator`)**
+   - `GET /validator/duties/proposer/{epoch}` - Proposer duties
+   - `GET /validator/duties/attester/{epoch}` - Attestation duties
+   - `POST /validator/beacon_committees/subscriptions` - Subscribe to committees
+
+**Execution Layer Endpoints:**
+
+1. **Ethereum API (`eth_*`)**
+   - `eth_getBlockByNumber` - Get block by number
+   - `eth_getBlockByHash` - Get block by hash
+   - `eth_getTransactionReceipt` - Transaction receipts
+   - `eth_call` - Execute message call
+   - `eth_getLogs` - Get event logs
+   - `eth_getBalance` - Get account balance
+   - `eth_getCode` - Get contract code
+   - `eth_getStorageAt` - Get storage at position
+
+2. **Net API (`net_*`)**
+   - `net_version` - Network ID
+   - `net_listening` - Whether client is listening
+   - `net_peerCount` - Number of peers
+
+3. **Web3 API (`web3_*`)**
+   - `web3_clientVersion` - Client version
+   - `web3_sha3` - Keccak-256 hash
+
+4. **Debug API (`debug_*`)**
+   - `debug_traceTransaction` - Trace transaction execution
+   - `debug_traceBlockByNumber` - Trace all transactions in block
+   - `debug_traceBlockByHash` - Trace all transactions in block
+
+5. **TxPool API (`txpool_*`)**
+   - `txpool_status` - Transaction pool status
+   - `txpool_content` - Pending transactions
+   - `txpool_inspect` - Inspect transaction pool
+
+6. **Trace API (`trace_*`)**
+   - `trace_block` - All traces in block
+   - `trace_transaction` - All traces in transaction
+   - `trace_call` - Execute and trace call
+
+#### 4.2.3 Connection Management and Configuration
+
+Dora implements a robust connection management system with the following features:
+
+1. **Connection Pooling**
+   - **HTTP/HTTPS Connections**:
+     - Maximum connections per host: 100
+     - Idle connection timeout: 30 seconds
+     - Keep-alive duration: 60 seconds
+     - Connection timeout: 10 seconds
+     - Response timeout: 30 seconds
+   - **WebSocket Connections**:
+     - Auto-reconnect with exponential backoff
+     - Ping-pong mechanism for connection health
+     - Message size limit: 10MB
+   - **Database Connections**:
+     - PostgreSQL connection pool: 5-50 connections
+     - Redis connection pool: 10-100 connections
+     - Connection lifetime: 1 hour
+     - Idle timeout: 5 minutes
+
+2. **Load Balancing**
+   - **Round-Robin Strategy**:
+     - Even distribution of requests across available nodes
+     - Weighted routing based on node performance
+     - Sticky sessions for stateful operations
+   - **Priority-Based Routing**:
+     - Primary nodes handle all read/write operations
+     - Secondary nodes handle read replicas
+     - Fallback nodes for critical operations
+   - **Request Batching**:
+     - Batch size limit: 100 requests
+     - Batch timeout: 100ms
+     - Parallel execution of non-dependent requests
+
+3. **Failover and Health Monitoring**
+   - **Health Checks**:
+     - Endpoint: `/-/health`
+     - Check interval: 10 seconds
+     - Unhealthy threshold: 3 consecutive failures
+   - **Circuit Breaker**:
+     - Failure threshold: 50%
+     - Reset timeout: 30 seconds
+     - Half-open state timeout: 10 seconds
+   - **Node Selection**:
+     - Latency-based selection
+     - Error rate monitoring
+     - Success rate tracking
+
+4. **Security and Authentication**
+   - **TLS Configuration**:
+     - Minimum TLS version: 1.2
+     - Cipher suite preferences
+     - Certificate pinning
+   - **Authentication Methods**:
+     - JWT tokens for Beacon Node API
+     - API keys for Execution Client
+     - Basic Auth for admin endpoints
+   - **Rate Limiting**:
+     - Requests per second: 1000
+     - Burst size: 100
+     - IP-based rate limiting
+
+5. **Monitoring and Logging**
+   - **Metrics**:
+     - Request latency
+     - Error rates
+     - Connection pool status
+     - Cache hit/miss ratio
+   - **Logging**:
+     - Structured JSON logging
+     - Correlation IDs for request tracing
+     - Log levels: debug, info, warn, error
+
+6. **SSH Tunneling**
+   - **Tunnel Configuration**:
+     - Local port forwarding
+     - Remote port forwarding
+     - Dynamic port forwarding
+   - **Authentication**:
+     - Public key authentication (preferred)
+     - Password authentication
+     - Agent forwarding
+   - **Reconnection**:
+     - Automatic reconnection on failure
+     - Backoff strategy: exponential, max 1 minute
+     - Maximum retry attempts: 10
+
+#### 1.1.4 Configuration
+
+Dora's node configuration is highly configurable:
+
+```yaml
+# Beacon Node Configuration
+beacon_api:
+  # beacon node rpc endpoints
+  endpoints:
+    - name: "primary-beacon"
+      url: "http://localhost:5052"
+      headers: {}
+      priority: 1
+      archive: false
+      skip_validators: false
+    - name: "backup-beacon"
+      url: "https://backup-beacon.example.com"
+      headers:
+        Authorization: "Bearer API_KEY"
+      priority: 2
+      archive: true
+
+# Execution Node Configuration
+execution_api:
+  # execution node rpc endpoints
+  endpoints:
+    - name: "primary-execution"
+      url: "http://localhost:8545"
+      headers: {}
+      priority: 1
+    - name: "backup-execution"
+      url: "https://backup-execution.example.com"
+      headers:
+        Authorization: "Bearer API_KEY"
+      priority: 2
+
+# SSH Tunnel Configuration (optional)
+ssh_tunnels:
+  - name: "remote-node-tunnel"
+    host: "remote-host.example.com"
+    port: 22
+    user: "ssh-user"
+    keyfile: "/path/to/ssh/key"
+    # OR password: "ssh-password"
+    local_port: 8546
+    remote_host: "localhost"
+    remote_port: 8545
+```
+
+#### 1.1.5 Security Considerations
+
+- **Authentication**: Supports JWT tokens and API keys for node authentication
+- **Encryption**: All external communications use TLS/SSL
+- **Rate Limiting**: Implements request rate limiting to prevent overloading nodes
+- **SSH Security**: Uses strong encryption and key-based authentication for SSH tunnels
+- **Header Injection**: Allows custom headers for authentication and identification
+
+#### 1.1.6 Deployment Diagram
+
+The following diagram illustrates a typical Dora deployment from an operating system perspective:
+
+```mermaid
+graph TD
+    %% Clients
+    User[User Browser] -->|HTTPS| Dora[Dora Web Server]
+    
+    %% Dora Components
+    Dora -->|HTTP| DoraAPI[Dora API Service]
+    DoraAPI --> DoraDB[(Dora PostgreSQL)]
+    DoraAPI --> Redis[(Redis Cache)]
+    
+    %% Ethereum Node Connections
+    subgraph Ethereum Network
+        DoraAPI -->|Beacon API| BN1[Beacon Node 1]
+        DoraAPI -->|Beacon API| BN2[Beacon Node 2]
+        DoraAPI -->|JSON-RPC| EN1[Execution Node 1]
+        DoraAPI -->|JSON-RPC| EN2[Execution Node 2]
+    end
+    
+    %% SSH Tunnels (if configured)
+    subgraph Remote Network
+        DoraAPI -->|SSH Tunnel| SSH[SSH Gateway]
+        SSH -->|Local Forward| RemoteBN[Remote Beacon Node]
+        SSH -->|Local Forward| RemoteEN[Remote Execution Node]
+    end
+    
+    %% Style
+    classDef client fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef dora fill:#9cf,stroke:#333,stroke-width:2px;
+    classDef db fill:#cf9,stroke:#333,stroke-width:2px;
+    classDef eth fill:#f96,stroke:#333,stroke-width:2px;
+    classDef remote fill:#c9f,stroke:#333,stroke-width:2px;
+    
+    class User client;
+    class Dora,DoraAPI dora;
+    class DoraDB,Redis db;
+    class BN1,BN2,EN1,EN2 eth;
+    class SSH,RemoteBN,RemoteEN remote;
+```
+
+**Key Components**:
+
+1. **User Facing**:
+   - Users interact with Dora through a web browser
+   - HTTPS traffic is terminated at the Dora web server
+
+2. **Dora Services**:
+   - **Web Server**: Serves the frontend and handles API requests
+   - **API Service**: Processes all blockchain data requests
+   - **PostgreSQL**: Primary database for storing indexed blockchain data
+   - **Redis**: Caching layer for improved performance
+
+3. **Ethereum Node Connections**:
+   - **Primary/Backup Beacon Nodes**: For consensus layer data
+   - **Primary/Backup Execution Nodes**: For execution layer data
+   - Connections support automatic failover and load balancing
+
+4. **Remote Access (Optional)**:
+   - Secure SSH tunneling for accessing nodes in private networks
+   - Supports both password and key-based authentication
+   - Automatic reconnection on tunnel failure
+
+This deployment architecture ensures high availability, fault tolerance, and secure access to blockchain data while maintaining good performance through caching and connection pooling.
+
 
 ### 4.3 Security Architecture
 - Rate limiting for API endpoints

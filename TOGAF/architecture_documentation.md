@@ -499,7 +499,7 @@ Dora implements a robust connection management system with the following feature
      - Backoff strategy: exponential, max 1 minute
      - Maximum retry attempts: 10
 
-#### 1.1.4 Configuration
+#### 4.2.4 Configuration
 
 Dora's node configuration is highly configurable:
 
@@ -548,7 +548,7 @@ ssh_tunnels:
     remote_port: 8545
 ```
 
-#### 1.1.5 Security Considerations
+#### 4.2.5 Security Considerations
 
 - **Authentication**: Supports JWT tokens and API keys for node authentication
 - **Encryption**: All external communications use TLS/SSL
@@ -556,7 +556,7 @@ ssh_tunnels:
 - **SSH Security**: Uses strong encryption and key-based authentication for SSH tunnels
 - **Header Injection**: Allows custom headers for authentication and identification
 
-#### 1.1.6 Deployment Diagram
+#### 4.2.6 Deployment Diagram
 
 The following diagram illustrates a typical Dora deployment from an operating system perspective:
 
@@ -625,10 +625,81 @@ This deployment architecture ensures high availability, fault tolerance, and sec
 
 
 ### 4.3 Security Architecture
-- Rate limiting for API endpoints
-- Input validation and sanitization
-- Secure database access
-- Regular security updates
+
+#### 4.3.1 Rate Limiting
+- **Implementation**: Uses a `CallRateLimiter` service that tracks and limits API calls per IP address
+- **Configuration**:
+  - Enabled via configuration with `rateLimit.enabled`
+  - Configurable rate and burst limits
+  - Supports proxy headers for deployments behind load balancers
+- **Key Components**:
+  - Tracks visitors by IP address
+  - Uses token bucket algorithm for rate limiting
+  - Automatically cleans up old visitor entries
+
+#### 4.3.2 Input Validation and Sanitization
+- **Form Input Handling**:
+  - Uses Go's `html/template` package which automatically escapes content to prevent XSS
+  - Server-side validation for all form submissions
+  - Client-side validation for better user experience
+- **URL Parameters**:
+  - All parameters are validated before processing
+  - Type-safe conversions with range checking
+  - Protection against path traversal and injection attacks
+
+#### 4.3.3 Secure Database Access
+- **Connection Security**:
+  - Supports PostgreSQL and SQLite backends
+  - Configurable connection pooling
+  - Implements connection timeouts and retry logic
+- **SQL Injection Prevention**:
+  - Uses parameterized queries exclusively
+  - Utilizes `sqlx` library for additional safety
+  - No direct string concatenation in SQL queries
+
+#### 4.3.4 Regular Security Updates
+- **Dependency Management**:
+  - Uses Go modules for dependency management
+  - Explicit versioning in `go.mod`
+  - Regular dependency updates recommended
+- **Configuration Security**:
+  - Sensitive values loaded from environment variables
+  - Separate configurations for development and production
+  - No hardcoded credentials
+
+#### 4.3.5 Additional Security Measures
+- **Content Security Policy (CSP)**: Implemented to prevent XSS attacks
+- **CSRF Protection**: All form submissions include CSRF tokens
+- **Secure Headers**:
+  - X-Content-Type-Options
+  - X-Frame-Options
+  - X-XSS-Protection
+  - Strict-Transport-Security (HSTS)
+- **TLS Configuration**:
+  - Enforced HTTPS in production
+  - Configurable TLS versions and cipher suites
+  - Automatic HTTP to HTTPS redirects
+
+#### 4.3.6 Security Best Practices
+1. **Authentication**:
+   - Secure session management
+   - Password hashing with bcrypt
+   - Rate limiting on authentication endpoints
+
+2. **Data Protection**:
+   - Encryption of sensitive data at rest
+   - Secure handling of API keys and secrets
+   - Regular security audits
+
+3. **Monitoring and Logging**:
+   - Comprehensive logging of security events
+   - Intrusion detection systems
+   - Regular security scanning
+
+4. **Compliance**:
+   - Adherence to OWASP Top 10
+   - Regular security assessments
+   - Incident response planning
 
 ## 5. Implementation and Migration
 

@@ -127,6 +127,12 @@ type Config struct {
 		} `yaml:"pgsqlWriter"`
 	} `yaml:"database"`
 
+	Graph struct {
+		Enabled   bool   `yaml:"enabled"  envconfig:"GRAPH_ENABLED"`
+		FilesPath string `yaml:"filesPath" envconfig:"GRAPH_FILES_PATH"`
+		EmptyFile string `yaml:"emptyFile" envconfig:"GRAPH_EMPTY_FILE"`
+	} `yaml:"graph"`
+
 	KillSwitch struct {
 		DisableSSZEncoding      bool `yaml:"disableSSZEncoding" envconfig:"KILLSWITCH_DISABLE_SSZ_ENCODING"`
 		DisableSSZRequests      bool `yaml:"disableSSZRequests" envconfig:"KILLSWITCH_DISABLE_SSZ_REQUESTS"`

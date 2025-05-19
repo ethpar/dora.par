@@ -359,7 +359,7 @@ func (c *Client) processBlock(slot phase0.Slot, root phase0.Root, header *phase0
 		}
 
 	} else {
-		block, _ = c.indexer.blockCache.createOrGetBlock(root, slot)
+		block, _ = c.indexer.blockCache.createOrGetBlock(root, slot, 0)
 	}
 
 	err = block.EnsureHeader(func() (*phase0.SignedBeaconBlockHeader, error) {
@@ -428,6 +428,11 @@ func (c *Client) processBlock(slot phase0.Slot, root phase0.Root, header *phase0
 
 		block.isInUnfinalizedDb = true
 		c.indexer.blockCache.latestBlock = block
+		processPendingTransactions(c, block.Slot)
+
+		if block.block != nil && block.block.Alpha != nil {
+			processExecutionBlocks(c, block, true)
+		}
 	}
 
 	if slot < finalizedSlot && !block.isInFinalizedDb {
@@ -437,6 +442,7 @@ func (c *Client) processBlock(slot phase0.Slot, root phase0.Root, header *phase0
 		c.logger.Errorf("new orphaned block in finalized epoch %v: %v [%v] - OPEN TODO", chainState.EpochOfSlot(slot), slot, root.String())
 	}
 
+	//rpc.NewExecutionClient(endpoint.Name, endpoint.URL, endpoint.Headers, endpoint.SshConfig, logger)
 	return
 }
 

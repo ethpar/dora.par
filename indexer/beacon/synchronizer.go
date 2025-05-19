@@ -152,6 +152,7 @@ func (sync *synchronizer) runSync() {
 		if retryLimit < 30 {
 			retryLimit = 30
 		}
+		retryLimit = 5
 		lastRetry := retryCount >= retryLimit
 		syncClient := syncClients[retryCount%len(syncClients)]
 
@@ -253,7 +254,7 @@ func (sync *synchronizer) loadBlockHeader(client *Client, slot phase0.Slot) (*ph
 	ctx, cancel := context.WithTimeout(sync.syncCtx, beaconHeaderRequestTimeout)
 	defer cancel()
 
-	header, root, orphaned, err := LoadBeaconHeaderBySlot(ctx, client, slot)
+	header, root, orphaned, err := LoadBeaconHeaderBySlot(ctx, client, slot) //
 	if orphaned {
 		return nil, root, nil
 	}
@@ -311,7 +312,9 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 
 				block.SetBlock(blockBody)
 			}
-
+			if block.block != nil && block.block.Alpha != nil {
+				processExecutionBlocks(client, block, false)
+			}
 			sync.cachedBlocks[slot] = block
 		}
 

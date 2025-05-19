@@ -34,7 +34,7 @@ func newBlockCache(indexer *Indexer) *blockCache {
 
 // createOrGetBlock creates a new block with the given root and slot, or returns an existing block if it already exists.
 // It returns the created block and a boolean indicating whether the block was newly created or not.
-func (cache *blockCache) createOrGetBlock(root phase0.Root, slot phase0.Slot) (*Block, bool) {
+func (cache *blockCache) createOrGetBlock(root phase0.Root, slot phase0.Slot, rank uint64) (*Block, bool) {
 	cache.cacheMutex.Lock()
 	defer cache.cacheMutex.Unlock()
 
@@ -332,6 +332,9 @@ func (cache *blockCache) isCanonicalBlock(blockRoot phase0.Root, head phase0.Roo
 // getCanonicalDistance returns the canonical distance between the block with the given blockRoot and the block with the given head.
 // It returns a boolean indicating whether the block with blockRoot is a canonical block, and the distance between the two blocks.
 func (cache *blockCache) getCanonicalDistance(blockRoot phase0.Root, head phase0.Root, maxDistance uint64) (bool, uint64) {
+	if bytes.Equal(head[:], blockRoot[:]) {
+		return true, 0
+	}
 	block := cache.getBlockByRoot(blockRoot)
 	if block == nil {
 		return false, 0

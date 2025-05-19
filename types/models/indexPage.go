@@ -58,6 +58,7 @@ type IndexPageDataEpochs struct {
 type IndexPageDataBlocks struct {
 	Epoch        uint64    `json:"epoch"`
 	Slot         uint64    `json:"slot"`
+	Rank         uint64    `json:"rank"`
 	WithEthBlock bool      `json:"has_block"`
 	EthBlock     uint64    `json:"eth_block"`
 	EthBlockLink string    `json:"eth_link"`
@@ -71,6 +72,7 @@ type IndexPageDataBlocks struct {
 type IndexPageDataSlots struct {
 	Epoch        uint64                    `json:"epoch"`
 	Slot         uint64                    `json:"slot"`
+	Rank         uint64                    `json:"rank"`
 	EthBlock     uint64                    `json:"eth_block"`
 	Ts           time.Time                 `json:"ts"`
 	Proposer     uint64                    `json:"proposer"`
@@ -82,8 +84,9 @@ type IndexPageDataSlots struct {
 }
 
 type IndexPageDataForkGraph struct {
-	Index int             `json:"index"`
-	Left  int             `json:"left"`
-	Tiles map[string]bool `json:"tiles"`
-	Block bool            `json:"block"`
+	Index         int             `json:"index"`
+	Left          int             `json:"left"`
+	Tiles         map[string]bool `json:"tiles"`
+	Block         bool            `json:"block"`
+	BlockParallel bool            `json:"block_parallel"`
 }

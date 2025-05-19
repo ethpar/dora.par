@@ -141,6 +141,7 @@ func (dbw *dbWriter) persistEpochData(tx *sqlx.Tx, epoch phase0.Epoch, blocks []
 		if err != nil {
 			dbw.indexer.logger.Errorf("error persisting slot: %v", err)
 		}
+
 	})
 
 	// insert missing slots
@@ -194,6 +195,10 @@ func (dbw *dbWriter) persistSyncAssignments(tx *sqlx.Tx, epoch phase0.Epoch, epo
 }
 
 func (dbw *dbWriter) buildDbBlock(block *Block, epochStats *EpochStats, overrideForkId *ForkKey) *dbtypes.Slot {
+	//if block.Rank > 0 {
+	//parallelBlock, _ := dbw.indexer.executionPool.GetReadyEndpoint(execution.AnyClient).GetRPCClient().DecodeBlockRaw(nil, block.parallelBlock)
+	//return dbw.buildDbParallelBlock(block, parallelBlock, block.Rank, epochStats, overrideForkId)
+	//}
 	if block.Slot == 0 {
 		// genesis block
 		header := block.GetHeader()
@@ -243,6 +248,7 @@ func (dbw *dbWriter) buildDbBlock(block *Block, epochStats *EpochStats, override
 	executionExtraData, _ := getBlockExecutionExtraData(blockBody)
 	executionTransactions, _ := blockBody.ExecutionTransactions()
 	executionWithdrawals, _ := blockBody.Withdrawals()
+	var rank, _ = blockBody.Rank()
 
 	dbBlock := dbtypes.Slot{
 		Slot:                  uint64(block.header.Message.Slot),
@@ -294,6 +300,7 @@ func (dbw *dbWriter) buildDbBlock(block *Block, epochStats *EpochStats, override
 		for _, withdrawal := range executionWithdrawals {
 			dbBlock.WithdrawAmount += uint64(withdrawal.Amount)
 		}
+		dbBlock.Rank = rank
 	}
 
 	return &dbBlock

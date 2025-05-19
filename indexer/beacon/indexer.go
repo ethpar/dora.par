@@ -3,6 +3,7 @@ package beacon
 import (
 	"context"
 	"fmt"
+	"github.com/ethpandaops/dora/clients/execution"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -28,6 +29,7 @@ const EtherGweiFactor = 1_000_000_000
 type Indexer struct {
 	logger        logrus.FieldLogger
 	consensusPool *consensus.Pool
+	executionPool *execution.Pool
 	dynSsz        *dynssz.DynSsz
 	synchronizer  *synchronizer
 
@@ -68,7 +70,7 @@ type Indexer struct {
 }
 
 // NewIndexer creates a new instance of the Indexer.
-func NewIndexer(logger logrus.FieldLogger, consensusPool *consensus.Pool) *Indexer {
+func NewIndexer(logger logrus.FieldLogger, consensusPool *consensus.Pool, executionPool *execution.Pool) *Indexer {
 	// Initialize the indexer with default values from the configuration.
 	inMemoryEpochs := utils.Config.Indexer.InMemoryEpochs
 	if inMemoryEpochs < 2 {
@@ -87,6 +89,7 @@ func NewIndexer(logger logrus.FieldLogger, consensusPool *consensus.Pool) *Index
 	indexer := &Indexer{
 		logger:        logger,
 		consensusPool: consensusPool,
+		executionPool: executionPool,
 
 		disableSync:           utils.Config.Indexer.DisableSynchronizer,
 		blockCompression:      blockCompression,
@@ -299,7 +302,7 @@ func (indexer *Indexer) StartIndexer() {
 	t1 = time.Now()
 	err = db.StreamUnfinalizedBlocks(uint64(finalizedSlot), func(dbBlock *dbtypes.UnfinalizedBlock) {
 
-		block, _ := indexer.blockCache.createOrGetBlock(phase0.Root(dbBlock.Root), phase0.Slot(dbBlock.Slot))
+		block, _ := indexer.blockCache.createOrGetBlock(phase0.Root(dbBlock.Root), phase0.Slot(dbBlock.Slot), dbBlock.Rank)
 		block.forkId = ForkKey(dbBlock.ForkId)
 		block.fokChecked = true
 		block.processingStatus = dbBlock.Status
@@ -310,39 +313,42 @@ func (indexer *Indexer) StartIndexer() {
 			return
 		}
 
-		header := &phase0.SignedBeaconBlockHeader{}
-		err := header.UnmarshalSSZ(dbBlock.HeaderSSZ)
-		if err != nil {
-			indexer.logger.Warnf("failed unmarshal unfinalized block header %v [%x] from db: %v", dbBlock.Slot, dbBlock.Root, err)
-			return
-		}
-
-		block.SetHeader(header)
-		indexer.blockCache.addBlockToParentMap(block)
-
-		blockBody, err := unmarshalVersionedSignedBeaconBlockSSZ(indexer.dynSsz, dbBlock.BlockVer, dbBlock.BlockSSZ)
-		if err != nil {
-			indexer.logger.Warnf("could not restore unfinalized block body %v [%x] from db: %v", dbBlock.Slot, dbBlock.Root, err)
-		} else if block.processingStatus == 0 {
-			block.SetBlock(blockBody)
-			restoredBodyCount++
-		} else {
-			block.setBlockIndex(blockBody)
-			block.isInFinalizedDb = true
-		}
-
-		blockFork := indexer.forkCache.getForkById(block.forkId)
-		if blockFork != nil {
-			if blockFork.headBlock == nil || blockFork.headBlock.Slot < block.Slot {
-				blockFork.headBlock = block
+		if block.Rank == 0 {
+			header := &phase0.SignedBeaconBlockHeader{}
+			err := header.UnmarshalSSZ(dbBlock.HeaderSSZ)
+			if err != nil {
+				indexer.logger.Warnf("failed unmarshal unfinalized block header %v [%x] from db: %v", dbBlock.Slot, dbBlock.Root, err)
+				return
 			}
-		}
 
-		restoredBlockCount++
+			block.SetHeader(header)
+			indexer.blockCache.addBlockToParentMap(block)
 
-		if time.Since(t1) > 5*time.Second {
-			indexer.logger.Infof("restoring unfinalized blocks from DB... (%v done)", restoredBlockCount)
-			t1 = time.Now()
+			blockBody, err := unmarshalVersionedSignedBeaconBlockSSZ(indexer.dynSsz, dbBlock.BlockVer, dbBlock.BlockSSZ)
+			if err != nil {
+				indexer.logger.Warnf("could not restore unfinalized block body %v [%x] from db: %v", dbBlock.Slot, dbBlock.Root, err)
+			} else if block.processingStatus == 0 {
+				block.SetBlock(blockBody)
+				restoredBodyCount++
+			} else {
+				block.setBlockIndex(blockBody) //gg
+				block.isInFinalizedDb = true
+			}
+
+			blockFork := indexer.forkCache.getForkById(block.forkId)
+			if blockFork != nil {
+				if blockFork.headBlock == nil || blockFork.headBlock.Slot < block.Slot {
+					blockFork.headBlock = block
+				}
+			}
+			restoreExecutionBlocksFromDB(indexer, block)
+
+			restoredBlockCount++
+
+			if time.Since(t1) > 5*time.Second {
+				indexer.logger.Infof("restoring unfinalized blocks from DB... (%v done)", restoredBlockCount)
+				t1 = time.Now()
+			}
 		}
 	})
 	if err != nil {

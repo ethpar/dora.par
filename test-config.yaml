@@ -107,3 +107,9 @@ database:
     user: "pk910"
     password: "SBekcBFpRW9rZrVL" # internal dev DB, no worries about password leaking ;)
     name: "pk910"
+
+#graph export
+graph:
+  enabled: false
+  filesPath: "/temp/files"
+  emptyFile: "/dora/epty.pdf"

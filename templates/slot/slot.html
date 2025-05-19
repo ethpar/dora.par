@@ -3,13 +3,13 @@
     <div class="d-md-flex py-2 justify-content-md-between">
       <h1 class="h4 my-2 mb-md-0 h1-pager">
         {{- if not (eq .Slot 0) -}}
-          <a href="/slot/{{ .PreviousSlot }}"><i class="fa fa-chevron-left"></i></a>
+          <a href="/slot/{{ .PreviousSlot }}/rank/0"><i class="fa fa-chevron-left"></i></a>
         {{- else -}}
           <a></a>
         {{- end -}}
         <span><i class="fas fa-cube mx-2"></i>Slot <span id="slot">{{ .Slot }}</span></span>
         {{- if gt .NextSlot 0 -}}
-          <a href="/slot/{{ .NextSlot }}"><i class="fa fa-chevron-right"></i></a>
+          <a href="/slot/{{ .NextSlot }}/rank/0"><i class="fa fa-chevron-right"></i></a>
         {{- else -}}
           <a></a>
         {{- end -}}
@@ -38,7 +38,12 @@
         <a class="nav-link active" id="overview-tab" data-bs-toggle="tab" href="#overview" role="tab" aria-controls="overview" aria-selected="true">Overview</a>
       </li>
       {{ if .Block }}
-        {{ if gt .Block.TransactionsCount 0 }}
+      {{ if gt .Block.ParallelBlocksCount 0 }}
+      <li class="nav-item">
+        <a class="nav-link" id="parallel-blocks-tab" data-bs-toggle="tab" href="#parallel-blocks" role="tab" aria-controls="parallel-blocks" aria-selected="false">Parallel blocks <span class="badge bg-secondary text-white">{{ .Block.ParallelBlocksCount }}</span></a>
+      </li>
+      {{ end }}
+      {{ if gt .Block.TransactionsCount 0 }}
           <li class="nav-item">
             <a class="nav-link" id="transactions-tab" data-bs-toggle="tab" href="#transactions" role="tab" aria-controls="transactions" aria-selected="false">Transactions <span class="badge bg-secondary text-white">{{ .Block.TransactionsCount }}</span></a>
           </li>
@@ -106,6 +111,18 @@
         </div>
       </div>
       {{ if .Block }}
+      {{ if gt .Block.ParallelBlocksCount 0 }}
+      <div class="tab-pane fade show active" id="parallel-blocks" role="tabpanel" aria-labelledby="parallel-blocks-tab">
+        <div class="card block-card">
+          <div style="margin-bottom: -.25rem;" class="card-body px-0 py-1">
+            <div class="row p-1 mx-0">
+              <h3 class="h5 col-md-12 text-center"><b>Showing {{ .Block.ParallelBlocksCount }} Parallel Blocks </b></h3>
+            </div>
+          </div>
+        </div>
+        {{ template "parallel_blocks" . }}
+      </div>
+      {{ end }}
         {{ if gt .Block.TransactionsCount 0 }}
           <div class="tab-pane fade show active" id="transactions" role="tabpanel" aria-labelledby="transactions-tab">
             <div class="card block-card">

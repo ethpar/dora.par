@@ -18,10 +18,11 @@ import (
 )
 
 type CombinedBlockResponse struct {
-	Root     phase0.Root
-	Header   *phase0.SignedBeaconBlockHeader
-	Block    *spec.VersionedSignedBeaconBlock
-	Orphaned bool
+	Root            phase0.Root
+	Header          *phase0.SignedBeaconBlockHeader
+	Block           *spec.VersionedSignedBeaconBlock
+	ExecutionBlocks map[uint64]beacon.ExecutionBlock
+	Orphaned        bool
 }
 
 // GetBlockBlob retrieves the blob sidecar for a given block root and commitment.
@@ -64,20 +65,22 @@ func (bs *ChainService) GetSlotDetailsByBlockroot(ctx context.Context, blockroot
 	var result *CombinedBlockResponse
 	if blockInfo := bs.beaconIndexer.GetBlockByRoot(blockroot); blockInfo != nil {
 		result = &CombinedBlockResponse{
-			Root:     blockInfo.Root,
-			Header:   blockInfo.GetHeader(),
-			Block:    blockInfo.GetBlock(),
-			Orphaned: !bs.beaconIndexer.IsCanonicalBlock(blockInfo, nil),
+			Root:            blockInfo.Root,
+			Header:          blockInfo.GetHeader(),
+			Block:           blockInfo.GetBlock(),
+			Orphaned:        !bs.beaconIndexer.IsCanonicalBlock(blockInfo, nil),
+			ExecutionBlocks: blockInfo.ExecutionBlocks,
 		}
 	} else if blockInfo, err := bs.beaconIndexer.GetOrphanedBlockByRoot(blockroot); blockInfo != nil || err != nil {
 		if err != nil {
 			return nil, err
 		}
 		result = &CombinedBlockResponse{
-			Root:     blockInfo.Root,
-			Header:   blockInfo.GetHeader(),
-			Block:    blockInfo.GetBlock(),
-			Orphaned: true,
+			Root:            blockInfo.Root,
+			Header:          blockInfo.GetHeader(),
+			Block:           blockInfo.GetBlock(),
+			Orphaned:        true,
+			ExecutionBlocks: blockInfo.ExecutionBlocks,
 		}
 	} else {
 		var header *phase0.SignedBeaconBlockHeader
@@ -157,10 +160,11 @@ func (bs *ChainService) GetSlotDetailsBySlot(ctx context.Context, slot phase0.Sl
 			isOrphaned = true
 		}
 		result = &CombinedBlockResponse{
-			Root:     cachedBlock.Root,
-			Header:   cachedBlock.GetHeader(),
-			Block:    cachedBlock.GetBlock(),
-			Orphaned: isOrphaned,
+			Root:            cachedBlock.Root,
+			Header:          cachedBlock.GetHeader(),
+			Block:           cachedBlock.GetBlock(),
+			Orphaned:        isOrphaned,
+			ExecutionBlocks: cachedBlock.ExecutionBlocks,
 		}
 	} else {
 
@@ -215,6 +219,7 @@ func (bs *ChainService) GetSlotDetailsBySlot(ctx context.Context, slot phase0.Sl
 			Header:   header,
 			Block:    block,
 			Orphaned: orphaned,
+			//todo	ExecutionBlocks: cachedBlock.ExecutionBlocks,
 		}
 	}
 
@@ -292,6 +297,39 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 				}
 				dbBlock := block.GetDbBlock(bs.beaconIndexer)
 				if dbBlock != nil {
+					var j = 0
+					var blocksCount = 1
+					if block.ExecutionBlocks != nil && len(block.ExecutionBlocks) > 0 {
+						blocksCount = len(block.ExecutionBlocks) + 1
+						for i := 5; i >= 0; i-- {
+							var executionBlock, ok = block.ExecutionBlocks[uint64(i)]
+							if ok {
+								var number = executionBlock.Block.NumberU64()
+								var proposer uint64
+								if executionBlock.Proposer == nil {
+									proposer = math.MaxInt64
+								} else {
+									proposer = *executionBlock.Proposer
+								}
+
+								resBlocks = append(resBlocks, &dbtypes.Slot{
+									Rank:                 uint64(i),
+									Slot:                 dbBlock.Slot,
+									Proposer:             proposer,
+									Status:               dbBlock.Status,
+									Root:                 executionBlock.Root[:],
+									ForkId:               dbBlock.ForkId,
+									EthTransactionCount:  uint64(executionBlock.Block.Transactions().Len()),
+									ExecutionBlocksCount: blocksCount,
+									ExecutionBlocksIdx:   j,
+									EthBlockNumber:       &number,
+								})
+								j++
+							}
+						}
+					}
+					dbBlock.ExecutionBlocksCount = blocksCount
+					dbBlock.ExecutionBlocksIdx = j
 					resBlocks = append(resBlocks, dbBlock)
 				}
 			}
@@ -360,7 +398,7 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 
 				blockStatus := dbtypes.Canonical
 				if !isCanonical {
-					blockStatus = dbtypes.Orphaned
+					//blockStatus = dbtypes.Orphaned
 				}
 
 				blockRoots = append(blockRoots, block.Root[:])
@@ -395,11 +433,11 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 				}
 
 				if !hasCanonicalProposer && slot > 0 {
-					resBlocks = append(resBlocks, &dbtypes.Slot{
+					/*	resBlocks = append(resBlocks, &dbtypes.Slot{
 						Slot:     uint64(slot),
 						Proposer: uint64(canonicalProposer),
 						Status:   dbtypes.Missing,
-					})
+					})*/
 				}
 			}
 		}
@@ -438,6 +476,36 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 			}
 
 			if dbBlock.Block != nil {
+				var j = 0
+				var blocksCount = 1
+				if dbBlock.Block.ExecutionBlocks != nil && len(dbBlock.Block.ExecutionBlocks) > 0 {
+					blocksCount = len(dbBlock.Block.ExecutionBlocks) + 1
+					for i := range dbBlock.Block.ExecutionBlocks {
+						var executionBlock = dbBlock.Block.ExecutionBlocks[i]
+						var number = executionBlock.Eth_block_number
+						var proposer uint64
+						if executionBlock.Proposer == nil {
+							proposer = math.MaxInt64
+						} else {
+							proposer = *executionBlock.Proposer
+						}
+						resBlocks = append(resBlocks, &dbtypes.Slot{
+							Rank:                 executionBlock.Rank,
+							Slot:                 dbBlock.Slot,
+							Proposer:             proposer,
+							Status:               dbBlock.Block.Status,
+							Root:                 executionBlock.Root[:],
+							ForkId:               dbBlock.Block.ForkId,
+							EthTransactionCount:  executionBlock.EthTransactionCount,
+							ExecutionBlocksCount: blocksCount,
+							ExecutionBlocksIdx:   i,
+							EthBlockNumber:       &number,
+						})
+						j++
+					}
+				}
+				dbBlock.Block.ExecutionBlocksCount = blocksCount
+				dbBlock.Block.ExecutionBlocksIdx = j
 				resBlocks = append(resBlocks, dbBlock.Block)
 			} else {
 				resBlocks = append(resBlocks, &dbtypes.Slot{
@@ -675,11 +743,40 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 			if block.block != nil {
 				if block.slot >= uint64(prunedSlot) {
 					assignedBlock.Block = block.block.GetDbBlock(bs.beaconIndexer)
+
 				} else {
 					blockRoots = append(blockRoots, block.block.Root[:])
 					blockRootsIdx = append(blockRootsIdx, resIdx)
 					blockRootsCachedId = append(blockRootsCachedId, cachedStart+uint64(cidx))
 				}
+				if block.block.ExecutionBlocks != nil {
+					var blocksCount = len(block.block.ExecutionBlocks)
+					for i := 5; i >= 0; i-- {
+						var executionBlock, ok = block.block.ExecutionBlocks[uint64(i)]
+						if ok {
+							assignedBlock1 := dbtypes.AssignedSlot{
+								Slot:     block.slot,
+								Proposer: block.proposer,
+							}
+							var number = executionBlock.Block.NumberU64()
+							assignedBlock1.Block = &dbtypes.Slot{
+								Rank:                 executionBlock.Rank,
+								Slot:                 uint64(block.block.Slot),
+								Proposer:             assignedBlock.Block.Proposer,
+								Status:               assignedBlock.Block.Status,
+								Root:                 executionBlock.Root[:],
+								ForkId:               assignedBlock.Block.ForkId,
+								EthTransactionCount:  uint64(len(executionBlock.Block.Transactions())),
+								ExecutionBlocksCount: blocksCount,
+								ExecutionBlocksIdx:   0, //i,
+								EthBlockNumber:       &number,
+							}
+							resBlocks = append(resBlocks, &assignedBlock1)
+						}
+						//	j++
+					}
+				}
+
 			}
 			resBlocks = append(resBlocks, &assignedBlock)
 			resIdx++

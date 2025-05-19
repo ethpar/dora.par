@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/alpha"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
@@ -41,6 +42,9 @@ func marshalVersionedSignedBeaconBlockSSZ(dynSsz *dynssz.DynSsz, block *spec.Ver
 		case spec.DataVersionDeneb:
 			version = uint64(block.Version)
 			ssz, err = dynSsz.MarshalSSZ(block.Deneb)
+		case spec.DataVersionAlpha:
+			version = uint64(block.Version)
+			ssz, err = dynSsz.MarshalSSZ(block.Alpha)
 		case spec.DataVersionElectra:
 			version = uint64(block.Version)
 			ssz, err = dynSsz.MarshalSSZ(block.Electra)
@@ -105,6 +109,12 @@ func unmarshalVersionedSignedBeaconBlockSSZ(dynSsz *dynssz.DynSsz, version uint6
 		if err := dynSsz.UnmarshalSSZ(block.Deneb, ssz); err != nil {
 			return nil, fmt.Errorf("failed to decode deneb signed beacon block: %v", err)
 		}
+	case spec.DataVersionAlpha:
+		block.Alpha = &alpha.SignedBeaconBlock{}
+		if err := dynSsz.UnmarshalSSZ(block.Alpha, ssz); err != nil {
+			return nil, fmt.Errorf("failed to decode alpha signed beacon block: %v", err)
+		}
+
 	case spec.DataVersionElectra:
 		block.Electra = &electra.SignedBeaconBlock{}
 		if err := dynSsz.UnmarshalSSZ(block.Electra, ssz); err != nil {
@@ -134,6 +144,9 @@ func marshalVersionedSignedBeaconBlockJson(block *spec.VersionedSignedBeaconBloc
 	case spec.DataVersionDeneb:
 		version = uint64(block.Version)
 		jsonRes, err = block.Deneb.MarshalJSON()
+	case spec.DataVersionAlpha:
+		version = uint64(block.Version)
+		jsonRes, err = block.Alpha.MarshalJSON()
 	case spec.DataVersionElectra:
 		version = uint64(block.Version)
 		jsonRes, err = block.Electra.MarshalJSON()
@@ -180,6 +193,11 @@ func unmarshalVersionedSignedBeaconBlockJson(version uint64, ssz []byte) (*spec.
 		if err := block.Deneb.UnmarshalJSON(ssz); err != nil {
 			return nil, fmt.Errorf("failed to decode deneb signed beacon block: %v", err)
 		}
+	case spec.DataVersionAlpha:
+		block.Alpha = &alpha.SignedBeaconBlock{}
+		if err := block.Alpha.UnmarshalJSON(ssz); err != nil {
+			return nil, fmt.Errorf("failed to decode alpha signed beacon block: %v", err)
+		}
 	case spec.DataVersionElectra:
 		block.Electra = &electra.SignedBeaconBlock{}
 		if err := block.Electra.UnmarshalJSON(ssz); err != nil {
@@ -212,6 +230,12 @@ func getBlockExecutionExtraData(v *spec.VersionedSignedBeaconBlock) ([]byte, err
 		}
 
 		return v.Deneb.Message.Body.ExecutionPayload.ExtraData, nil
+	case spec.DataVersionAlpha:
+		if v.Alpha == nil || v.Alpha.Message == nil || v.Alpha.Message.Body == nil || v.Alpha.Message.Body.ExecutionPayload == nil {
+			return nil, errors.New("no alpha block")
+		}
+
+		return v.Alpha.Message.Body.ExecutionPayload.ExtraData, nil
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.Message == nil || v.Electra.Message.Body == nil || v.Electra.Message.Body.ExecutionPayload == nil {
 			return nil, errors.New("no electra block")
@@ -235,6 +259,8 @@ func getBlockExecutionDepositRequests(v *spec.VersionedSignedBeaconBlock) ([]*el
 		return nil, errors.New("no deposit requests in capella")
 	case spec.DataVersionDeneb:
 		return nil, errors.New("no deposit requests in deneb")
+	case spec.DataVersionAlpha:
+		return nil, errors.New("no deposit requests in alpha")
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.Message == nil || v.Electra.Message.Body == nil || v.Electra.Message.Body.ExecutionPayload == nil {
 			return nil, errors.New("no electra block")
@@ -258,6 +284,8 @@ func getBlockExecutionConsolidationRequests(v *spec.VersionedSignedBeaconBlock) 
 		return nil, errors.New("no deposit requests in capella")
 	case spec.DataVersionDeneb:
 		return nil, errors.New("no deposit requests in deneb")
+	case spec.DataVersionAlpha:
+		return nil, errors.New("no deposit requests in alpha")
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.Message == nil || v.Electra.Message.Body == nil || v.Electra.Message.Body.ExecutionPayload == nil {
 			return nil, errors.New("no electra block")
@@ -281,6 +309,8 @@ func getBlockExecutionWithdrawalRequests(v *spec.VersionedSignedBeaconBlock) ([]
 		return nil, errors.New("no deposit requests in capella")
 	case spec.DataVersionDeneb:
 		return nil, errors.New("no deposit requests in deneb")
+	case spec.DataVersionAlpha:
+		return nil, errors.New("no deposit requests in alpha")
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.Message == nil || v.Electra.Message.Body == nil || v.Electra.Message.Body.ExecutionPayload == nil {
 			return nil, errors.New("no electra block")
@@ -325,6 +355,12 @@ func getStateRandaoMixes(v *spec.VersionedBeaconState) ([]phase0.Root, error) {
 		}
 
 		return v.Deneb.RANDAOMixes, nil
+	case spec.DataVersionAlpha:
+		if v.Alpha == nil || v.Alpha.RANDAOMixes == nil {
+			return nil, errors.New("no alpha block")
+		}
+
+		return v.Alpha.RANDAOMixes, nil
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.RANDAOMixes == nil {
 			return nil, errors.New("no electra block")
@@ -349,6 +385,8 @@ func getStateDepositIndex(state *spec.VersionedBeaconState) uint64 {
 		return state.Capella.ETH1DepositIndex
 	case spec.DataVersionDeneb:
 		return state.Deneb.ETH1DepositIndex
+	case spec.DataVersionAlpha:
+		return state.Alpha.ETH1DepositIndex
 	case spec.DataVersionElectra:
 		return state.Electra.ETH1DepositIndex
 	}
@@ -384,6 +422,12 @@ func getStateCurrentSyncCommittee(v *spec.VersionedBeaconState) ([]phase0.BLSPub
 		}
 
 		return v.Deneb.CurrentSyncCommittee.Pubkeys, nil
+	case spec.DataVersionAlpha:
+		if v.Alpha == nil || v.Alpha.CurrentSyncCommittee == nil {
+			return nil, errors.New("no alpha block")
+		}
+
+		return v.Alpha.CurrentSyncCommittee.Pubkeys, nil
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.CurrentSyncCommittee == nil {
 			return nil, errors.New("no electra block")

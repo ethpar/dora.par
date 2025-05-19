@@ -35,6 +35,8 @@ type Block struct {
 	processingStatus  dbtypes.UnfinalizedBlockStatus
 	seenMutex         sync.RWMutex
 	seenMap           map[uint16]*Client
+	Rank              uint64
+	ExecutionBlocks   map[uint64]ExecutionBlock
 }
 
 // BlockBodyIndex holds important block propoerties that are used as index for cache lookups.
@@ -49,12 +51,13 @@ type BlockBodyIndex struct {
 // newBlock creates a new Block instance.
 func newBlock(dynSsz *dynssz.DynSsz, root phase0.Root, slot phase0.Slot) *Block {
 	return &Block{
-		Root:       root,
-		Slot:       slot,
-		dynSsz:     dynSsz,
-		seenMap:    make(map[uint16]*Client),
-		headerChan: make(chan bool),
-		blockChan:  make(chan bool),
+		Root:            root,
+		Slot:            slot,
+		dynSsz:          dynSsz,
+		seenMap:         make(map[uint16]*Client),
+		headerChan:      make(chan bool),
+		blockChan:       make(chan bool),
+		ExecutionBlocks: make(map[uint64]ExecutionBlock),
 	}
 }
 
@@ -230,6 +233,10 @@ func (block *Block) EnsureBlock(loadBlock func() (*spec.VersionedSignedBeaconBlo
 		block.blockChan = nil
 	}
 
+	//rank, _ := blockBody.Rank();
+	//block.rank = rank;
+	block.Rank = 0
+
 	return true, nil
 }
 
@@ -279,6 +286,7 @@ func (block *Block) buildUnfinalizedBlock(compress bool) (*dbtypes.UnfinalizedBl
 		BlockSSZ:  blockSSZ,
 		Status:    0,
 		ForkId:    uint64(block.forkId),
+		Rank:      0,
 	}, nil
 }
 

@@ -54,7 +54,7 @@ func LoadBeaconHeaderBySlot(ctx context.Context, client *Client, slot phase0.Slo
 func LoadBeaconBlock(ctx context.Context, client *Client, root phase0.Root) (*spec.VersionedSignedBeaconBlock, error) {
 	ctx, cancel := context.WithTimeout(ctx, beaconBodyRequestTimeout)
 	defer cancel()
-
+	client.client.GetPool()
 	body, err := client.client.GetRPCClient().GetBlockBodyByBlockroot(ctx, root)
 	if err != nil {
 		return nil, err

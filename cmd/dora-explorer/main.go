@@ -149,9 +149,11 @@ func startFrontend(webserver *http.Server) {
 	router.HandleFunc("/epoch/{epoch}", handlers.Epoch).Methods("GET")
 	router.HandleFunc("/slots", handlers.Slots).Methods("GET")
 	router.HandleFunc("/slots/filtered", handlers.SlotsFiltered).Methods("GET")
+	router.HandleFunc("/slot/{slotOrHash}/rank/{rank}", handlers.Slot).Methods("GET")
 	router.HandleFunc("/slot/{slotOrHash}", handlers.Slot).Methods("GET")
 	router.HandleFunc("/slot/{root}/blob/{commitment}", handlers.SlotBlob).Methods("GET")
 	router.HandleFunc("/mev/blocks", handlers.MevBlocks).Methods("GET")
+	router.HandleFunc("/pool/{slot}", handlers.Pool).Methods("GET")
 
 	router.HandleFunc("/search", handlers.Search).Methods("GET")
 	router.HandleFunc("/search/{type}", handlers.SearchAhead).Methods("GET")

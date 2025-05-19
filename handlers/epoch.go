@@ -184,6 +184,7 @@ func buildEpochPageData(epoch uint64) (*models.EpochPageData, time.Duration) {
 				EthTransactionCount:   dbSlot.EthTransactionCount,
 				Graffiti:              dbSlot.Graffiti,
 				BlockRoot:             dbSlot.Root,
+				Rank:                  dbSlot.Rank,
 			}
 			if dbSlot.EthBlockNumber != nil {
 				slotData.WithEthBlock = true

@@ -47,11 +47,13 @@ type SlotsPageDataSlot struct {
 	BlockRoot             []byte                    `json:"block_root"`
 	ParentRoot            []byte                    `json:"parent_root"`
 	ForkGraph             []*SlotsPageDataForkGraph `json:"fork_graph"`
+	Rank                  uint64                    `json:"rank"`
 }
 
 type SlotsPageDataForkGraph struct {
-	Index int             `json:"index"`
-	Left  int             `json:"left"`
-	Tiles map[string]bool `json:"tiles"`
-	Block bool            `json:"block"`
+	Index         int             `json:"index"`
+	Left          int             `json:"left"`
+	Tiles         map[string]bool `json:"tiles"`
+	Block         bool            `json:"block"`
+	BlockParallel bool            `json:"block_parallel"`
 }

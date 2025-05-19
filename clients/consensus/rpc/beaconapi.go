@@ -286,6 +286,30 @@ func (bc *BeaconClient) GetNodeVersion(ctx context.Context) (string, error) {
 	return nodeVersion.Data.Version, nil
 }
 
+type rewards struct {
+	ExecutionOptimistic bool `json:"execution_optimistic"`
+	Finalized           bool `json:"finalized"`
+	Data                struct {
+		ProposerIndices   []string `json:"proposer_indices"`
+		Total             string   `json:"total"`
+		Attestations      string   `json:"attestations"`
+		SyncAggregate     string   `json:"sync_aggregate"`
+		ProposerSlashings string   `json:"proposer_slashings"`
+		AttesterSlashings string   `json:"attester_slashings"`
+	} `json:"data"`
+}
+
+func (bc *BeaconClient) GetRewards(ctx context.Context, blockHash phase0.Root) ([]string, error) {
+	var blockRewards rewards
+
+	err := bc.getJSON(ctx, fmt.Sprintf("%s/eth/v1/beacon/rewards/blocks/%s", bc.endpoint, blockHash.String()), &blockRewards)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving node rewards: %v", err)
+	}
+
+	return blockRewards.Data.ProposerIndices, nil
+}
+
 func (bc *BeaconClient) GetConfigSpecs(ctx context.Context) (map[string]interface{}, error) {
 	provider, isProvider := bc.clientSvc.(eth2client.SpecProvider)
 	if !isProvider {

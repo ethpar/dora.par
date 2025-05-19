@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"net/url"
@@ -231,6 +232,63 @@ func (ec *ExecutionClient) GetBlockByHash(ctx context.Context, hash common.Hash)
 	return block, nil
 }
 
+func (ec *ExecutionClient) GetBlockByStringHash(ctx context.Context, hash string) (*types.Block, error) {
+	block, err := ec.ethClient.BlockByStringHash(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return block, nil
+}
+
+func (ec *ExecutionClient) GetBlockByStringHashRaw(ctx context.Context, hash string) (*json.RawMessage, error) {
+	block, err := ec.ethClient.BlockByStringHashRaw(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return block, nil
+}
+
+func (ec *ExecutionClient) GetBlockByNumberAndRank(ctx context.Context, number uint64, rank uint64) (*types.Block, error) {
+	block, err := ec.ethClient.BlockByNumberAndRank(ctx, big.NewInt(0).SetUint64(number), rank)
+	if err != nil {
+		return nil, err
+	}
+
+	return block, nil
+}
+
+func (ec *ExecutionClient) DecodeBlockRaw(ctx context.Context, raw *json.RawMessage) (*types.Block, error) {
+	block, err := ec.ethClient.DecodeBlockRaw(*raw, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return block, nil
+}
+
+func (ec *ExecutionClient) GetBlockByNumberAndRankRaw(ctx context.Context, number uint64, rank uint64) (*json.RawMessage, error) {
+	parallelExecutionBlock, err := ec.ethClient.BlockByNumberAndRankRaw(ctx, big.NewInt(0).SetUint64(number), rank)
+	if err != nil {
+		return nil, err
+	}
+	/*if json.Unmarshal(parallelExecutionBlock) == "null" {
+		return nil, nil
+	}*/
+	return parallelExecutionBlock, nil
+}
+
+func (ec *ExecutionClient) GetBlocksByNumber(ctx context.Context, number uint64) (*types.Block, error) {
+	block, err := ec.ethClient.BlockByNumberAndRank(ctx, big.NewInt(0).SetUint64(number), 1)
+	if err != nil {
+
+		return nil, err
+	}
+
+	return block, nil
+}
+
 func (ec *ExecutionClient) GetNonceAt(ctx context.Context, wallet common.Address, blockNumber *big.Int) (uint64, error) {
 	return ec.ethClient.NonceAt(ctx, wallet, blockNumber)
 }
@@ -245,4 +303,8 @@ func (ec *ExecutionClient) GetTransactionReceipt(ctx context.Context, txHash com
 
 func (ec *ExecutionClient) SendTransaction(ctx context.Context, tx *types.Transaction) error {
 	return ec.ethClient.SendTransaction(ctx, tx)
+}
+
+func (ec *ExecutionClient) GetPendingTransactions(ctx context.Context) (json.RawMessage, error) {
+	return ec.ethClient.GetPendingTransactions(ctx)
 }

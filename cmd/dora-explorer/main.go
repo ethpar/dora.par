@@ -155,6 +155,9 @@ func startFrontend(webserver *http.Server) {
 	router.HandleFunc("/mev/blocks", handlers.MevBlocks).Methods("GET")
 	router.HandleFunc("/pool/{slot}", handlers.Pool).Methods("GET")
 
+	// Etherscan-compatible API endpoints
+	router.HandleFunc("/api", handlers.EtherscanAPI).Methods("GET")
+
 	router.HandleFunc("/search", handlers.Search).Methods("GET")
 	router.HandleFunc("/search/{type}", handlers.SearchAhead).Methods("GET")
 	router.HandleFunc("/validators", handlers.Validators).Methods("GET")

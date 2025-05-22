@@ -1,0 +1,77 @@
+{{ define "addressTransactions" }}
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title d-flex justify-content-between align-items-center" style="margin: .4rem 0;">
+            <span> <i class="fas fa-history"></i> Transactions </span>
+        </h5>
+    </div>
+<div class="card-body p-0">
+<div class="table-ellipsis px-0">
+    <table class="table" id="block_transactions">
+        <thead>
+        <tr>
+            <th>#</th>
+            <th>Hash</th>
+            <th>Method</th>
+            <th>Block</th>
+            <th>From</th>
+            <th></th>
+            <th>To</th>
+            <th>Value</th>
+            <th>ttt</th>
+        </tr>
+        </thead>
+        <tbody>
+        {{ range $i, $transaction := .Transactions }}
+        <tr>
+            <td>{{ $i }}</td>
+            <td>
+                <div class="ellipsis-copy-btn">
+                    <i class="fa fa-copy text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="0x{{ printf "%x" $transaction.Hash }}"></i>
+                </div>
+                0x{{ printf "%x" $transaction.Hash }}
+            </td>
+            <td>
+                <span class="badge rounded-pill text-bg-secondary" style="font-size: 12px; font-weight: 500;">{{ $transaction.Method }}</span>
+            </td>
+            <td>
+                {{ formatAddCommas $transaction.BlockNumber }}
+            </td>
+            <td>
+                <div class="ellipsis-copy-btn">
+                    <i class="fa fa-copy text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $transaction.From }}"></i>
+                </div>
+                {{if $transaction.IsFrom}}
+                {{ $transaction.From }}
+                {{else}}
+                <a href="/address/{{ $transaction.From }}">{{ $transaction.From }}</a>
+                {{end}}
+            </td>
+            <td>
+                <span class="badge rounded-pill text-bg-secondary" style="font-size: 12px; font-weight: 500;">In</span>
+            </td>
+            <td>
+                <div class="ellipsis-copy-btn">
+                    <i class="fa fa-copy text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $transaction.To }}"></i>
+                </div>
+                {{if $transaction.IsFrom}}
+                <a href="/address/{{ $transaction.To }}">{{ $transaction.To }}</a>
+                {{else}}
+                {{ $transaction.To }}
+                {{end}}
+            </td>
+            <td>{{ $transaction.Value }} ETHPAR</td>
+            <td>
+                <i class="fa fa-circle-info text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" data-bs-html="true" data-bs-title="{{ "" -}}
+                TX Type: {{ $transaction.Type }}<br>
+                {{- "" }}"></i>
+            </td>
+        </tr>
+        {{ end }}
+        </tbody>
+    </table>
+</div>
+</div>
+</div>
+
+{{ end }}

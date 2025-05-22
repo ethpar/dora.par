@@ -162,9 +162,76 @@ func processExecutionBlock(c *Client, block *Block, parallelExecutionBlock *type
 				c.logger.Infof("saved slot: %v exec block:%v:%v %v", block.Slot, parallelExecutionBlock.Number(), rank, isAsync)
 				return nil
 			})
+			SaveTransaction(c, block, parallelExecutionBlock, rank)
 		}
 	}
 	return
+}
+
+func SaveTransaction(c *Client, block *Block, parallelExecutionBlock *types.Block, rank uint64) error {
+
+	var executionClient = c.indexer.executionPool.GetReadyEndpoint(execution.AnyClient)
+	if executionClient == nil {
+		return fmt.Errorf("processExecutionBlocks: could not get execution client")
+	}
+
+	client := executionClient.GetRPCClient()
+	ethClient := client.GetEthClient()
+
+	for _, tx := range parallelExecutionBlock.Transactions() {
+
+		//tx, isPending, err := ethClient.TransactionByHash(c.getContext(), common.HexToHash(txHash))
+
+		var receipt *types.Receipt
+
+		receipt, err := ethClient.TransactionReceipt(c.getContext(), tx.Hash())
+		receipt.TxHash.Hex()
+
+		if err != nil {
+			return err
+		}
+		//}
+		//block, err := ethClient.BlockByNumber(c.getContext(), receipt.BlockNumber)
+
+		/*		if err != nil {
+				return err
+			}*/
+		transaction := dbtypes.Transaction{
+			Hash:             receipt.TxHash.Hex(),
+			Nonce:            tx.Nonce(),
+			BlockHash:        receipt.BlockHash.Hex(),
+			BlockNumber:      receipt.BlockNumber.Uint64(),
+			BlockRank:        rank,
+			TransactionIndex: receipt.TransactionIndex,
+			From: func() string {
+				sender, err := ethClient.TransactionSender(c.getContext(), tx, receipt.BlockHash, receipt.TransactionIndex)
+				if err != nil {
+					return "0x0000000000000000000000000000000000000000"
+				}
+				return sender.Hex()
+			}(),
+			To:                tx.To().Hex(),
+			Value:             tx.Value().Uint64(),
+			Gas:               tx.Gas(),
+			GasPrice:          tx.GasPrice().Uint64(),
+			IsError:           false,
+			TimeStamp:         tx.Time(), //fmt.Sprintf("%#x", block.Time()),
+			ContractAddress:   receipt.ContractAddress.Hex(),
+			CumulativeGasUsed: receipt.CumulativeGasUsed,
+			GasUsed:           receipt.GasUsed,
+		}
+		err = db.RunDBTransaction(func(tx *sqlx.Tx) error {
+			err := db.InsertTransaction(&transaction, tx)
+			if err != nil {
+				c.logger.Errorf("!transaction save error:  %v", err)
+				return err
+			}
+			//c.logger.Debugf("saved execution block: slot: %v  %v:%v", block.Slot, parallelExecutionBlock.Number(), rank)
+			//c.logger.Infof("saved transaction: %v exec block:%v:%v", transaction.Hash, parallelExecutionBlock.Number(), rank)
+			return nil
+		})
+	}
+	return nil
 }
 
 type txExtraInfo struct {

@@ -851,3 +851,7 @@ func (bs *ChainService) CheckBlockOrphanedStatus(blockRoot phase0.Root) dbtypes.
 
 	return dbtypes.Missing
 }
+
+func (bs *ChainService) GetTransactionsForAddress(address string) []*dbtypes.Transaction {
+	return db.GetTransactions(address)
+}

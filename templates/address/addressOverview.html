@@ -1,0 +1,16 @@
+{{ define "addressOverview" }}
+<div class="card-body px-0 py-1">
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Address">Address:</span></div>
+        <div class="col-md-10" data-bind="text: netname()">{{ .AccountAddress }}</div>
+    </div>
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Balance">Balance:</span></div>
+        <div class="col-md-10" data-bind="text: netname()">{{ .AccountBalance }} ETHPAR</div>
+    </div>
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="ERC20 Tokens">ERC20 Tokens:</span></div>
+        <div class="col-md-10" data-bind="text: netname()">{{ .ERC20Tokens }}</div>
+    </div>
+</div>
+{{ end }}

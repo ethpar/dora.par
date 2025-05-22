@@ -1,5 +1,9 @@
 package dbtypes
 
+import (
+	"time"
+)
+
 type ExplorerState struct {
 	Key   string `db:"key"`
 	Value string `db:"value"`
@@ -125,6 +129,30 @@ type UnfinalizedExecutionBlock struct {
 	Block               []byte                 `db:"block"`
 	Status              UnfinalizedBlockStatus `db:"status"`
 	Proposer            *uint64                `db:"proposer"`
+}
+
+type Transaction struct {
+	Hash              string    `db:"hash"`
+	BlockNumber       uint64    `db:"block_number"`
+	BlockRank         uint64    `db:"block_rank"`
+	TimeStamp         time.Time `db:"created_at"`
+	Nonce             uint64    `db:"nonce"`
+	BlockHash         string    `db:"block_hash"`
+	TransactionIndex  uint      `db:"transaction_index"`
+	From              string    `db:"from"`
+	To                string    `db:"to"`
+	Value             uint64    `db:"value"`
+	Gas               uint64    `db:"gas"`
+	GasPrice          uint64    `db:"gas_price"`
+	IsError           bool      `db:"is_error"`
+	TxReceiptStatus   string    `db:"receipt_status"`
+	Input             string    `db:"input"`
+	ContractAddress   string    `db:"contract_address"`
+	CumulativeGasUsed uint64    `db:"cumulative_gas_used"`
+	GasUsed           uint64    `db:"gas_used"`
+	Confirmations     int       `db:"confirmations"`
+	Method            string    `db:"method"`
+	Type              string    `db:"type"`
 }
 
 type UnfinalizedEpoch struct {

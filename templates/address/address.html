@@ -1,0 +1,33 @@
+{{ define "page" }}
+<div class="container mt-2" id="frontpage_container">
+    {{ template "addressOverview" . }}
+
+    <div class="row">
+
+            <div class="startpage-panel">
+                {{ template "addressTransactions" . }}
+            </div>
+            <div style="height:30px"></div>
+
+    </div>
+</div>
+{{ end }}
+{{ define "js" }}
+<script src="/js/knockout.min.js"></script>
+
+{{ end }}
+{{ define "css" }}
+<link rel="stylesheet" href="/css/forkgraph.css" />
+<style>
+    #recent-epochs, #recent-blocks, #recent-slots {
+        margin-bottom: 0;
+    }
+    .startpage-panel .card-header {
+        padding-top: 2px;
+        padding-bottom: 2px;
+    }
+    .startpage-panel .card-header i {
+        margin-right: 5px;
+    }
+</style>
+{{ end }}

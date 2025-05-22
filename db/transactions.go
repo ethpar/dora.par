@@ -22,6 +22,25 @@ func GetTransactions(address string) []*dbtypes.Transaction {
 	return transactions
 }
 
+func GetTransactionByHash(hash string) *dbtypes.Transaction {
+	transactions := []*dbtypes.Transaction{}
+	err := ReaderDb.Select(&transactions, `
+	SELECT
+		"hash","block_number",block_rank,created_at,nonce,block_hash,transaction_index,"from","to",value,gas,gas_price,
+			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations
+	FROM transactions
+	WHERE "hash" = $1
+	`, hash)
+	if err != nil {
+		logger.Errorf("Error while fetching Transactions: %v", err)
+		return nil
+	}
+	if len(transactions) > 0 {
+		return transactions[0]
+	}
+	return nil
+}
+
 func InsertTransaction(transaction *dbtypes.Transaction, tx *sqlx.Tx) error {
 	_, err := tx.Exec(EngineQuery(map[dbtypes.DBEngineType]string{
 		dbtypes.DBEnginePgsql: `

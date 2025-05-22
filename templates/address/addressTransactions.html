@@ -29,7 +29,8 @@
                 <div class="ellipsis-copy-btn">
                     <i class="fa fa-copy text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="0x{{ printf "%x" $transaction.Hash }}"></i>
                 </div>
-                0x{{ printf "%x" $transaction.Hash }}
+
+                <a href="/tx/{{ $transaction.Hash }}">{{ $transaction.Hash }}</a>
             </td>
             <td>
                 <span class="badge rounded-pill text-bg-secondary" style="font-size: 12px; font-weight: 500;">{{ $transaction.Method }}</span>
@@ -48,7 +49,11 @@
                 {{end}}
             </td>
             <td>
-                <span class="badge rounded-pill text-bg-secondary" style="font-size: 12px; font-weight: 500;">In</span>
+                {{if $transaction.IsFrom}}
+                <span class="badge rounded-pill text-bg-secondary" style="font-size: 12px; font-weight: 500;">OUT</span>
+                {{else}}
+                <span class="badge rounded-pill text-bg-secondary" style="font-size: 12px; font-weight: 500;">IN</span>
+                {{end}}
             </td>
             <td>
                 <div class="ellipsis-copy-btn">

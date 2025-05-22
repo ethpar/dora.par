@@ -855,3 +855,7 @@ func (bs *ChainService) CheckBlockOrphanedStatus(blockRoot phase0.Root) dbtypes.
 func (bs *ChainService) GetTransactionsForAddress(address string) []*dbtypes.Transaction {
 	return db.GetTransactions(address)
 }
+
+func (bs *ChainService) GetTransactionByHash(hash string) *dbtypes.Transaction {
+	return db.GetTransactionByHash(hash)
+}

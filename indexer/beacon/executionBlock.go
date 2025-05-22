@@ -102,7 +102,7 @@ func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64, isAsy
 	c.logger.Infof("start check parallel Blocks for: %v", blockNumber)
 	var proposers, _ = c.client.GetRPCClient().GetRewards(c.getContext(), block.Root)
 
-	for rank := 1; rank < 5; rank++ {
+	for rank := 0; rank < 5; rank++ {
 		var proposer *uint64 = nil
 		if len(proposers) > rank {
 			if proposers[rank] != "" {
@@ -126,11 +126,15 @@ func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64, isAsy
 		}
 		parallelExecutionBlock, err := executionClient.GetRPCClient().DecodeBlockRaw(nil, parallelExecutionBlockRaw)
 		if err == nil {
-			processExecutionBlock(c, block, parallelExecutionBlock, parallelExecutionBlockRaw, uint64(rank), proposer, isAsync)
+			if rank > 0 {
+				processExecutionBlock(c, block, parallelExecutionBlock, parallelExecutionBlockRaw, uint64(rank), proposer, isAsync)
+			}
+			SaveTransaction(c, parallelExecutionBlock, uint64(rank))
 		} else {
 			c.logger.Errorf("DecodeBlockRaw: %v:%v %v", blockNumber, rank, err)
 		}
 	}
+
 	return
 }
 
@@ -162,13 +166,13 @@ func processExecutionBlock(c *Client, block *Block, parallelExecutionBlock *type
 				c.logger.Infof("saved slot: %v exec block:%v:%v %v", block.Slot, parallelExecutionBlock.Number(), rank, isAsync)
 				return nil
 			})
-			SaveTransaction(c, block, parallelExecutionBlock, rank)
+			//SaveTransaction(c, parallelExecutionBlock, rank)
 		}
 	}
 	return
 }
 
-func SaveTransaction(c *Client, block *Block, parallelExecutionBlock *types.Block, rank uint64) error {
+func SaveTransaction(c *Client, parallelExecutionBlock *types.Block, rank uint64) error {
 
 	var executionClient = c.indexer.executionPool.GetReadyEndpoint(execution.AnyClient)
 	if executionClient == nil {

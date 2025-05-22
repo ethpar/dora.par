@@ -6,42 +6,18 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethpandaops/dora/services"
 	"github.com/ethpandaops/dora/templates"
+	"github.com/ethpandaops/dora/types/models"
 	"github.com/gorilla/mux"
 	"math/big"
 	"net/http"
 	"strings"
-	"time"
 )
 
-type TransactionData struct {
-	Hash              string     `json:"hash"`
-	BlockNumber       uint64     `json:"block_number"`
-	BlockRank         uint64     `json:"block_rank"`
-	TimeStamp         time.Time  `json:"created_at"`
-	Nonce             uint64     `json:"nonce"`
-	BlockHash         string     `json:"block_hash"`
-	TransactionIndex  uint       `json:"transaction_index"`
-	From              string     `json:"from"`
-	To                string     `json:"to"`
-	Value             *big.Float `json:"value"`
-	Gas               uint64     `json:"gas"`
-	GasPrice          uint64     `json:"gas_price"`
-	IsError           bool       `json:"is_error"`
-	TxReceiptStatus   string     `json:"receipt_status"`
-	Input             string     `json:"input"`
-	ContractAddress   string     `json:"contract_address"`
-	CumulativeGasUsed uint64     `json:"cumulative_gas_used"`
-	GasUsed           uint64     `json:"gas_used"`
-	Confirmations     int        `json:"confirmations"`
-	Method            string     `json:"method"`
-	Type              string     `json:"type"`
-	IsFrom            bool       `json:"is_from"`
-}
 type Account struct {
-	AccountAddress string             `json:"account_address"`
-	AccountBalance *big.Float         `json:"account_balance"`
-	ERC20Tokens    int                `json:"account_erc20"`
-	Transactions   []*TransactionData `json:"transactions"` // Transactions included in this block
+	AccountAddress string                    `json:"account_address"`
+	AccountBalance *big.Float                `json:"account_balance"`
+	ERC20Tokens    int                       `json:"account_erc20"`
+	Transactions   []*models.TransactionData `json:"transactions"` // Transactions included in this block
 }
 
 func Address(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +44,7 @@ func Address(w http.ResponseWriter, r *http.Request) {
 
 		txValue := weiToEther(new(big.Int).SetUint64(dbTransaction.Value))
 
-		transactionData := &TransactionData{
+		transactionData := &models.TransactionData{
 			Hash:        dbTransaction.Hash,
 			BlockNumber: dbTransaction.BlockNumber,
 			BlockRank:   dbTransaction.BlockRank,
@@ -124,4 +100,8 @@ func Address(w http.ResponseWriter, r *http.Request) {
 
 func weiToEther(wei *big.Int) *big.Float {
 	return new(big.Float).Quo(new(big.Float).SetInt(wei), big.NewFloat(params.Ether))
+}
+
+func weiToGWei(wei *big.Int) *big.Float {
+	return new(big.Float).Quo(new(big.Float).SetInt(wei), big.NewFloat(params.GWei))
 }

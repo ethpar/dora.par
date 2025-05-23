@@ -27,7 +27,12 @@ func Transaction(w http.ResponseWriter, r *http.Request) {
 
 	dbTransaction := services.GlobalBeaconService.GetTransactionByHash(hash)
 
+	if dbTransaction == nil {
+		return
+	}
+
 	txValue := weiToEther(new(big.Int).SetUint64(dbTransaction.Value))
+
 	gasPriceGWei := weiToGWei(new(big.Int).SetUint64(dbTransaction.GasPrice))
 	txFee := weiToEther(new(big.Int).SetUint64(dbTransaction.GasPrice * dbTransaction.GasUsed))
 	transactionData := &models.TransactionData{

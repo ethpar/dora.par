@@ -1,7 +1,7 @@
 {{ define "addressOverview" }}
 <div class="card-body px-0 py-1">
     <div class="row border-bottom p-2 mx-0">
-        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Address">Address:</span></div>
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Address">{{ .AccountType }}:</span></div>
         <div class="col-md-10" data-bind="text: netname()">{{ .AccountAddress }}</div>
     </div>
     <div class="row border-bottom p-2 mx-0">

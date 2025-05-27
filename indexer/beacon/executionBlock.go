@@ -1,6 +1,7 @@
 package beacon
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -200,6 +201,8 @@ func SaveTransaction(c *Client, parallelExecutionBlock *types.Block, rank uint64
 		/*		if err != nil {
 				return err
 			}*/
+
+		input := hex.EncodeToString(tx.Data())
 		transaction := dbtypes.Transaction{
 			Hash:             receipt.TxHash.Hex(),
 			Nonce:            tx.Nonce(),
@@ -219,11 +222,14 @@ func SaveTransaction(c *Client, parallelExecutionBlock *types.Block, rank uint64
 			Gas:               tx.Gas(),
 			GasPrice:          tx.GasPrice().Uint64(),
 			IsError:           false,
-			TimeStamp:         tx.Time(), //fmt.Sprintf("%#x", block.Time()),
+			TimeStamp:         time.Unix(int64(parallelExecutionBlock.Time()), 0),
+			Input:             input,
 			ContractAddress:   receipt.ContractAddress.Hex(),
 			CumulativeGasUsed: receipt.CumulativeGasUsed,
 			GasUsed:           receipt.GasUsed,
+			Type:              tx.Type(),
 		}
+		//c.logger.Infof(">>>>>>>>>>block: slot: %v  %v logs %v", tx.Time(), time.Unix(parallelExecutionBlock.Time(), 0), len(receipt.Logs))
 		err = db.RunDBTransaction(func(tx *sqlx.Tx) error {
 			err := db.InsertTransaction(&transaction, tx)
 			if err != nil {

@@ -14,6 +14,7 @@ import (
 )
 
 type Account struct {
+	AccountType    string                    `json:"account_type"`
 	AccountAddress string                    `json:"account_address"`
 	AccountBalance *big.Float                `json:"account_balance"`
 	ERC20Tokens    int                       `json:"account_erc20"`
@@ -68,7 +69,12 @@ func Address(w http.ResponseWriter, r *http.Request) {
 	if len(clients) > 0 {
 		client := clients[0].GetRPCClient()
 		balance, err := client.GetEthClient().BalanceAt(context.Background(), common.HexToAddress(address), nil)
-
+		code, err := client.GetEthClient().CodeAt(context.Background(), common.HexToAddress(address), nil)
+		if len(code) == 0 {
+			account.AccountType = "Address"
+		} else {
+			account.AccountType = "Contract"
+		}
 		if err == nil {
 			account.AccountBalance = weiToEther(new(big.Int).SetUint64(balance.Uint64()))
 		}

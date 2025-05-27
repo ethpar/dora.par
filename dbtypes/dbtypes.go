@@ -152,7 +152,7 @@ type Transaction struct {
 	GasUsed           uint64    `db:"gas_used"`
 	Confirmations     int       `db:"confirmations"`
 	Method            string    `db:"method"`
-	Type              string    `db:"type"`
+	Type              uint8     `db:"type"`
 }
 
 type UnfinalizedEpoch struct {

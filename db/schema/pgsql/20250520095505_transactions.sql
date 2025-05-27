@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS public.transactions
     cumulative_gas_used bigint,
     gas_used            bigint,
     confirmations       int,
+    "type" int,
     CONSTRAINT "transactions_pkey" PRIMARY KEY ("hash")
 );
 

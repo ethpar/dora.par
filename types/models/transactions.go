@@ -27,7 +27,7 @@ type TransactionData struct {
 	GasUsed           uint64     `json:"gas_used"`
 	Confirmations     int        `json:"confirmations"`
 	Method            string     `json:"method"`
-	Type              string     `json:"type"`
+	Type              uint8      `json:"type"`
 	IsFrom            bool       `json:"is_from"`
 	TxFee             *big.Float `json:"tx_fee"`
 }

@@ -14,6 +14,8 @@
             <th>Hash</th>
             <th>Method</th>
             <th>Block</th>
+            <th>Rank</th>
+            <th>Time</th>
             <th>From</th>
             <th></th>
             <th>To</th>
@@ -38,6 +40,13 @@
             <td>
                 {{ formatAddCommas $transaction.BlockNumber }}
             </td>
+            <td>
+                {{ formatAddCommas $transaction.BlockRank }}
+            </td>
+            <td>
+            <span data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="{{ $transaction.TimeStamp }}">{{ formatRecentTimeShort $transaction.TimeStamp }}</span>
+            </td>
+
             <td>
                 <div class="ellipsis-copy-btn">
                     <i class="fa fa-copy text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $transaction.From }}"></i>

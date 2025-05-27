@@ -13,7 +13,7 @@ func GetTransactions(address string) []*dbtypes.Transaction {
 			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations
 	FROM transactions
 	WHERE "to" = $1 or "from"=$2
-	ORDER BY created_at desc
+	ORDER BY block_number desc, block_rank desc
 	`, address, address)
 	if err != nil {
 		logger.Errorf("Error while fetching Transactions: %v", err)
@@ -46,17 +46,20 @@ func InsertTransaction(transaction *dbtypes.Transaction, tx *sqlx.Tx) error {
 		dbtypes.DBEnginePgsql: `
 			INSERT INTO transactions (
 				"hash","block_number",block_rank,created_at,nonce,block_hash,transaction_index,"from","to",value,gas,gas_price,
-			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations,
+			                          type
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 			ON CONFLICT ("hash") DO NOTHING`,
 		dbtypes.DBEngineSqlite: `
-			INSERT OR IGNORE INTO unfinalized_execution_blocks (
-				root, slot, rank, block, eth_block_number, eth_block_hash, eth_transaction_count, proposer
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			INSERT OR IGNORE INTO transactions (
+				"hash","block_number",block_rank,created_at,nonce,block_hash,transaction_index,"from","to",value,gas,gas_price,
+			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations,
+			                          type
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
 	}),
 		transaction.Hash, transaction.BlockNumber, transaction.BlockRank, transaction.TimeStamp, transaction.Nonce, transaction.BlockHash, transaction.TransactionIndex, transaction.From,
 		transaction.To, transaction.Value, transaction.Gas, transaction.GasPrice, transaction.IsError, transaction.TxReceiptStatus, transaction.Input, transaction.ContractAddress, transaction.CumulativeGasUsed,
-		transaction.GasUsed, transaction.Confirmations)
+		transaction.GasUsed, transaction.Confirmations, transaction.Type)
 	if err != nil {
 		return err
 	}

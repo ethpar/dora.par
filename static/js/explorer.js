@@ -178,6 +178,30 @@
         maxPendingRequests: requestNum,
       },
     });
+    var bhTransaction = new Bloodhound({
+      datumTokenizer: Bloodhound.tokenizers.whitespace,
+      queryTokenizer: Bloodhound.tokenizers.whitespace,
+      identify: function (obj) {
+        return obj.hash
+      },
+      remote: {
+        url: "/search/tx?q=",
+        prepare: prepareQueryFn,
+        maxPendingRequests: requestNum,
+      },
+    });
+    var bhAddress = new Bloodhound({
+      datumTokenizer: Bloodhound.tokenizers.whitespace,
+      queryTokenizer: Bloodhound.tokenizers.whitespace,
+      identify: function (obj) {
+        return obj.hash
+      },
+      remote: {
+        url: "/search/address?q=",
+        prepare: prepareQueryFn,
+        maxPendingRequests: requestNum,
+      },
+    });
 
 
     searchEl.typeahead(
@@ -254,7 +278,32 @@
             return `<div class="text-monospace" style="display:flex"><div class="text-truncate" style="flex:1 1 auto;">${data.graffiti}</div><div style="max-width:fit-content;white-space:nowrap;">${data.count}</div></div>`
           },
         },
-      }
+      },
+     {
+      limit: 5,
+          name: "transaction",
+        source: bhTransaction,
+        display: "transaction",
+        templates: {
+      header: '<h3 class="h5">Transactions:</h3>',
+          suggestion: function (data) {
+        return `<div class="text-monospace" style="display:flex"><div class="text-truncate" style="flex:1 1 auto;">${data.hash}</div><div style="max-width:fit-content;white-space:nowrap;">${data.count}</div></div>`
+      },
+    },
+    },
+        {
+          limit: 5,
+          name: "address",
+          source: bhAddress,
+          display: "address",
+          templates: {
+            header: '<h3 class="h5">Addresses:</h3>',
+            suggestion: function (data) {
+              return `<div class="text-monospace" style="display:flex"><div class="text-truncate" style="flex:1 1 auto;">${data.address}</div><div style="max-width:fit-content;white-space:nowrap;">${data.address}</div></div>`
+            },
+          },
+        }
+
     )
   
     searchEl.on("input", function (input) {
@@ -288,7 +337,11 @@
           var el = document.createElement("textarea")
           el.innerHTML = sug.name
           window.location = "/slots/filtered?f&f.missing=1&f.orphaned=1&f.pname=" + encodeURIComponent(el.value)
-      } else {
+      }else if (sug.hash !== undefined) {
+        window.location = "/tx/" + sug.hash
+      }else if (sug.address !== undefined) {
+        window.location = "/address/" + sug.address
+      }  else {
         console.log("invalid typeahead-selection", sug)
       }
     })

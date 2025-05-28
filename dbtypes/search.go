@@ -41,3 +41,12 @@ type SearchAheadValidatorNameResult []struct {
 	Name  string `db:"name"`
 	Count uint64 `db:"count"`
 }
+
+type SearchAheadTransactionResult []struct {
+	Hash  string `db:"hash"`
+	Count uint64 `db:"count"`
+}
+
+type SearchAheadAddressResult []struct {
+	Address string `db:"address"`
+}

@@ -43,7 +43,9 @@ func Address(w http.ResponseWriter, r *http.Request) {
 
 	for _, dbTransaction := range transactions {
 
-		txValue := weiToEther(new(big.Int).SetUint64(dbTransaction.Value))
+		v := new(big.Int)
+		v.SetString(dbTransaction.Value, 10)
+		txValue := weiToEther(v)
 
 		transactionData := &models.TransactionData{
 			Hash:        dbTransaction.Hash,
@@ -76,7 +78,7 @@ func Address(w http.ResponseWriter, r *http.Request) {
 			account.AccountType = "Contract"
 		}
 		if err == nil {
-			account.AccountBalance = weiToEther(new(big.Int).SetUint64(balance.Uint64()))
+			account.AccountBalance = weiToEther(balance)
 		}
 	}
 

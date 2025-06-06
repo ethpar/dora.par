@@ -28,6 +28,7 @@ type ChainService struct {
 	consensusPool   *consensus.Pool
 	executionPool   *execution.Pool
 	beaconIndexer   *beacon.Indexer
+	txIndexer       *beacon.TxIndexer
 	validatorNames  *ValidatorNames
 	mevRelayIndexer *mevrelay.MevIndexer
 	started         bool
@@ -45,6 +46,8 @@ func InitChainService(ctx context.Context, logger logrus.FieldLogger) {
 	consensusPool := consensus.NewPool(ctx, logger.WithField("service", "cl-pool"))
 	executionPool := execution.NewPool(ctx, logger.WithField("service", "el-pool"))
 	beaconIndexer := beacon.NewIndexer(logger.WithField("service", "cl-indexer"), consensusPool, executionPool)
+	txIndexer := beacon.NewTxIndexer(logger.WithField("service", "tx-indexer"), consensusPool, executionPool)
+
 	chainState := consensusPool.GetChainState()
 	validatorNames := NewValidatorNames(beaconIndexer, chainState)
 	mevRelayIndexer := mevrelay.NewMevIndexer(logger.WithField("service", "mev-relay"), beaconIndexer, chainState)
@@ -54,6 +57,7 @@ func InitChainService(ctx context.Context, logger logrus.FieldLogger) {
 		consensusPool:   consensusPool,
 		executionPool:   executionPool,
 		beaconIndexer:   beaconIndexer,
+		txIndexer:       txIndexer,
 		validatorNames:  validatorNames,
 		mevRelayIndexer: mevRelayIndexer,
 	}
@@ -177,6 +181,7 @@ func (cs *ChainService) StartService() error {
 
 	// start chain indexer
 	cs.beaconIndexer.StartIndexer()
+	cs.txIndexer.StartIndexer()
 
 	// add execution indexers
 	execindexer.NewDepositIndexer(executionIndexerCtx)

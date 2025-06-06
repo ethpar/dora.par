@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.transactions
     transaction_index   int,
     "from"              text,
     "to"                text,
-    value               bigint,
+    value               numeric,
     gas                 bigint,
     gas_price           bigint,
     is_error            boolean,
@@ -33,6 +33,10 @@ CREATE INDEX IF NOT EXISTS "transactions_from_idx"
 CREATE INDEX IF NOT EXISTS "transactions_to_idx"
     ON public."transactions"
         ("to" ASC NULLS LAST);
+
+CREATE INDEX IF NOT EXISTS transactions_from_ci_idx ON public.transactions ((lower("from")));
+
+CREATE INDEX IF NOT EXISTS transactions_to_ci_idx ON public.transactions ((lower("to")));
 
 -- +goose StatementEnd
 -- +goose Down

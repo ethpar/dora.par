@@ -857,5 +857,24 @@ func (bs *ChainService) GetTransactionsForAddress(address string) []*dbtypes.Tra
 }
 
 func (bs *ChainService) GetTransactionByHash(hash string) *dbtypes.Transaction {
+	var dbTransaction = db.GetTransactionByHash(hash)
+	if dbTransaction != nil {
+		return dbTransaction
+	}
+
+	bs.logger.Infof("tx not in db %v", hash)
+	clients := GlobalBeaconService.GetExecutionClients()
+	if len(clients) == 0 {
+		bs.logger.Warnf("no clients for read tx  %v", hash)
+		return nil
+	}
+
+	client := clients[0].GetRPCClient()
+	executionClient := client.GetEthClient()
+
+	err := beacon.UpdateTransactionsForHash(context.Background(), executionClient, hash, bs.logger)
+	if err != nil {
+		bs.logger.Errorf("error during UpdateTransactionsForHash  %v", err)
+	}
 	return db.GetTransactionByHash(hash)
 }

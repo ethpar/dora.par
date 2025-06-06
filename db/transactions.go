@@ -49,7 +49,27 @@ func InsertTransaction(transaction *dbtypes.Transaction, tx *sqlx.Tx) error {
 			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations,
 			                          type
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
-			ON CONFLICT ("hash") DO NOTHING`,
+			ON CONFLICT ("hash") 
+DO UPDATE SET
+    "block_number" = EXCLUDED."block_number",
+    block_rank = EXCLUDED.block_rank,
+    created_at = EXCLUDED.created_at,
+    nonce = EXCLUDED.nonce,
+    block_hash = EXCLUDED.block_hash,
+    transaction_index = EXCLUDED.transaction_index,
+    "from" = EXCLUDED."from",
+    "to" = EXCLUDED."to",
+    value = EXCLUDED.value,
+    gas = EXCLUDED.gas,
+    gas_price = EXCLUDED.gas_price,
+    is_error = EXCLUDED.is_error,
+    receipt_status = EXCLUDED.receipt_status,
+    input = EXCLUDED.input,
+    contract_address = EXCLUDED.contract_address,
+    cumulative_gas_used = EXCLUDED.cumulative_gas_used,
+    gas_used = EXCLUDED.gas_used,
+    confirmations = EXCLUDED.confirmations,
+    type = EXCLUDED.type;`,
 		dbtypes.DBEngineSqlite: `
 			INSERT OR IGNORE INTO transactions (
 				"hash","block_number",block_rank,created_at,nonce,block_hash,transaction_index,"from","to",value,gas,gas_price,

@@ -31,7 +31,9 @@ func Transaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	txValue := weiToEther(new(big.Int).SetUint64(dbTransaction.Value))
+	v := new(big.Int)
+	v.SetString(dbTransaction.Value, 10)
+	txValue := weiToEther(v)
 
 	gasPriceGWei := weiToGWei(new(big.Int).SetUint64(dbTransaction.GasPrice))
 	txFee := weiToEther(new(big.Int).SetUint64(dbTransaction.GasPrice * dbTransaction.GasUsed))

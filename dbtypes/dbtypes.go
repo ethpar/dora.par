@@ -141,7 +141,7 @@ type Transaction struct {
 	TransactionIndex  uint      `db:"transaction_index"`
 	From              string    `db:"from"`
 	To                string    `db:"to"`
-	Value             uint64    `db:"value"`
+	Value             string    `db:"value"`
 	Gas               uint64    `db:"gas"`
 	GasPrice          uint64    `db:"gas_price"`
 	IsError           bool      `db:"is_error"`

@@ -17,7 +17,7 @@ func ApiTransactions(w http.ResponseWriter, r *http.Request) {
 	if strings.Index(address, "0x") != 0 {
 		address = "0x" + address
 	}
-	res := services.GlobalBeaconService.GetTransactionsForAddress(address)
+	res := services.GlobalBeaconService.GetAllTransactionsForAddress(address)
 	json.NewEncoder(w).Encode(res)
 
 }

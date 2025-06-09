@@ -852,8 +852,16 @@ func (bs *ChainService) CheckBlockOrphanedStatus(blockRoot phase0.Root) dbtypes.
 	return dbtypes.Missing
 }
 
-func (bs *ChainService) GetTransactionsForAddress(address string) []*dbtypes.Transaction {
-	return db.GetTransactions(address)
+func (bs *ChainService) GetTransactionsForAddress(address string, start uint64, pageSize uint64) []*dbtypes.Transaction {
+	return db.GetTransactions(address, start, pageSize)
+}
+
+func (bs *ChainService) GetTransactionsCountForAddress(address string) (uint64, error) {
+	return db.GetTransactionsCount(address)
+}
+
+func (bs *ChainService) GetAllTransactionsForAddress(address string) []*dbtypes.Transaction {
+	return db.GetTransactions(address, 0, 100000000)
 }
 
 func (bs *ChainService) GetTransactionByHash(hash string) *dbtypes.Transaction {

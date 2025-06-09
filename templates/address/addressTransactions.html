@@ -6,6 +6,26 @@
         </h5>
     </div>
 <div class="card-body p-0">
+    <div class="row">
+        <div class="col-sm-12 col-md-6 table-pagesize">
+            <form action="/address/{{ .AccountAddress }}" method="get">
+                <label class="px-2">
+                    <span>Show </span>
+                    <select name="c" aria-controls="address" class="custom-select custom-select-sm form-control form-control-sm" onchange="this.form.submit()">
+                        <option value="{{ .PageSize }}" selected>{{ .PageSize }}</option>
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    {{ if not .IsDefaultPage }}
+                    <input name="s" type="hidden" value="{{ .CurrentPageSlot }}">
+                    {{ end }}
+                    <span> entries</span>
+                </label>
+            </form>
+        </div>
+    </div>
 <div class="table-ellipsis px-0">
     <table class="table" id="block_transactions">
         <thead>
@@ -85,6 +105,36 @@
         </tbody>
     </table>
 </div>
+    {{ if gt .TotalPages 1 }}
+    <div class="row">
+        <div class="col-sm-12 col-md-5 table-metainfo">
+            <div class="px-2">
+                <div class="table-meta" role="status" aria-live="polite">Showing page {{ .CurrentPageIndex }}</div>
+            </div>
+        </div>
+        <div class="col-sm-12 col-md-7 table-paging">
+            <div class="d-inline-block px-2">
+                <ul class="pagination">
+                    <li class="first paginate_button page-item {{ if le .PrevPage 1 }}disabled{{ end }}" id="tpg_first">
+                        <a tab-index="1" aria-controls="tpg_first" class="page-link" href="/address/{{ .AccountAddress }}?c={{ .PageSize }}">First</a>
+                    </li>
+                    <li class="previous paginate_button page-item {{ if eq .PrevPage 0 }}disabled{{ end }}" id="tpg_previous">
+                        <a tab-index="1" aria-controls="tpg_previous" class="page-link" href="/address/{{ .AccountAddress }}?s={{ .PrevPage }}&c={{ .PageSize }}"><i class="fas fa-chevron-left"></i></a>
+                    </li>
+                    <li class="page-item disabled">
+                        <a class="page-link" style="background-color: transparent;">{{ .CurrentPageIndex }} of {{ .TotalPages }}</a>
+                    </li>
+                    <li class="next paginate_button page-item {{ if eq .NextPage 0 }}disabled{{ end }}" id="tpg_next">
+                        <a tab-index="1" aria-controls="tpg_next" class="page-link" href="/address/{{ .AccountAddress }}?s={{ .NextPage }}&c={{ .PageSize }}"><i class="fas fa-chevron-right"></i></a>
+                    </li>
+                    <li class="last paginate_button page-item {{ if or (eq .LastPage 0) (le .LastPage .NextPage) }}disabled{{ end }}" id="tpg_last">
+                        <a tab-index="1" aria-controls="tpg_last" class="page-link" href="/address/{{ .AccountAddress }}?s={{ .LastPage }}&c={{ .PageSize }}">Last</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    {{ end }}
 </div>
 </div>
 

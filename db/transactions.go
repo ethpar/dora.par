@@ -1,11 +1,12 @@
 package db
 
 import (
+	"fmt"
 	"github.com/ethpandaops/dora/dbtypes"
 	"github.com/jmoiron/sqlx"
 )
 
-func GetTransactions(address string) []*dbtypes.Transaction {
+func GetTransactions(address string, start uint64, pageSize uint64) []*dbtypes.Transaction {
 	transactions := []*dbtypes.Transaction{}
 	err := ReaderDb.Select(&transactions, `
 	SELECT
@@ -13,13 +14,25 @@ func GetTransactions(address string) []*dbtypes.Transaction {
 			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations
 	FROM transactions
 	WHERE "to" = $1 or "from"=$2
-	ORDER BY block_number desc, block_rank desc
-	`, address, address)
+	ORDER BY block_number desc, block_rank desc LIMIT $3 OFFSET $4
+	`, address, address, pageSize, start)
 	if err != nil {
 		logger.Errorf("Error while fetching Transactions: %v", err)
 		return nil
 	}
 	return transactions
+}
+
+func GetTransactionsCount(address string) (uint64, error) {
+
+	query := fmt.Sprintf("SELECT count(*)  FROM transactions WHERE \"to\" = '%s' or \"from\"='%s'", address, address)
+
+	var count uint64
+	err := ReaderDb.DB.QueryRow(query).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get row count: %v", err)
+	}
+	return count, nil
 }
 
 func GetTransactionByHash(hash string) *dbtypes.Transaction {
@@ -71,11 +84,10 @@ DO UPDATE SET
     confirmations = EXCLUDED.confirmations,
     type = EXCLUDED.type;`,
 		dbtypes.DBEngineSqlite: `
-			INSERT OR IGNORE INTO transactions (
-				"hash","block_number",block_rank,created_at,nonce,block_hash,transaction_index,"from","to",value,gas,gas_price,
-			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations,
-			                          type
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
+			INSERT OR REPLACE INTO transactions (
+    "hash", "block_number", block_rank, created_at, nonce, block_hash, transaction_index, "from", "to", value, gas,
+    gas_price, is_error, receipt_status, input, contract_address, cumulative_gas_used, gas_used, confirmations, type
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20);`,
 	}),
 		transaction.Hash, transaction.BlockNumber, transaction.BlockRank, transaction.TimeStamp, transaction.Nonce, transaction.BlockHash, transaction.TransactionIndex, transaction.From,
 		transaction.To, transaction.Value, transaction.Gas, transaction.GasPrice, transaction.IsError, transaction.TxReceiptStatus, transaction.Input, transaction.ContractAddress, transaction.CumulativeGasUsed,

@@ -79,7 +79,7 @@ func (indexer *TxIndexer) runIndexerLoop() {
 		executionClient := client.GetEthClient()
 
 		for i := 0; i < 50; i++ {
-			indexer.logger.Infof("!!!process blockNumber:%v %v", blockNumber, i)
+			//indexer.logger.Infof("!!!process blockNumber:%v %v", blockNumber, i)
 			UpdateTransactionsForBlock(context.Background(), executionClient, &blockNumber, indexer.logger)
 			blockNumber.Sub(&blockNumber, b)
 			if blockNumber.Cmp(&blockNumberEnd) < 0 {
@@ -89,6 +89,7 @@ func (indexer *TxIndexer) runIndexerLoop() {
 			}
 		}
 		time.Sleep(3 * time.Second)
+		indexer.logger.Infof("!!!processed blockNumber:%v", blockNumber)
 		indexer.storeState(blockNumber, blockNumberEnd)
 	}
 

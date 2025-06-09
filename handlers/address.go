@@ -10,15 +10,23 @@ import (
 	"github.com/gorilla/mux"
 	"math/big"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
 type Account struct {
-	AccountType    string                    `json:"account_type"`
-	AccountAddress string                    `json:"account_address"`
-	AccountBalance *big.Float                `json:"account_balance"`
-	ERC20Tokens    int                       `json:"account_erc20"`
-	Transactions   []*models.TransactionData `json:"transactions"` // Transactions included in this block
+	AccountType      string                    `json:"account_type"`
+	AccountAddress   string                    `json:"account_address"`
+	AccountBalance   *big.Float                `json:"account_balance"`
+	ERC20Tokens      int                       `json:"account_erc20"`
+	Transactions     []*models.TransactionData `json:"transactions"` // Transactions included in this block
+	IsDefaultPage    bool                      `json:"default_page"`
+	TotalPages       uint64                    `json:"total_pages"`
+	PageSize         uint64                    `json:"page_size"`
+	CurrentPageIndex uint64                    `json:"page_index"`
+	PrevPage         uint64                    `json:"prev_index"`
+	NextPage         uint64                    `json:"next_index"`
+	LastPage         uint64                    `json:"last_index"`
 }
 
 func Address(w http.ResponseWriter, r *http.Request) {
@@ -32,13 +40,27 @@ func Address(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	//address := strings.Replace(vars["address"], "0x", "", -1)
 	address := vars["address"]
+	urlArgs := r.URL.Query()
+	var start uint64 = 0
+	var pageSize uint64 = 50
+	if urlArgs.Has("c") {
+		pageSize, _ = strconv.ParseUint(urlArgs.Get("c"), 10, 64)
+	}
+	var currentPage uint64 = 1
+	if urlArgs.Has("s") {
+		currentPage, _ = strconv.ParseUint(urlArgs.Get("s"), 10, 64)
+	}
 
 	if strings.Index(address, "0x") != 0 {
 		address = "0x" + address
 	}
 
 	data := InitPageData(w, r, "address", "", "", addressTemplateFiles)
-	transactions := services.GlobalBeaconService.GetTransactionsForAddress(address)
+
+	transactionsCount, _ := services.GlobalBeaconService.GetTransactionsCountForAddress(address)
+	totalPages := transactionsCount / pageSize
+	start = pageSize * (currentPage - 1)
+	transactions := services.GlobalBeaconService.GetTransactionsForAddress(address, start, pageSize)
 	var account Account
 
 	for _, dbTransaction := range transactions {
@@ -81,6 +103,21 @@ func Address(w http.ResponseWriter, r *http.Request) {
 			account.AccountBalance = weiToEther(balance)
 		}
 	}
+	account.PageSize = pageSize
+	account.TotalPages = totalPages
+	account.CurrentPageIndex = currentPage
+	account.IsDefaultPage = true
+	if currentPage == 1 {
+		account.PrevPage = 1
+	} else {
+		account.PrevPage = currentPage - 1
+	}
+	if currentPage == account.TotalPages {
+		account.NextPage = account.TotalPages
+	} else {
+		account.NextPage = currentPage + 1
+	}
+	account.LastPage = account.TotalPages
 
 	data.Data = account
 	w.Header().Set("Content-Type", "text/html")

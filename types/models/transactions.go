@@ -31,3 +31,19 @@ type TransactionData struct {
 	IsFrom            bool       `json:"is_from"`
 	TxFee             *big.Float `json:"tx_fee"`
 }
+
+type TransactionDataList struct {
+	Hash      string    `json:"hash"`
+	TimeStamp time.Time `json:"created_at"`
+	From      string    `json:"from"`
+	To        string    `json:"to"`
+	Value     string    `json:"value"`
+	IsFrom    bool      `json:"is_from"`
+}
+
+type APITransactionsList struct {
+	Data       []TransactionDataList `json:"data"`
+	TotalCount uint64                `json:"totalCount"`
+	PageSize   uint64                `json:"pageSize"`
+	Offset     uint64                `json:"offset"`
+}

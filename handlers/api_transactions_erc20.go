@@ -30,9 +30,14 @@ func ApiTransactionsErc20(w http.ResponseWriter, r *http.Request) {
 		offset, _ = strconv.ParseUint(urlArgs.Get("offset"), 10, 64)
 	}
 
-	transactionsCount, _ := services.GlobalBeaconService.GetTransactionsErc20CountForAddress(address)
+	var contract string = ""
+	if urlArgs.Has("contract") {
+		contract = urlArgs.Get("contract")
+	}
 
-	transactions := services.GlobalBeaconService.GetTransactionsErc20ForAddress(address, offset, pageSize)
+	transactionsCount, _ := services.GlobalBeaconService.GetTransactionsErc20CountForAddress(address, contract)
+
+	transactions := services.GlobalBeaconService.GetTransactionsErc20ForAddress(address, contract, offset, pageSize)
 
 	var result models.APITransactionsErc20List
 
@@ -54,7 +59,7 @@ func ApiTransactionsErc20(w http.ResponseWriter, r *http.Request) {
 			Amount:    *dbTransaction.Erc20Value,
 			IsFrom:    false,
 			Contract:  dbTransaction.To,
-			Coin:      coin,
+			Token:     coin,
 		}
 		if address == transactionData.From {
 			transactionData.IsFrom = true

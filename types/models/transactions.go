@@ -63,7 +63,7 @@ type ApiTransactionErc20DataListItem struct {
 	To        string    `json:"to"`
 	Amount    string    `json:"amount"`
 	IsFrom    bool      `json:"is_from"`
-	Coin      string    `json:"coin"`
+	Token     string    `json:"token"`
 	Contract  string    `json:"contract"`
 }
 

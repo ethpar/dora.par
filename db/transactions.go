@@ -24,20 +24,36 @@ func GetTransactions(address string, start uint64, pageSize uint64) []*dbtypes.T
 	return transactions
 }
 
-func GetTransactionsErc20(address string, start uint64, pageSize uint64) []*dbtypes.Transaction {
+func GetTransactionsErc20(address string, contract string, start uint64, pageSize uint64) []*dbtypes.Transaction {
 	transactions := []*dbtypes.Transaction{}
-	err := ReaderDb.Select(&transactions, `
+	if contract != "" {
+		err := ReaderDb.Select(&transactions, `
 	SELECT
 		"hash","block_number",block_rank,created_at,nonce,block_hash,transaction_index,"from","to",value,gas,gas_price,
 			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations, 
 			                          erc20_method, erc20_address_to, erc20_value
 	FROM transactions
-	WHERE ("to" = $1 or "from"=$2 or erc20_address_to =$3) and erc20_method !=''
+	WHERE "to" = $1 and ("from"=$2 or erc20_address_to =$3) and erc20_method !=''
 	ORDER BY block_number desc, block_rank desc LIMIT $4 OFFSET $5
-	`, address, address, address, pageSize, start)
-	if err != nil {
-		logger.Errorf("Error while fetching Transactions: %v", err)
-		return nil
+	`, contract, address, address, pageSize, start)
+		if err != nil {
+			logger.Errorf("Error while fetching Transactions: %v", err)
+			return nil
+		}
+	} else {
+		err := ReaderDb.Select(&transactions, `
+	SELECT
+		"hash","block_number",block_rank,created_at,nonce,block_hash,transaction_index,"from","to",value,gas,gas_price,
+			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations, 
+			                          erc20_method, erc20_address_to, erc20_value
+	FROM transactions
+	WHERE ("from"=$1 or erc20_address_to =$2) and erc20_method !=''
+	ORDER BY block_number desc, block_rank desc LIMIT $3 OFFSET $4
+	`, address, address, pageSize, start)
+		if err != nil {
+			logger.Errorf("Error while fetching Transactions: %v", err)
+			return nil
+		}
 	}
 	return transactions
 }
@@ -54,10 +70,15 @@ func GetTransactionsCount(address string) (uint64, error) {
 	return count, nil
 }
 
-func GetTransactionsErc20Count(address string) (uint64, error) {
+func GetTransactionsErc20Count(address string, contract string) (uint64, error) {
 
-	query := fmt.Sprintf("SELECT count(*)  FROM transactions WHERE (\"to\" = '%s' or \"from\"='%s' or erc20_address_to='%s') and erc20_method !=''",
-		address, address, address)
+	query := fmt.Sprintf("SELECT count(*)  FROM transactions WHERE (\"from\"='%s' or erc20_address_to='%s') and erc20_method !=''",
+		address, address)
+
+	if contract != "" {
+		query = fmt.Sprintf("SELECT count(*)  FROM transactions WHERE \"to\" = '%s' and ( \"from\"='%s' or erc20_address_to='%s') and erc20_method !=''",
+			contract, address, address)
+	}
 
 	var count uint64
 	err := ReaderDb.DB.QueryRow(query).Scan(&count)

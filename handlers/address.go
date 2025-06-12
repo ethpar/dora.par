@@ -158,10 +158,10 @@ func initTransactions(account *Account, start uint64, pageSize uint64, currentPa
 }
 
 func initTransactionsErc20(account *Account, start uint64, pageSize uint64, currentPage uint64) {
-	transactionsCount, _ := services.GlobalBeaconService.GetTransactionsErc20CountForAddress(account.AccountAddress)
+	transactionsCount, _ := services.GlobalBeaconService.GetTransactionsErc20CountForAddress(account.AccountAddress, "")
 	totalPages := transactionsCount / pageSize
 	start = pageSize * (currentPage - 1)
-	transactions := services.GlobalBeaconService.GetTransactionsErc20ForAddress(account.AccountAddress, start, pageSize)
+	transactions := services.GlobalBeaconService.GetTransactionsErc20ForAddress(account.AccountAddress, "", start, pageSize)
 
 	contracts := services.GlobalBeaconService.GetContracts()
 

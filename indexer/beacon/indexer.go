@@ -67,6 +67,8 @@ type Indexer struct {
 
 	// canonical validator set cache
 	validatorSetCache *lru.Cache[epochStatsKey, []*v1.Validator]
+
+	contracts map[string]*dbtypes.Contract
 }
 
 // NewIndexer creates a new instance of the Indexer.

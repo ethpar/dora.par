@@ -41,9 +41,42 @@ type TransactionDataList struct {
 	IsFrom    bool      `json:"is_from"`
 }
 
+type TransactionErc20DataListItem struct {
+	Hash        string     `json:"hash"`
+	BlockNumber uint64     `json:"block_number"`
+	BlockRank   uint64     `json:"block_rank"`
+	Method      string     `json:"method"`
+	TimeStamp   time.Time  `json:"created_at"`
+	From        string     `json:"from"`
+	To          string     `json:"to"`
+	Amount      *big.Float `json:"amount"`
+	IsFrom      bool       `json:"is_from"`
+	Coin        string     `json:"coin"`
+	Contract    string     `json:"contract"`
+}
+
+type ApiTransactionErc20DataListItem struct {
+	Hash      string    `json:"hash"`
+	Method    string    `json:"method"`
+	TimeStamp time.Time `json:"created_at"`
+	From      string    `json:"from"`
+	To        string    `json:"to"`
+	Amount    string    `json:"amount"`
+	IsFrom    bool      `json:"is_from"`
+	Coin      string    `json:"coin"`
+	Contract  string    `json:"contract"`
+}
+
 type APITransactionsList struct {
 	Data       []TransactionDataList `json:"data"`
 	TotalCount uint64                `json:"totalCount"`
 	PageSize   uint64                `json:"pageSize"`
 	Offset     uint64                `json:"offset"`
+}
+
+type APITransactionsErc20List struct {
+	Data       []ApiTransactionErc20DataListItem `json:"data"`
+	TotalCount uint64                            `json:"totalCount"`
+	PageSize   uint64                            `json:"pageSize"`
+	Offset     uint64                            `json:"offset"`
 }

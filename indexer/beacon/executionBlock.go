@@ -187,9 +187,12 @@ func SaveTransactionsForBlock(c *Client, parallelExecutionBlock *types.Block, ra
 
 	client := executionClient.GetRPCClient()
 	ethClient := client.GetEthClient()
-
+	if c.indexer.contracts == nil {
+		logger.Infof("init contracts: ")
+		c.indexer.contracts = db.GetContracts()
+	}
 	for _, tx := range parallelExecutionBlock.Transactions() {
-		var err = processTransaction(tx, parallelExecutionBlock.Time(), rank, ethClient, c.getContext(), c.logger)
+		var err = processTransaction(tx, parallelExecutionBlock.Time(), rank, ethClient, c.getContext(), c.logger, c.indexer.contracts)
 		if err != nil {
 			if logger != nil {
 				logger.Errorf("transaction save error:  %v", err)
@@ -199,7 +202,8 @@ func SaveTransactionsForBlock(c *Client, parallelExecutionBlock *types.Block, ra
 	return nil
 }
 
-func UpdateTransactionsForBlock(context context.Context, executionClient *ethclient.Client, blockNumber *big.Int, logger logrus.FieldLogger) error {
+func UpdateTransactionsForBlock(context context.Context, executionClient *ethclient.Client,
+	blockNumber *big.Int, logger logrus.FieldLogger, contracts map[string]*dbtypes.Contract) error {
 	for rank := 0; rank < 5; rank++ {
 		parallelExecutionBlockRaw, err := executionClient.BlockByNumberAndRankRaw(context, blockNumber, uint64(rank))
 		if err != nil {
@@ -214,7 +218,8 @@ func UpdateTransactionsForBlock(context context.Context, executionClient *ethcli
 		if err == nil {
 			//SaveTransaction(c, parallelExecutionBlock, uint64(rank), logger)
 			for _, tx := range parallelExecutionBlock.Transactions() {
-				var err = processTransaction(tx, parallelExecutionBlock.Time(), uint64(rank), executionClient, context, logger)
+				var err = processTransaction(tx, parallelExecutionBlock.Time(), uint64(rank),
+					executionClient, context, logger, contracts)
 				if err != nil {
 					logger.Errorf("transaction save error:  %v", err)
 				}
@@ -231,6 +236,8 @@ func UpdateTransactionsForHash(context context.Context, executionClient *ethclie
 	if executionClient == nil {
 		return nil
 	}
+
+	var contracts = db.GetContracts()
 	var receipt *types.Receipt
 	//ethClient.TransactionByHash()
 	receipt, err := executionClient.TransactionReceipt(context, common.HexToHash(txHash))
@@ -240,7 +247,7 @@ func UpdateTransactionsForHash(context context.Context, executionClient *ethclie
 	if receipt != nil {
 		var blockNumber = receipt.BlockNumber
 		logger.Infof("blockNumber %v for tx %v", blockNumber, txHash)
-		err = UpdateTransactionsForBlock(context, executionClient, blockNumber, logger)
+		err = UpdateTransactionsForBlock(context, executionClient, blockNumber, logger, contracts)
 	} else {
 		logger.Warnf("no receipt for tx %v", txHash)
 	}
@@ -248,7 +255,7 @@ func UpdateTransactionsForHash(context context.Context, executionClient *ethclie
 }
 
 func processTransaction(tx *types.Transaction, blockTime uint64, rank uint64, ethClient *ethclient.Client,
-	context context.Context, logger logrus.FieldLogger) error {
+	context context.Context, logger logrus.FieldLogger, contracts map[string]*dbtypes.Contract) error {
 	//tx, isPending, err := ethClient.TransactionByHash(c.getContext(), common.HexToHash(txHash))
 
 	var receipt *types.Receipt
@@ -272,11 +279,33 @@ func processTransaction(tx *types.Transaction, blockTime uint64, rank uint64, et
 		toAddress = tx.To().Hex()
 	}
 
+	input := hex.EncodeToString(tx.Data())
+
+	var contract *dbtypes.Contract
+	if contracts != nil {
+		contract = contracts[toAddress]
+
+	}
+
+	var erc20_method *string
+	var erc20_value *big.Int
+	var erc20_to *string
+	if contract != nil {
+		if contract.IsErc20 {
+			logger.Infof("tx to contract: %v", contract.Address)
+			var erc20_to_address *common.Address
+			erc20_method, erc20_value, erc20_to_address = parseFunction(input, logger)
+			if erc20_to_address != nil {
+				s := erc20_to_address.Hex()
+				erc20_to = &s
+			}
+		}
+	}
+
 	if receipt.TxHash.Hex() == "0xa37301e0bb16a1fec2f5d14ada84b273b6b452519c03b5738767ba20faf3a31b" {
 		logger.Warnf("value for %v %v %v", receipt.TxHash.Hex(), tx.Value().Uint64(), tx.Value())
 	}
 
-	input := hex.EncodeToString(tx.Data())
 	transaction := dbtypes.Transaction{
 		Hash:             receipt.TxHash.Hex(),
 		Nonce:            tx.Nonce(),
@@ -302,6 +331,12 @@ func processTransaction(tx *types.Transaction, blockTime uint64, rank uint64, et
 		CumulativeGasUsed: receipt.CumulativeGasUsed,
 		GasUsed:           receipt.GasUsed,
 		Type:              tx.Type(),
+		Erc20Method:       erc20_method,
+		Erc20Address:      erc20_to,
+	}
+	if erc20_value != nil {
+		s := erc20_value.String()
+		transaction.Erc20Value = &s
 	}
 	//c.logger.Infof(">>>>>>>>>>block: slot: %v  %v logs %v", tx.Time(), time.Unix(parallelExecutionBlock.Time(), 0), len(receipt.Logs))
 	err = db.RunDBTransaction(func(tx *sqlx.Tx) error {

@@ -22,7 +22,10 @@ CREATE TABLE IF NOT EXISTS public.transactions
     cumulative_gas_used bigint,
     gas_used            bigint,
     confirmations       int,
-    "type" int,
+    "type"              int,
+    erc20_method        text,
+    erc20_address_to    text,
+    erc20_value         numeric,
     CONSTRAINT "transactions_pkey" PRIMARY KEY ("hash")
 );
 

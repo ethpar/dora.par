@@ -153,8 +153,20 @@ type Transaction struct {
 	Confirmations     int       `db:"confirmations"`
 	Method            string    `db:"method"`
 	Type              uint8     `db:"type"`
+	Erc20Method       *string   `db:"erc20_method"`
+	Erc20Address      *string   `db:"erc20_address_to"`
+	Erc20Value        *string   `db:"erc20_value"`
 }
 
+type Contract struct {
+	Address   string    `db:"address"`
+	Owner     string    `db:"owner"`
+	IsErc20   bool      `db:"is_erc20"`
+	Name      string    `db:"name"`
+	Symbol    string    `db:"symbol"`
+	TimeStamp time.Time `db:"created_at"`
+	Body      *string   `db:"body"`
+}
 type UnfinalizedEpoch struct {
 	Epoch                 uint64  `db:"epoch"`
 	DependentRoot         []byte  `db:"dependent_root"`

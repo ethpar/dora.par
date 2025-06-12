@@ -856,8 +856,20 @@ func (bs *ChainService) GetTransactionsForAddress(address string, offset uint64,
 	return db.GetTransactions(address, offset, pageSize)
 }
 
+func (bs *ChainService) GetTransactionsErc20ForAddress(address string, offset uint64, pageSize uint64) []*dbtypes.Transaction {
+	return db.GetTransactionsErc20(address, offset, pageSize)
+}
+
 func (bs *ChainService) GetTransactionsCountForAddress(address string) (uint64, error) {
 	return db.GetTransactionsCount(address)
+}
+
+func (bs *ChainService) GetTransactionsErc20CountForAddress(address string) (uint64, error) {
+	return db.GetTransactionsErc20Count(address)
+}
+
+func (bs *ChainService) GetContracts() map[string]*dbtypes.Contract {
+	return bs.txIndexer.GetContracts()
 }
 
 func (bs *ChainService) GetAllTransactionsForAddress(address string) []*dbtypes.Transaction {

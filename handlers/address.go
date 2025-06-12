@@ -15,18 +15,19 @@ import (
 )
 
 type Account struct {
-	AccountType      string                    `json:"account_type"`
-	AccountAddress   string                    `json:"account_address"`
-	AccountBalance   *big.Float                `json:"account_balance"`
-	ERC20Tokens      int                       `json:"account_erc20"`
-	Transactions     []*models.TransactionData `json:"transactions"` // Transactions included in this block
-	IsDefaultPage    bool                      `json:"default_page"`
-	TotalPages       uint64                    `json:"total_pages"`
-	PageSize         uint64                    `json:"page_size"`
-	CurrentPageIndex uint64                    `json:"page_index"`
-	PrevPage         uint64                    `json:"prev_index"`
-	NextPage         uint64                    `json:"next_index"`
-	LastPage         uint64                    `json:"last_index"`
+	AccountType       string                                 `json:"account_type"`
+	AccountAddress    string                                 `json:"account_address"`
+	AccountBalance    *big.Float                             `json:"account_balance"`
+	ERC20Tokens       int                                    `json:"account_erc20"`
+	Transactions      []*models.TransactionData              `json:"transactions"`       // Transactions included in this block
+	TransactionsErc20 []*models.TransactionErc20DataListItem `json:"transactions_erc20"` // Transactions included in this block
+	IsDefaultPage     bool                                   `json:"default_page"`
+	TotalPages        uint64                                 `json:"total_pages"`
+	PageSize          uint64                                 `json:"page_size"`
+	CurrentPageIndex  uint64                                 `json:"page_index"`
+	PrevPage          uint64                                 `json:"prev_index"`
+	NextPage          uint64                                 `json:"next_index"`
+	LastPage          uint64                                 `json:"last_index"`
 }
 
 func Address(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +35,7 @@ func Address(w http.ResponseWriter, r *http.Request) {
 		"address/address.html",
 		"address/addressOverview.html",
 		"address/addressTransactions.html",
+		"address/addressTransactionsErc20.html",
 	)
 	var addressTemplate = templates.GetTemplate(addressTemplateFiles...)
 
@@ -57,37 +59,12 @@ func Address(w http.ResponseWriter, r *http.Request) {
 
 	data := InitPageData(w, r, "address", "", "", addressTemplateFiles)
 
-	transactionsCount, _ := services.GlobalBeaconService.GetTransactionsCountForAddress(address)
-	totalPages := transactionsCount / pageSize
-	start = pageSize * (currentPage - 1)
-	transactions := services.GlobalBeaconService.GetTransactionsForAddress(address, start, pageSize)
 	var account Account
-
-	for _, dbTransaction := range transactions {
-
-		v := new(big.Int)
-		v.SetString(dbTransaction.Value, 10)
-		txValue := weiToEther(v)
-
-		transactionData := &models.TransactionData{
-			Hash:        dbTransaction.Hash,
-			BlockNumber: dbTransaction.BlockNumber,
-			BlockRank:   dbTransaction.BlockRank,
-			TimeStamp:   dbTransaction.TimeStamp,
-			From:        dbTransaction.From,
-			To:          dbTransaction.To,
-			Value:       txValue,
-			Method:      dbTransaction.Method,
-			Type:        dbTransaction.Type,
-			IsFrom:      false,
-		}
-		if address == transactionData.From {
-			transactionData.IsFrom = true
-		}
-		account.Transactions = append(account.Transactions, transactionData)
-	}
-
 	account.AccountAddress = address
+
+	initTransactions(&account, start, pageSize, currentPage)
+
+	initTransactionsErc20(&account, start, pageSize, currentPage)
 
 	clients := services.GlobalBeaconService.GetExecutionClients()
 	if len(clients) > 0 {
@@ -103,10 +80,7 @@ func Address(w http.ResponseWriter, r *http.Request) {
 			account.AccountBalance = weiToEther(balance)
 		}
 	}
-	account.PageSize = pageSize
-	account.TotalPages = totalPages
-	account.CurrentPageIndex = currentPage
-	account.IsDefaultPage = true
+
 	if currentPage == 1 {
 		account.PrevPage = 1
 	} else {
@@ -143,6 +117,91 @@ func Address(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func initTransactions(account *Account, start uint64, pageSize uint64, currentPage uint64) {
+	transactionsCount, _ := services.GlobalBeaconService.GetTransactionsCountForAddress(account.AccountAddress)
+	totalPages := transactionsCount / pageSize
+	start = pageSize * (currentPage - 1)
+	transactions := services.GlobalBeaconService.GetTransactionsForAddress(account.AccountAddress, start, pageSize)
+
+	for _, dbTransaction := range transactions {
+
+		v := new(big.Int)
+		v.SetString(dbTransaction.Value, 10)
+		txValue := weiToEther(v)
+
+		method := dbTransaction.Method
+		if dbTransaction.Erc20Method != nil {
+			method = *dbTransaction.Erc20Method
+		}
+		transactionData := &models.TransactionData{
+			Hash:        dbTransaction.Hash,
+			BlockNumber: dbTransaction.BlockNumber,
+			BlockRank:   dbTransaction.BlockRank,
+			TimeStamp:   dbTransaction.TimeStamp,
+			From:        dbTransaction.From,
+			To:          dbTransaction.To,
+			Value:       txValue,
+			Method:      method,
+			Type:        dbTransaction.Type,
+			IsFrom:      false,
+		}
+		if account.AccountAddress == transactionData.From {
+			transactionData.IsFrom = true
+		}
+		account.Transactions = append(account.Transactions, transactionData)
+	}
+
+	account.PageSize = pageSize
+	account.TotalPages = totalPages
+	account.CurrentPageIndex = currentPage
+	account.IsDefaultPage = true
+}
+
+func initTransactionsErc20(account *Account, start uint64, pageSize uint64, currentPage uint64) {
+	transactionsCount, _ := services.GlobalBeaconService.GetTransactionsErc20CountForAddress(account.AccountAddress)
+	totalPages := transactionsCount / pageSize
+	start = pageSize * (currentPage - 1)
+	transactions := services.GlobalBeaconService.GetTransactionsErc20ForAddress(account.AccountAddress, start, pageSize)
+
+	contracts := services.GlobalBeaconService.GetContracts()
+
+	for _, dbTransaction := range transactions {
+		contract := contracts[dbTransaction.To]
+		coin := ""
+		if contract != nil {
+			coin = contract.Symbol
+		}
+
+		v := new(big.Int)
+		s := dbTransaction.Erc20Value
+		v.SetString(*s, 10)
+		txValue := weiToEther(v)
+
+		transactionData := &models.TransactionErc20DataListItem{
+			Hash:        dbTransaction.Hash,
+			BlockNumber: dbTransaction.BlockNumber,
+			BlockRank:   dbTransaction.BlockRank,
+			Method:      *dbTransaction.Erc20Method,
+			TimeStamp:   dbTransaction.TimeStamp,
+			From:        dbTransaction.From,
+			To:          *dbTransaction.Erc20Address,
+			Amount:      txValue,
+			IsFrom:      false,
+			Contract:    dbTransaction.To,
+			Coin:        coin,
+		}
+
+		if account.AccountAddress == transactionData.From {
+			transactionData.IsFrom = true
+		}
+		account.TransactionsErc20 = append(account.TransactionsErc20, transactionData)
+	}
+
+	account.PageSize = pageSize
+	account.TotalPages = totalPages
+	account.CurrentPageIndex = currentPage
+	account.IsDefaultPage = true
+}
 func weiToEther(wei *big.Int) *big.Float {
 	return new(big.Float).Quo(new(big.Float).SetInt(wei), big.NewFloat(params.Ether))
 }

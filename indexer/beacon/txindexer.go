@@ -18,7 +18,13 @@ type TxIndexer struct {
 	consensusPool *consensus.Pool
 	executionPool *execution.Pool
 
+	contracts map[string]*dbtypes.Contract
+
 	running bool
+}
+
+func (indexer TxIndexer) GetContracts() map[string]*dbtypes.Contract {
+	return indexer.contracts
 }
 
 func NewTxIndexer(logger logrus.FieldLogger, consensusPool *consensus.Pool, executionPool *execution.Pool) *TxIndexer {
@@ -66,6 +72,7 @@ func (indexer *TxIndexer) runIndexerLoop() {
 	blockNumberEnd := txState.BlockNumberEnd
 	b := big.NewInt(1)
 	indexer.logger.Infof("blockNumber:%v", blockNumber)
+	indexer.contracts = db.GetContracts()
 	for {
 
 		clients := indexer.executionPool.GetAllEndpoints()
@@ -80,7 +87,7 @@ func (indexer *TxIndexer) runIndexerLoop() {
 
 		for i := 0; i < 50; i++ {
 			//indexer.logger.Infof("!!!process blockNumber:%v %v", blockNumber, i)
-			UpdateTransactionsForBlock(context.Background(), executionClient, &blockNumber, indexer.logger)
+			UpdateTransactionsForBlock(context.Background(), executionClient, &blockNumber, indexer.logger, indexer.contracts)
 			blockNumber.Sub(&blockNumber, b)
 			if blockNumber.Cmp(&blockNumberEnd) < 0 {
 				indexer.logger.Infof("indexed, exit:%v %v", blockNumber, blockNumberEnd)

@@ -31,9 +31,31 @@ func Transaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	v := new(big.Int)
-	v.SetString(dbTransaction.Value, 10)
-	txValue := weiToEther(v)
+	txValue := weiToEtherS(dbTransaction.Value)
+
+	contracts := services.GlobalBeaconService.GetContracts()
+	contract := contracts[dbTransaction.To]
+	coin := ""
+	contractName := ""
+	if contract != nil {
+		coin = contract.Symbol
+		contractName = contract.Name
+	}
+
+	var erc20Value *big.Float
+	var erc20Address string
+	var erc20Method string
+	isErc20 := false
+	if dbTransaction.Erc20Value != nil {
+		isErc20 = true
+		erc20Value = weiToEtherS(*dbTransaction.Erc20Value)
+	}
+	if dbTransaction.Erc20Method != nil {
+		erc20Method = *dbTransaction.Erc20Method
+	}
+	if dbTransaction.Erc20Address != nil {
+		erc20Address = *dbTransaction.Erc20Address
+	}
 
 	gasPriceGWei := weiToGWei(new(big.Int).SetUint64(dbTransaction.GasPrice))
 	txFee := weiToEther(new(big.Int).SetUint64(dbTransaction.GasPrice * dbTransaction.GasUsed))
@@ -52,6 +74,12 @@ func Transaction(w http.ResponseWriter, r *http.Request) {
 		GasPriceGWei: gasPriceGWei,
 		GasUsed:      dbTransaction.GasUsed,
 		TxFee:        txFee,
+		Erc20Method:  erc20Method,
+		Erc20Address: erc20Address,
+		Erc20Value:   erc20Value,
+		Contract:     contractName,
+		Coin:         coin,
+		IsErc20:      isErc20,
 	}
 
 	data.Data = transactionData

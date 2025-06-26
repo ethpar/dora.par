@@ -125,9 +125,7 @@ func initTransactions(account *Account, start uint64, pageSize uint64, currentPa
 
 	for _, dbTransaction := range transactions {
 
-		v := new(big.Int)
-		v.SetString(dbTransaction.Value, 10)
-		txValue := weiToEther(v)
+		txValue := weiToEtherS(dbTransaction.Value)
 
 		method := dbTransaction.Method
 		if dbTransaction.Erc20Method != nil {
@@ -172,10 +170,8 @@ func initTransactionsErc20(account *Account, start uint64, pageSize uint64, curr
 			coin = contract.Symbol
 		}
 
-		v := new(big.Int)
 		s := dbTransaction.Erc20Value
-		v.SetString(*s, 10)
-		txValue := weiToEther(v)
+		txValue := weiToEtherS(*s)
 
 		transactionData := &models.TransactionErc20DataListItem{
 			Hash:        dbTransaction.Hash,
@@ -204,6 +200,12 @@ func initTransactionsErc20(account *Account, start uint64, pageSize uint64, curr
 }
 func weiToEther(wei *big.Int) *big.Float {
 	return new(big.Float).Quo(new(big.Float).SetInt(wei), big.NewFloat(params.Ether))
+}
+
+func weiToEtherS(wei string) *big.Float {
+	v := new(big.Int)
+	v.SetString(wei, 10)
+	return new(big.Float).Quo(new(big.Float).SetInt(v), big.NewFloat(params.Ether))
 }
 
 func weiToGWei(wei *big.Int) *big.Float {

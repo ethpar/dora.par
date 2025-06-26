@@ -30,6 +30,37 @@ type TransactionData struct {
 	Type              uint8      `json:"type"`
 	IsFrom            bool       `json:"is_from"`
 	TxFee             *big.Float `json:"tx_fee"`
+	Erc20Method       string     `json:"erc20_method"`
+	Erc20Address      string     `json:"erc20_address_to"`
+	Erc20Value        *big.Float `json:"erc20_value"`
+	Coin              string     `json:"coin"`
+	Contract          string     `json:"contract"`
+	IsErc20           bool       `json:"is_erc20"`
+}
+
+type ApiTransactionData struct {
+	Hash             string    `json:"hash"`
+	BlockNumber      uint64    `json:"block_number"`
+	BlockRank        uint64    `json:"block_rank"`
+	TimeStamp        time.Time `json:"created_at"`
+	Nonce            uint64    `json:"nonce"`
+	TransactionIndex uint      `json:"transaction_index"`
+	From             string    `json:"from"`
+	To               string    `json:"to"`
+	Value            big.Int   `json:"value"`
+	//Gas               uint64    `json:"gas"`
+	GasPrice          uint64   `json:"gas_price"`
+	Input             string   `json:"input"`
+	CumulativeGasUsed uint64   `json:"cumulative_gas_used"`
+	GasUsed           uint64   `json:"gas_used"`
+	Type              uint8    `json:"type"`
+	TxFee             *big.Int `json:"tx_fee"`
+	Erc20Method       string   `json:"erc20_method"`
+	Erc20Address      string   `json:"erc20_address_to"`
+	Erc20Value        big.Int  `json:"erc20_value"`
+	Coin              string   `json:"erc20_coin"`
+	Contract          string   `json:"erc20_contract"`
+	IsErc20           bool     `json:"is_erc20"`
 }
 
 type TransactionDataList struct {

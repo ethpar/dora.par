@@ -34,12 +34,37 @@
 </div>
 <div class="card-body px-0 py-1">
     <div class="row border-bottom p-2 mx-0">
-        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="To">To:</span></div>
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="To">
+            {{ if .IsErc20 }}
+            Interacted With (To):
+            {{ else }}
+            To:
+            {{ end }}
+        </span></div>
         <div class="col-md-10">
-            <a href="/address/{{ .To }}">{{ .To }}</a>
+            <a href="/address/{{ .To }}">{{ .To }}
+                {{ if .IsErc20 }}
+                ({{ .Contract }})
+                {{ end }}
+            </a>
             <i class="fa fa-copy text-muted p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ .To }}"></i></div>
     </div>
 </div>
+{{ if .IsErc20 }}
+<div class="card-body px-0 py-1">
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="To">ERC-20 Tokens Transferred::</span></div>
+        <div class="col-md-10">
+            From <a href="/address/{{ .From }}">{{ .From }}</a>
+            <i class="fa fa-copy text-muted p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ .From }}"></i>
+            To <a href="/address/{{ .Erc20Address }}">{{ .Erc20Address }}</a>
+            <i class="fa fa-copy text-muted p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ .Erc20Address }}"></i>
+            For {{ .Erc20Value }} {{ .Coin }}
+        </div>
+    </div>
+</div>
+{{ end }}
+
 <div class="card-body px-0 py-1">
     <div class="row border-bottom p-2 mx-0">
         <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Value">Value:</span></div>

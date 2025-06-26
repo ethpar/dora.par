@@ -851,3 +851,50 @@ func (bs *ChainService) CheckBlockOrphanedStatus(blockRoot phase0.Root) dbtypes.
 
 	return dbtypes.Missing
 }
+
+func (bs *ChainService) GetTransactionsForAddress(address string, offset uint64, pageSize uint64) []*dbtypes.Transaction {
+	return db.GetTransactions(address, offset, pageSize)
+}
+
+func (bs *ChainService) GetTransactionsErc20ForAddress(address string, contract string, offset uint64, pageSize uint64) []*dbtypes.Transaction {
+	return db.GetTransactionsErc20(address, contract, offset, pageSize)
+}
+
+func (bs *ChainService) GetTransactionsCountForAddress(address string) (uint64, error) {
+	return db.GetTransactionsCount(address)
+}
+
+func (bs *ChainService) GetTransactionsErc20CountForAddress(address string, contract string) (uint64, error) {
+	return db.GetTransactionsErc20Count(address, contract)
+}
+
+func (bs *ChainService) GetContracts() map[string]*dbtypes.Contract {
+	return bs.txIndexer.GetContracts()
+}
+
+func (bs *ChainService) GetAllTransactionsForAddress(address string) []*dbtypes.Transaction {
+	return db.GetTransactions(address, 0, 100000000)
+}
+
+func (bs *ChainService) GetTransactionByHash(hash string) *dbtypes.Transaction {
+	var dbTransaction = db.GetTransactionByHash(hash)
+	if dbTransaction != nil {
+		return dbTransaction
+	}
+
+	bs.logger.Infof("tx not in db %v", hash)
+	clients := GlobalBeaconService.GetExecutionClients()
+	if len(clients) == 0 {
+		bs.logger.Warnf("no clients for read tx  %v", hash)
+		return nil
+	}
+
+	client := clients[0].GetRPCClient()
+	executionClient := client.GetEthClient()
+
+	err := beacon.UpdateTransactionsForHash(context.Background(), executionClient, hash, bs.logger)
+	if err != nil {
+		bs.logger.Errorf("error during UpdateTransactionsForHash  %v", err)
+	}
+	return db.GetTransactionByHash(hash)
+}

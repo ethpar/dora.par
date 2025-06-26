@@ -1,11 +1,18 @@
 package dbtypes
 
+import "math/big"
+
 type IndexerSyncState struct {
 	Epoch uint64 `json:"epoch"`
 }
 
 type IndexerPruneState struct {
 	Epoch uint64 `json:"epoch"`
+}
+
+type IndexerTxState struct {
+	BlockNumberStart big.Int `json:"block_number_start"`
+	BlockNumberEnd   big.Int `json:"block_number_end"`
 }
 
 type IndexerForkState struct {

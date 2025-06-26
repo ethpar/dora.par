@@ -1,0 +1,111 @@
+{{ define "page" }}
+<div class="row border-bottom p-2 mx-0">
+    <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Hash">Hash:</span></div>
+    <div class="col-md-10 text-monospace text-break">
+        {{ .Hash }}
+        <i class="fa fa-copy text-muted p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="0x{{ printf "%x" .Hash }}"></i>
+    </div>
+</div>
+<div class="row border-bottom p-2 mx-0">
+    <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Block">Block:</span></div>
+    <div class="col-md-10 text-monospace text-break">
+        {{ .BlockNumber }}
+    </div>
+</div>
+<div class="row border-bottom p-2 mx-0">
+    <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Rank">Rank:</span></div>
+    <div class="col-md-10 text-monospace text-break">
+        {{ .BlockRank }}
+    </div>
+</div>
+<div class="row border-bottom p-2 mx-0">
+    <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Timestamp">Timestamp:</span></div>
+    <div class="col-md-10 text-monospace text-break">
+        {{ .TimeStamp }}
+    </div>
+</div>
+<div class="card-body px-0 py-1">
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="From">From:</span></div>
+        <div class="col-md-10">
+            <a href="/address/{{ .From }}">{{ .From }}</a>
+            <i class="fa fa-copy text-muted p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ .From }}"></i></div>
+    </div>
+</div>
+<div class="card-body px-0 py-1">
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="To">
+            {{ if .IsErc20 }}
+            Interacted With (To):
+            {{ else }}
+            To:
+            {{ end }}
+        </span></div>
+        <div class="col-md-10">
+            <a href="/address/{{ .To }}">{{ .To }}
+                {{ if .IsErc20 }}
+                ({{ .Contract }})
+                {{ end }}
+            </a>
+            <i class="fa fa-copy text-muted p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ .To }}"></i></div>
+    </div>
+</div>
+{{ if .IsErc20 }}
+<div class="card-body px-0 py-1">
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="To">ERC-20 Tokens Transferred::</span></div>
+        <div class="col-md-10">
+            From <a href="/address/{{ .From }}">{{ .From }}</a>
+            <i class="fa fa-copy text-muted p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ .From }}"></i>
+            To <a href="/address/{{ .Erc20Address }}">{{ .Erc20Address }}</a>
+            <i class="fa fa-copy text-muted p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ .Erc20Address }}"></i>
+            For {{ .Erc20Value }} {{ .Coin }}
+        </div>
+    </div>
+</div>
+{{ end }}
+
+<div class="card-body px-0 py-1">
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Value">Value:</span></div>
+        <div class="col-md-10">
+            {{ .Value }} ETP
+        </div>
+    </div>
+</div>
+<div class="card-body px-0 py-1">
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Value">Gas used:</span></div>
+        <div class="col-md-10">
+            {{ .GasUsed }}
+        </div>
+    </div>
+</div>
+<div class="card-body px-0 py-1">
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Gas Price">Gas Price:</span></div>
+        <div class="col-md-10">
+            {{ .GasPrice }}
+        </div>
+    </div>
+</div>
+{{end}}
+{{ define "js" }}
+<script src="/js/knockout.min.js"></script>
+
+{{ end }}
+{{ define "css" }}
+<link rel="stylesheet" href="/css/forkgraph.css" />
+<style>
+    #recent-epochs, #recent-blocks, #recent-slots {
+        margin-bottom: 0;
+    }
+    .startpage-panel .card-header {
+        padding-top: 2px;
+        padding-bottom: 2px;
+    }
+    .startpage-panel .card-header i {
+        margin-right: 5px;
+    }
+</style>
+{{ end }}

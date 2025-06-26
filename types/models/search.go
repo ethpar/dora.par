@@ -46,3 +46,14 @@ type SearchAheadValidatorNameResult struct {
 	Name  string `json:"name,omitempty"`
 	Count string `json:"count,omitempty"`
 }
+
+// SearchAheadTransactionResult is a struct
+type SearchAheadTransactionResult struct {
+	Hash  string `json:"hash,omitempty"`
+	Count string `json:"count,omitempty"`
+}
+
+type SearchAheadAddressResult struct {
+	Address string `json:"address,omitempty"`
+	Count   string `json:"count,omitempty"`
+}

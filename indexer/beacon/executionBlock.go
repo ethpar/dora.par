@@ -1,12 +1,18 @@
 package beacon
 
 import (
+	"context"
+	"github.com/sirupsen/logrus"
+	"math/big"
+
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethpandaops/dora/clients/execution"
 	"github.com/ethpandaops/dora/db"
 	"github.com/ethpandaops/dora/dbtypes"
@@ -102,7 +108,7 @@ func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64, isAsy
 	c.logger.Infof("start check parallel Blocks for: %v", blockNumber)
 	var proposers, _ = c.client.GetRPCClient().GetRewards(c.getContext(), block.Root)
 
-	for rank := 1; rank < 5; rank++ {
+	for rank := 0; rank < 5; rank++ {
 		var proposer *uint64 = nil
 		if len(proposers) > rank {
 			if proposers[rank] != "" {
@@ -126,11 +132,15 @@ func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64, isAsy
 		}
 		parallelExecutionBlock, err := executionClient.GetRPCClient().DecodeBlockRaw(nil, parallelExecutionBlockRaw)
 		if err == nil {
-			processExecutionBlock(c, block, parallelExecutionBlock, parallelExecutionBlockRaw, uint64(rank), proposer, isAsync)
+			if rank > 0 {
+				processExecutionBlock(c, block, parallelExecutionBlock, parallelExecutionBlockRaw, uint64(rank), proposer, isAsync)
+			}
+			SaveTransactionsForBlock(c, parallelExecutionBlock, uint64(rank), c.logger)
 		} else {
 			c.logger.Errorf("DecodeBlockRaw: %v:%v %v", blockNumber, rank, err)
 		}
 	}
+
 	return
 }
 
@@ -162,9 +172,183 @@ func processExecutionBlock(c *Client, block *Block, parallelExecutionBlock *type
 				c.logger.Infof("saved slot: %v exec block:%v:%v %v", block.Slot, parallelExecutionBlock.Number(), rank, isAsync)
 				return nil
 			})
+			//SaveTransaction(c, parallelExecutionBlock, rank)
 		}
 	}
 	return
+}
+
+func SaveTransactionsForBlock(c *Client, parallelExecutionBlock *types.Block, rank uint64, logger logrus.FieldLogger) error {
+
+	var executionClient = c.indexer.executionPool.GetReadyEndpoint(execution.AnyClient)
+	if executionClient == nil {
+		return fmt.Errorf("processExecutionBlocks: could not get execution client")
+	}
+
+	client := executionClient.GetRPCClient()
+	ethClient := client.GetEthClient()
+	if c.indexer.contracts == nil {
+		logger.Infof("init contracts: ")
+		c.indexer.contracts = db.GetContracts()
+	}
+	for _, tx := range parallelExecutionBlock.Transactions() {
+		var err = processTransaction(tx, parallelExecutionBlock.Time(), rank, ethClient, c.getContext(), c.logger, c.indexer.contracts)
+		if err != nil {
+			if logger != nil {
+				logger.Errorf("transaction save error:  %v", err)
+			}
+		}
+	}
+	return nil
+}
+
+func UpdateTransactionsForBlock(context context.Context, executionClient *ethclient.Client,
+	blockNumber *big.Int, logger logrus.FieldLogger, contracts map[string]*dbtypes.Contract) error {
+	for rank := 0; rank < 5; rank++ {
+		parallelExecutionBlockRaw, err := executionClient.BlockByNumberAndRankRaw(context, blockNumber, uint64(rank))
+		if err != nil {
+			if err.Error() != "not found" {
+				logger.Errorf("GetBlockByNumberAndRank: %v:%v %v", blockNumber, rank, err)
+			} else {
+				//	c.logger.Infof("GetBlockByNumberAndRank not found: %v:%v", blockNumber, rank)
+			}
+			continue
+		}
+		parallelExecutionBlock, err := executionClient.DecodeBlockRaw(*parallelExecutionBlockRaw, context)
+		if err == nil {
+			//SaveTransaction(c, parallelExecutionBlock, uint64(rank), logger)
+			for _, tx := range parallelExecutionBlock.Transactions() {
+				var err = processTransaction(tx, parallelExecutionBlock.Time(), uint64(rank),
+					executionClient, context, logger, contracts)
+				if err != nil {
+					logger.Errorf("transaction save error:  %v", err)
+				}
+			}
+		} else {
+			logger.Errorf("DecodeBlockRaw: %v:%v %v", blockNumber, rank, err)
+		}
+	}
+	return nil
+}
+
+func UpdateTransactionsForHash(context context.Context, executionClient *ethclient.Client, txHash string, logger logrus.FieldLogger) error {
+
+	if executionClient == nil {
+		return nil
+	}
+
+	var contracts = db.GetContracts()
+	var receipt *types.Receipt
+	//ethClient.TransactionByHash()
+	receipt, err := executionClient.TransactionReceipt(context, common.HexToHash(txHash))
+	if err != nil {
+		return err
+	}
+	if receipt != nil {
+		var blockNumber = receipt.BlockNumber
+		logger.Infof("blockNumber %v for tx %v", blockNumber, txHash)
+		err = UpdateTransactionsForBlock(context, executionClient, blockNumber, logger, contracts)
+	} else {
+		logger.Warnf("no receipt for tx %v", txHash)
+	}
+	return err
+}
+
+func processTransaction(tx *types.Transaction, blockTime uint64, rank uint64, ethClient *ethclient.Client,
+	context context.Context, logger logrus.FieldLogger, contracts map[string]*dbtypes.Contract) error {
+	//tx, isPending, err := ethClient.TransactionByHash(c.getContext(), common.HexToHash(txHash))
+
+	var receipt *types.Receipt
+	//ethClient.TransactionByHash()
+	receipt, err := ethClient.TransactionReceipt(context, tx.Hash())
+
+	if err != nil {
+		logger.Errorf("error on get tx receipt for hash: %v %v", tx.Hash(), err)
+		return err
+	}
+
+	//}
+	//block, err := ethClient.BlockByNumber(c.getContext(), receipt.BlockNumber)
+
+	/*		if err != nil {
+			return err
+		}*/
+
+	var toAddress string
+	if tx.To() != nil {
+		toAddress = tx.To().Hex()
+	}
+
+	input := hex.EncodeToString(tx.Data())
+
+	var contract *dbtypes.Contract
+	if contracts != nil {
+		contract = contracts[toAddress]
+
+	}
+
+	var erc20_method *string
+	var erc20_value *big.Int
+	var erc20_to *string
+	if contract != nil {
+		if contract.IsErc20 {
+			logger.Infof("tx to contract: %v", contract.Address)
+			var erc20_to_address *common.Address
+			erc20_method, erc20_value, erc20_to_address = parseFunction(input, logger)
+			if erc20_to_address != nil {
+				s := erc20_to_address.Hex()
+				erc20_to = &s
+			}
+		}
+	}
+
+	if receipt.TxHash.Hex() == "0xa37301e0bb16a1fec2f5d14ada84b273b6b452519c03b5738767ba20faf3a31b" {
+		logger.Warnf("value for %v %v %v", receipt.TxHash.Hex(), tx.Value().Uint64(), tx.Value())
+	}
+
+	transaction := dbtypes.Transaction{
+		Hash:             receipt.TxHash.Hex(),
+		Nonce:            tx.Nonce(),
+		BlockHash:        receipt.BlockHash.Hex(),
+		BlockNumber:      receipt.BlockNumber.Uint64(),
+		BlockRank:        rank,
+		TransactionIndex: receipt.TransactionIndex,
+		From: func() string {
+			sender, err := ethClient.TransactionSender(context, tx, receipt.BlockHash, receipt.TransactionIndex)
+			if err != nil {
+				return "0x0000000000000000000000000000000000000000"
+			}
+			return sender.Hex()
+		}(),
+		To:                toAddress,
+		Value:             tx.Value().String(),
+		Gas:               tx.Gas(),
+		GasPrice:          tx.GasPrice().Uint64(),
+		IsError:           false,
+		TimeStamp:         time.Unix(int64(blockTime), 0),
+		Input:             input,
+		ContractAddress:   receipt.ContractAddress.Hex(),
+		CumulativeGasUsed: receipt.CumulativeGasUsed,
+		GasUsed:           receipt.GasUsed,
+		Type:              tx.Type(),
+		Erc20Method:       erc20_method,
+		Erc20Address:      erc20_to,
+	}
+	if erc20_value != nil {
+		s := erc20_value.String()
+		transaction.Erc20Value = &s
+	}
+	//c.logger.Infof(">>>>>>>>>>block: slot: %v  %v logs %v", tx.Time(), time.Unix(parallelExecutionBlock.Time(), 0), len(receipt.Logs))
+	err = db.RunDBTransaction(func(tx *sqlx.Tx) error {
+		err := db.InsertTransaction(&transaction, tx)
+		if err != nil {
+			logger.Errorf("error on save tx for hash: %v %v", transaction, err)
+			return err
+		}
+		return nil
+	})
+
+	return nil
 }
 
 type txExtraInfo struct {

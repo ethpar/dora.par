@@ -1,5 +1,9 @@
 package dbtypes
 
+import (
+	"time"
+)
+
 type ExplorerState struct {
 	Key   string `db:"key"`
 	Value string `db:"value"`
@@ -127,6 +131,42 @@ type UnfinalizedExecutionBlock struct {
 	Proposer            *uint64                `db:"proposer"`
 }
 
+type Transaction struct {
+	Hash              string    `db:"hash"`
+	BlockNumber       uint64    `db:"block_number"`
+	BlockRank         uint64    `db:"block_rank"`
+	TimeStamp         time.Time `db:"created_at"`
+	Nonce             uint64    `db:"nonce"`
+	BlockHash         string    `db:"block_hash"`
+	TransactionIndex  uint      `db:"transaction_index"`
+	From              string    `db:"from"`
+	To                string    `db:"to"`
+	Value             string    `db:"value"`
+	Gas               uint64    `db:"gas"`
+	GasPrice          uint64    `db:"gas_price"`
+	IsError           bool      `db:"is_error"`
+	TxReceiptStatus   string    `db:"receipt_status"`
+	Input             string    `db:"input"`
+	ContractAddress   string    `db:"contract_address"`
+	CumulativeGasUsed uint64    `db:"cumulative_gas_used"`
+	GasUsed           uint64    `db:"gas_used"`
+	Confirmations     int       `db:"confirmations"`
+	Method            string    `db:"method"`
+	Type              uint8     `db:"type"`
+	Erc20Method       *string   `db:"erc20_method"`
+	Erc20Address      *string   `db:"erc20_address_to"`
+	Erc20Value        *string   `db:"erc20_value"`
+}
+
+type Contract struct {
+	Address   string    `db:"address"`
+	Owner     string    `db:"owner"`
+	IsErc20   bool      `db:"is_erc20"`
+	Name      string    `db:"name"`
+	Symbol    string    `db:"symbol"`
+	TimeStamp time.Time `db:"created_at"`
+	Body      *string   `db:"body"`
+}
 type UnfinalizedEpoch struct {
 	Epoch                 uint64  `db:"epoch"`
 	DependentRoot         []byte  `db:"dependent_root"`

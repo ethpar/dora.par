@@ -154,9 +154,18 @@ func startFrontend(webserver *http.Server) {
 	router.HandleFunc("/slot/{root}/blob/{commitment}", handlers.SlotBlob).Methods("GET")
 	router.HandleFunc("/mev/blocks", handlers.MevBlocks).Methods("GET")
 	router.HandleFunc("/pool/{slot}", handlers.Pool).Methods("GET")
+	//router.HandleFunc("/transaction/{txHash}", handlers.Transaction).Methods("GET")
 
 	// Etherscan-compatible API endpoints
-	router.HandleFunc("/api", handlers.EtherscanAPI).Methods("GET")
+	//router.HandleFunc("/api", handlers.EtherscanAPI).Methods("GET")
+	router.HandleFunc("/api/account/balance/{address}", handlers.EtherscanAPI).Methods("GET")
+	router.HandleFunc("/api/account/txlist/{address}", handlers.ApiTransactions).Methods("GET")
+	router.HandleFunc("/api/account/txlist/erc20/{address}", handlers.ApiTransactionsErc20).Methods("GET")
+
+	router.HandleFunc("/api/tx/{hash}", handlers.ApiTransaction).Methods("GET")
+
+	router.HandleFunc("/address/{address}", handlers.Address).Methods("GET")
+	router.HandleFunc("/tx/{hash}", handlers.Transaction).Methods("GET")
 
 	router.HandleFunc("/search", handlers.Search).Methods("GET")
 	router.HandleFunc("/search/{type}", handlers.SearchAhead).Methods("GET")

@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/mux"
 	"math/big"
 	"net/http"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethpandaops/dora/services"
@@ -19,29 +21,32 @@ type EtherscanResponse struct {
 
 type EtherscanTx struct {
 	BlockNumber       string `json:"blockNumber"`
-	TimeStamp        string `json:"timeStamp"`
-	Hash             string `json:"hash"`
-	Nonce            string `json:"nonce"`
-	BlockHash        string `json:"blockHash"`
-	TransactionIndex string `json:"transactionIndex"`
-	From             string `json:"from"`
-	To               string `json:"to"`
-	Value            string `json:"value"`
-	Gas              string `json:"gas"`
-	GasPrice         string `json:"gasPrice"`
-	IsError          string `json:"isError"`
-	TxReceiptStatus  string `json:"txreceipt_status"`
-	Input            string `json:"input"`
-	ContractAddress  string `json:"contractAddress"`
+	TimeStamp         string `json:"timeStamp"`
+	Hash              string `json:"hash"`
+	Nonce             string `json:"nonce"`
+	BlockHash         string `json:"blockHash"`
+	TransactionIndex  string `json:"transactionIndex"`
+	From              string `json:"from"`
+	To                string `json:"to"`
+	Value             string `json:"value"`
+	Gas               string `json:"gas"`
+	GasPrice          string `json:"gasPrice"`
+	IsError           string `json:"isError"`
+	TxReceiptStatus   string `json:"txreceipt_status"`
+	Input             string `json:"input"`
+	ContractAddress   string `json:"contractAddress"`
 	CumulativeGasUsed string `json:"cumulativeGasUsed"`
-	GasUsed          string `json:"gasUsed"`
-	Confirmations    string `json:"confirmations"`
+	GasUsed           string `json:"gasUsed"`
+	Confirmations     string `json:"confirmations"`
 }
 
 func EtherscanAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	module := r.URL.Query().Get("module")
+	vars := mux.Vars(r)
+	address := strings.Replace(vars["address"], "0x", "", -1)
+	handleBalance(w, address)
+	/*module := r.URL.Query().Get("module")
 	action := r.URL.Query().Get("action")
 	address := r.URL.Query().Get("address")
 	contractaddress := r.URL.Query().Get("contractaddress")
@@ -81,7 +86,7 @@ func EtherscanAPI(w http.ResponseWriter, r *http.Request) {
 			Message: "Invalid module",
 			Result:  nil,
 		})
-	}
+	}*/
 }
 
 func handleBalance(w http.ResponseWriter, address string) {
@@ -179,23 +184,23 @@ func handleTxList(w http.ResponseWriter, address string) {
 
 				txs = append(txs, map[string]interface{}{
 					"hash":             tx.Hash().Hex(),
-					"nonce":           fmt.Sprintf("%#x", tx.Nonce()),
-					"blockHash":       block.Hash().Hex(),
-					"blockNumber":     fmt.Sprintf("%#x", block.Number()),
+					"nonce":            fmt.Sprintf("%#x", tx.Nonce()),
+					"blockHash":        block.Hash().Hex(),
+					"blockNumber":      fmt.Sprintf("%#x", block.Number()),
 					"transactionIndex": fmt.Sprintf("%#x", receipt.TransactionIndex),
-					"from":            func() string {
+					"from": func() string {
 						sender, err := ethClient.TransactionSender(context.Background(), tx, block.Hash(), receipt.TransactionIndex)
 						if err != nil {
 							return "0x0000000000000000000000000000000000000000"
 						}
 						return sender.Hex()
 					}(),
-					"to":              tx.To().Hex(),
-					"value":           fmt.Sprintf("%#x", tx.Value()),
-					"gas":             fmt.Sprintf("%#x", tx.Gas()),
-					"gasPrice":        fmt.Sprintf("%#x", tx.GasPrice()),
-					"isError":         "0",
-					"timeStamp":       fmt.Sprintf("%#x", block.Time()),
+					"to":        tx.To().Hex(),
+					"value":     fmt.Sprintf("%#x", tx.Value()),
+					"gas":       fmt.Sprintf("%#x", tx.Gas()),
+					"gasPrice":  fmt.Sprintf("%#x", tx.GasPrice()),
+					"isError":   "0",
+					"timeStamp": fmt.Sprintf("%#x", block.Time()),
 				})
 			}
 		}

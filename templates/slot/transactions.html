@@ -21,19 +21,19 @@
               <div class="ellipsis-copy-btn">
                 <i class="fa fa-copy text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="0x{{ printf "%x" $transaction.Hash }}"></i>
               </div>
-              0x{{ printf "%x" $transaction.Hash }}
+              <a href="/tx/{{ printf "%x" $transaction.Hash }}">0x{{ printf "%x" $transaction.Hash }}</a>
             </td>
             <td>
               <div class="ellipsis-copy-btn">
                 <i class="fa fa-copy text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $transaction.From }}"></i>
               </div>
-              {{ $transaction.From }}
+              <a href="/address/{{ $transaction.From }}">{{ $transaction.From }}</a>
             </td>
             <td>
               <div class="ellipsis-copy-btn">
                 <i class="fa fa-copy text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $transaction.To }}"></i>
               </div>
-              {{ $transaction.To }}
+              <a href="/address/{{ $transaction.To }}">{{ $transaction.To }}</a>
             </td>
             <td>
               {{ if eq $transaction.FuncSigStatus 10 }}
@@ -44,7 +44,7 @@
                 <span class="badge rounded-pill text-bg-secondary" style="font-size: 12px; font-weight: 500;" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="call {{ $transaction.FuncBytes }}">{{ $transaction.FuncName }}</span>
               {{ end }}
             </td>
-            <td>{{ $transaction.Value }} ETHPAR</td>
+            <td>{{ $transaction.Value }} ETP</td>
             <td>
               {{ if gt $transaction.DataLen 0 }}
                 <span class="badge rounded-pill text-bg-secondary" style="font-size: 12px; font-weight: 500;">{{ $transaction.DataLen }} B</span>

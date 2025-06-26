@@ -211,6 +211,14 @@ func buildSlotPageData(ctx context.Context, blockSlot int64, blockRoot []byte, r
 
 	var slot phase0.Slot
 	if blockData != nil {
+		if blockData.Header == nil {
+			logrus.Warnf("blockData.Header nil : %v", blockSlot)
+			return nil, -1
+		}
+		if blockData.Header.Message == nil {
+			logrus.Warnf("blockData.Header.Message nil : %v", blockSlot)
+			return nil, -1
+		}
 		slot = blockData.Header.Message.Slot
 	} else if blockSlot > -1 {
 		slot = phase0.Slot(blockSlot)

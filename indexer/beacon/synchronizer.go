@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"sort"
-	"sync"
+	gosync "sync"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethpandaops/dora/blockdb"
 	"github.com/ethpandaops/dora/clients/consensus"
 	"github.com/ethpandaops/dora/db"
 	"github.com/ethpandaops/dora/dbtypes"
@@ -24,9 +25,9 @@ type synchronizer struct {
 
 	syncCtx       context.Context
 	syncCtxCancel context.CancelFunc
-	runMutex      sync.Mutex
+	runMutex      gosync.Mutex
 
-	stateMutex   sync.Mutex
+	stateMutex   gosync.Mutex
 	running      bool
 	currentEpoch phase0.Epoch
 
@@ -92,7 +93,7 @@ func (sync *synchronizer) startSync(startEpoch phase0.Epoch) {
 }
 
 func (s *synchronizer) stopSync() {
-	var lockedMutex *sync.Mutex
+	var lockedMutex *gosync.Mutex
 	defer func() {
 		if lockedMutex != nil {
 			lockedMutex.Unlock()
@@ -114,7 +115,7 @@ func (s *synchronizer) stopSync() {
 }
 
 func (sync *synchronizer) runSync() {
-	defer utils.HandleSubroutinePanic("runSync")
+	defer utils.HandleSubroutinePanic("runSync", nil)
 
 	sync.runMutex.Lock()
 	defer sync.runMutex.Unlock()
@@ -353,9 +354,19 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 	}
 
 	epochState := newEpochState(dependentRoot)
-	err := epochState.loadState(sync.syncCtx, client, nil)
+	state, err := epochState.loadState(sync.syncCtx, client, nil)
 	if (err != nil || epochState.loadingStatus != 2) && !lastTry {
 		return false, fmt.Errorf("error fetching epoch %v state: %v", syncEpoch, err)
+	}
+
+	var validatorSet []*phase0.Validator
+	if state == nil {
+		sync.logger.Warnf("state for epoch %v not found", syncEpoch)
+	} else {
+		validatorSet, err = state.Validators()
+		if err != nil {
+			sync.logger.Warnf("error getting validator set from state %v: %v", dependentRoot.String(), err)
+		}
 	}
 
 	var epochStats *EpochStats
@@ -363,7 +374,7 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 	if epochState != nil && epochState.loadingStatus == 2 {
 		epochStats = newEpochStats(syncEpoch, dependentRoot)
 		epochStats.dependentState = epochState
-		epochStats.processState(sync.indexer)
+		epochStats.processState(sync.indexer, validatorSet)
 		epochStatsValues = epochStats.GetValues(false)
 	}
 
@@ -383,9 +394,12 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 		}
 	}
 
+	sim := newStateSimulator(sync.indexer, epochStats)
+	sim.validatorSet = validatorSet
+
 	// save blocks
 	err = db.RunDBTransaction(func(tx *sqlx.Tx) error {
-		err = sync.indexer.dbWriter.persistEpochData(tx, syncEpoch, canonicalBlocks, epochStats, epochVotes)
+		err = sync.indexer.dbWriter.persistEpochData(tx, syncEpoch, canonicalBlocks, epochStats, epochVotes, sim)
 		if err != nil {
 			return fmt.Errorf("error persisting epoch data to db: %v", err)
 		}
@@ -400,16 +414,18 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 		}
 
 		// delete unfinalized epoch aggregations in epoch
-		if err := db.DeleteUnfinalizedEpochsIn(uint64(syncEpoch), tx); err != nil {
-			return fmt.Errorf("failed deleting unfinalized epoch aggregations of epoch %v: %v", syncEpoch, err)
+		if err := db.DeleteUnfinalizedEpochsBefore(uint64(syncEpoch+1), tx); err != nil {
+			return fmt.Errorf("failed deleting unfinalized epoch aggregations <= epoch %v: %v", syncEpoch, err)
 		}
 
 		// delete unfinalized forks for canonical roots
-		if err := db.UpdateFinalizedForkParents(canonicalBlockRoots, tx); err != nil {
-			return fmt.Errorf("failed updating finalized fork parents: %v", err)
-		}
-		if err := db.DeleteFinalizedForks(canonicalBlockRoots, tx); err != nil {
-			return fmt.Errorf("failed deleting finalized forks: %v", err)
+		if len(canonicalBlockRoots) > 0 {
+			if err := db.UpdateFinalizedForkParents(canonicalBlockRoots, tx); err != nil {
+				return fmt.Errorf("failed updating finalized fork parents: %v", err)
+			}
+			if err := db.DeleteFinalizedForks(canonicalBlockRoots, tx); err != nil {
+				return fmt.Errorf("failed deleting finalized forks: %v", err)
+			}
 		}
 
 		err = db.SetExplorerState("indexer.syncstate", &dbtypes.IndexerSyncState{
@@ -425,9 +441,24 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 		return false, err
 	}
 
+	// save block bodies to blockdb
+	if blockdb.GlobalBlockDb != nil && !sync.indexer.disableBlockDbWrite {
+		var wg gosync.WaitGroup
+		for _, block := range canonicalBlocks {
+			wg.Add(1)
+			go func(b *Block) {
+				defer wg.Done()
+				if err := b.writeToBlockDb(); err != nil {
+					sync.logger.Errorf("error writing block %v to blockdb: %v", b.Root.String(), err)
+				}
+			}(block)
+		}
+		wg.Wait()
+	}
+
 	// cleanup cache (remove blocks from this epoch)
-	for slot := firstSlot; slot <= lastSlot; slot++ {
-		if sync.cachedBlocks[slot] != nil {
+	for slot := range sync.cachedBlocks {
+		if slot <= lastSlot {
 			delete(sync.cachedBlocks, slot)
 		}
 	}

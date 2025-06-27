@@ -14,6 +14,7 @@ type ElWithdrawalsPageData struct {
 	FilterValidatorName string `json:"filter_vname"`
 	FilterWithOrphaned  uint8  `json:"filter_orphaned"`
 	FilterWithType      uint8  `json:"filter_type"`
+	FilterPublicKey     string `json:"filter_pubkey"`
 
 	ElRequests   []*ElWithdrawalsPageDataWithdrawal `json:"withdrawals"`
 	RequestCount uint64                             `json:"request_count"`
@@ -35,10 +36,14 @@ type ElWithdrawalsPageData struct {
 }
 
 type ElWithdrawalsPageDataWithdrawal struct {
+	IsIncluded        bool      `json:"is_included"`
 	SlotNumber        uint64    `json:"slot"`
 	SlotRoot          []byte    `json:"slot_root"`
 	Time              time.Time `json:"time"`
-	Orphaned          bool      `json:"orphaned"`
+	Status            uint64    `json:"status"`
+	Result            uint8     `json:"result"`
+	ResultMessage     string    `json:"result_message"`
+	TxStatus          uint64    `json:"tx_status"`
 	SourceAddr        []byte    `json:"source_addr"`
 	Amount            uint64    `json:"amount"`
 	ValidatorValid    bool      `json:"vvalid"`
@@ -47,4 +52,15 @@ type ElWithdrawalsPageDataWithdrawal struct {
 	PublicKey         []byte    `json:"pubkey"`
 	LinkedTransaction bool      `json:"linked_tx"`
 	TransactionHash   []byte    `json:"tx_hash"`
+
+	TransactionDetails *ElWithdrawalsPageDataWithdrawalTxDetails `json:"tx_details"`
+}
+
+type ElWithdrawalsPageDataWithdrawalTxDetails struct {
+	BlockNumber uint64 `json:"block"`
+	BlockHash   string `json:"block_hash"`
+	BlockTime   uint64 `json:"block_time"`
+	TxOrigin    string `json:"tx_origin"`
+	TxTarget    string `json:"tx_target"`
+	TxHash      string `json:"tx_hash"`
 }

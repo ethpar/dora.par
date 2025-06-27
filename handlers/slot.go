@@ -20,10 +20,10 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/gorilla/mux"
-	"github.com/juliangruber/go-intersect"
 	"github.com/sirupsen/logrus"
 
 	"github.com/ethpandaops/dora/db"
+	"github.com/ethpandaops/dora/dbtypes"
 	"github.com/ethpandaops/dora/indexer/beacon"
 	"github.com/ethpandaops/dora/services"
 	"github.com/ethpandaops/dora/templates"
@@ -55,8 +55,6 @@ func Slot(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	slotOrHash := strings.Replace(vars["slotOrHash"], "0x", "", -1)
-	//rankString := vars["rank"]
-
 	blockSlot := int64(-1)
 	blockRootHash, err := hex.DecodeString(slotOrHash)
 	if err != nil || len(slotOrHash) != 64 {
@@ -71,6 +69,11 @@ func Slot(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	if pageError := services.GlobalCallRateLimiter.CheckCallLimit(r, 1); pageError != nil {
+		handlePageError(w, r, pageError)
+		return
+	}
 	var rank = uint64(0)
 	for s, s2 := range vars {
 		if s == "rank" {
@@ -83,13 +86,15 @@ func Slot(w http.ResponseWriter, r *http.Request) {
 	}*/
 
 	urlArgs := r.URL.Query()
-
-	var pageData *models.SlotPageData
-	var pageError error
-	pageError = services.GlobalCallRateLimiter.CheckCallLimit(r, 1)
-	if pageError == nil {
-		pageData, pageError = getSlotPageData(blockSlot, blockRootHash, rank)
+	if urlArgs.Has("download") {
+		if err := handleSlotDownload(r.Context(), w, blockSlot, blockRootHash, urlArgs.Get("download")); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		return
 	}
+
+	pageData, pageError := getSlotPageData(blockSlot, blockRootHash, rank)
 	if pageError != nil {
 		handlePageError(w, r, pageError)
 		return
@@ -344,6 +349,8 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 		Eth1dataDepositroot:    eth1Data.DepositRoot[:],
 		Eth1dataDepositcount:   eth1Data.DepositCount,
 		Eth1dataBlockhash:      eth1Data.BlockHash,
+		ValidatorNames:         make(map[uint64]string),
+		SpecValues:             make(map[string]interface{}),
 		ProposerSlashingsCount: uint64(len(proposerSlashings)),
 		AttesterSlashingsCount: uint64(len(attesterSlashings)),
 		AttestationsCount:      uint64(len(attestations)),
@@ -353,9 +360,15 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 		ConnectedProposers:     connectedProposersString,
 	}
 
+	pageData.SpecValues["committees_per_slot"] = specs.MaxCommitteesPerSlot
+	pageData.SpecValues["target_committee_size"] = specs.TargetCommitteeSize
+	pageData.SpecValues["slots_per_epoch"] = specs.SlotsPerEpoch
+
 	epoch := chainState.EpochOfSlot(blockData.Header.Message.Slot)
 	assignmentsMap := make(map[phase0.Epoch]*beacon.EpochStatsValues)
 	assignmentsLoaded := make(map[phase0.Epoch]bool)
+	dbEpochMap := make(map[phase0.Epoch]*dbtypes.Epoch)
+	dbEpochLoaded := make(map[phase0.Epoch]bool)
 	assignmentsMap[epoch] = epochStatsValues
 	assignmentsLoaded[epoch] = true
 
@@ -376,14 +389,32 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 			continue
 		}
 
-		attEpoch := chainState.EpochOfSlot(attData.Slot())
+		totalActiveValidators := uint64(0)
+
+		attEpoch := chainState.EpochOfSlot(attData.Slot)
 		if !assignmentsLoaded[attEpoch] { // get epoch duties from cache
+			assignmentsLoaded[attEpoch] = true
 			beaconIndexer := services.GlobalBeaconService.GetBeaconIndexer()
 			if epochStats := beaconIndexer.GetEpochStats(epoch, nil); epochStats != nil {
 				epochStatsValues := epochStats.GetOrLoadValues(beaconIndexer, true, false)
 
 				assignmentsMap[attEpoch] = epochStatsValues
-				assignmentsLoaded[attEpoch] = true
+			}
+		}
+
+		if assignmentsMap[attEpoch] != nil {
+			totalActiveValidators = assignmentsMap[attEpoch].ActiveValidators
+		} else {
+			if !dbEpochLoaded[attEpoch] {
+				dbEpochLoaded[attEpoch] = true
+				dbEpochs := db.GetEpochs(uint64(attEpoch), 1)
+				if len(dbEpochs) > 0 && dbEpochs[0].Epoch == uint64(attEpoch) {
+					dbEpochMap[attEpoch] = dbEpochs[0]
+				}
+			}
+
+			if dbEpochMap[attEpoch] != nil {
+				totalActiveValidators = dbEpochMap[attEpoch].ValidatorCount
 			}
 		}
 
@@ -392,21 +423,23 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 			e = append(e, attData.ExecutionHashes()[i2].String())
 		}
 
-		var d = attData.BeaconBlockRoot()
+		var d = attData.BeaconBlockRoot
 		attPageData := models.SlotPageAttestation{
-			Slot:            uint64(attData.Slot()),
+			Slot:            uint64(attData.Slot),
+			TotalActive:     totalActiveValidators,
 			AggregationBits: attAggregationBits,
 			Signature:       attSignature[:],
 			BeaconBlockRoot: d[:],
-			SourceEpoch:     uint64(attData.Source().Epoch),
-			SourceRoot:      attData.Source().Root[:],
-			TargetEpoch:     uint64(attData.Target().Epoch),
-			TargetRoot:      attData.Target().Root[:],
+			SourceEpoch:     uint64(attData.Source.Epoch),
+			SourceRoot:      attData.Source.Root[:],
+			TargetEpoch:     uint64(attData.Target.Epoch),
+			TargetRoot:      attData.Target.Root[:],
 			ExecutionHashes: e,
 		}
 
 		var attAssignments []uint64
 		includedValidators := []uint64{}
+		attEpochStatsValues := assignmentsMap[attEpoch]
 
 		if attVersioned.Version >= spec.DataVersionElectra {
 			// EIP-7549 attestation
@@ -425,19 +458,20 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 				}
 
 				attPageData.CommitteeIndex = append(attPageData.CommitteeIndex, uint64(committee))
-				if assignmentsMap[attEpoch] != nil {
-					slotIndex := int(chainState.SlotToSlotIndex(attData.Slot()))
-					committeeAssignments := assignmentsMap[attEpoch].AttesterDuties[slotIndex][uint64(committee)]
+				if attEpochStatsValues != nil {
+					slotIndex := int(chainState.SlotToSlotIndex(attData.Slot))
+					committeeAssignments := attEpochStatsValues.AttesterDuties[slotIndex][uint64(committee)]
 					if len(committeeAssignments) == 0 {
 						break
 					}
 
 					committeeAssignmentsInt := make([]uint64, 0)
 					for j := 0; j < len(committeeAssignments); j++ {
+						validatorIndex := attEpochStatsValues.ActiveIndices[committeeAssignments[j]]
 						if attAggregationBits.BitAt(attBitsOffset + uint64(j)) {
-							includedValidators = append(includedValidators, uint64(committeeAssignments[j]))
+							includedValidators = append(includedValidators, uint64(validatorIndex))
 						}
-						committeeAssignmentsInt = append(committeeAssignmentsInt, uint64(committeeAssignments[j]))
+						committeeAssignmentsInt = append(committeeAssignmentsInt, uint64(validatorIndex))
 					}
 
 					attBitsOffset += uint64(len(committeeAssignments))
@@ -446,15 +480,16 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 			}
 		} else {
 			// pre-electra attestation
-			if assignmentsMap[attEpoch] != nil {
-				slotIndex := int(chainState.SlotToSlotIndex(attData.Slot()))
-				committeeAssignments := assignmentsMap[attEpoch].AttesterDuties[slotIndex][uint64(attData.Index())]
+			if attEpochStatsValues != nil {
+				slotIndex := int(chainState.SlotToSlotIndex(attData.Slot))
+				committeeAssignments := attEpochStatsValues.AttesterDuties[slotIndex][uint64(attData.Index)]
 				committeeAssignmentsInt := make([]uint64, 0)
 				for j := 0; j < len(committeeAssignments); j++ {
+					validatorIndex := attEpochStatsValues.ActiveIndices[committeeAssignments[j]]
 					if attAggregationBits.BitAt(uint64(j)) {
-						includedValidators = append(includedValidators, uint64(committeeAssignments[j]))
+						includedValidators = append(includedValidators, uint64(validatorIndex))
 					}
-					committeeAssignmentsInt = append(committeeAssignmentsInt, uint64(committeeAssignments[j]))
+					committeeAssignmentsInt = append(committeeAssignmentsInt, uint64(validatorIndex))
 				}
 
 				attAssignments = committeeAssignmentsInt
@@ -465,19 +500,17 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 			attPageData.CommitteeIndex = []uint64{uint64(attData.Index())}
 		}
 
-		attPageData.Validators = make([]types.NamedValidator, len(attAssignments))
+		attPageData.Validators = attAssignments
 		for j := 0; j < len(attAssignments); j++ {
-			attPageData.Validators[j] = types.NamedValidator{
-				Index: attAssignments[j],
-				Name:  services.GlobalBeaconService.GetValidatorName(attAssignments[j]),
+			if _, found := pageData.ValidatorNames[attAssignments[j]]; !found {
+				pageData.ValidatorNames[attAssignments[j]] = services.GlobalBeaconService.GetValidatorName(attAssignments[j])
 			}
 		}
 
-		attPageData.IncludedValidators = make([]types.NamedValidator, len(includedValidators))
+		attPageData.IncludedValidators = includedValidators
 		for j := 0; j < len(includedValidators); j++ {
-			attPageData.IncludedValidators[j] = types.NamedValidator{
-				Index: includedValidators[j],
-				Name:  services.GlobalBeaconService.GetValidatorName(includedValidators[j]),
+			if _, found := pageData.ValidatorNames[includedValidators[j]]; !found {
+				pageData.ValidatorNames[includedValidators[j]] = services.GlobalBeaconService.GetValidatorName(includedValidators[j])
 			}
 		}
 
@@ -558,9 +591,7 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 		for j := range att2AttestingIndices {
 			slashingData.Attestation2Indices[j] = uint64(att2AttestingIndices[j])
 		}
-		inter := intersect.Simple(att1AttestingIndices, att2AttestingIndices)
-		for _, j := range inter {
-			valIdx := j.(uint64)
+		for _, valIdx := range utils.FindMatchingIndices(att1AttestingIndices, att2AttestingIndices) {
 			slashingData.SlashedValidators = append(slashingData.SlashedValidators, types.NamedValidator{
 				Index: valIdx,
 				Name:  services.GlobalBeaconService.GetValidatorName(valIdx),
@@ -774,9 +805,6 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 				BlockNumber:   uint64(executionPayload.BlockNumber),
 			}
 			getSlotPageTransactions(pageData, executionPayload.Transactions)
-			getSlotPageDepositRequests(pageData, executionPayload.DepositRequests)
-			getSlotPageWithdrawalRequests(pageData, executionPayload.WithdrawalRequests)
-			getSlotPageConsolidationRequests(pageData, executionPayload.ConsolidationRequests)
 		}
 	}
 
@@ -830,6 +858,15 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 		}
 	}
 
+	if specs.ElectraForkEpoch != nil && uint64(epoch) >= *specs.ElectraForkEpoch {
+		requests, err := blockData.Block.ExecutionRequests()
+		if err == nil && requests != nil {
+			getSlotPageDepositRequests(pageData, requests.Deposits)
+			getSlotPageWithdrawalRequests(pageData, requests.Withdrawals)
+			getSlotPageConsolidationRequests(pageData, requests.Consolidations)
+		}
+	}
+
 	return pageData
 }
 
@@ -859,12 +896,12 @@ func getSlotPageParallelBlocks(pageData *models.SlotPageBlockData, parallelBlock
 	}
 }
 
-func getSlotPageTransactions(pageData *models.SlotPageBlockData, tranactions []bellatrix.Transaction) {
+func getSlotPageTransactions(pageData *models.SlotPageBlockData, transactions []bellatrix.Transaction) {
 	pageData.Transactions = make([]*models.SlotPageTransaction, 0)
 	sigLookupBytes := []types.TxSignatureBytes{}
 	sigLookupMap := map[types.TxSignatureBytes][]*models.SlotPageTransaction{}
 
-	for idx, txBytes := range tranactions {
+	for idx, txBytes := range transactions {
 		var tx ethtypes.Transaction
 
 		err := tx.UnmarshalBinary(txBytes)
@@ -918,81 +955,7 @@ func getSlotPageTransactions(pageData *models.SlotPageBlockData, tranactions []b
 			txData.FuncName = "transfer"
 		}
 	}
-	pageData.TransactionsCount = uint64(len(tranactions))
-
-	if len(sigLookupBytes) > 0 {
-		sigLookups := services.GlobalTxSignaturesService.LookupSignatures(sigLookupBytes)
-		for _, sigLookup := range sigLookups {
-			for _, txData := range sigLookupMap[sigLookup.Bytes] {
-				txData.FuncSigStatus = uint64(sigLookup.Status)
-				txData.FuncBytes = fmt.Sprintf("0x%x", sigLookup.Bytes[:])
-				if sigLookup.Status == types.TxSigStatusFound {
-					txData.FuncSig = sigLookup.Signature
-					txData.FuncName = sigLookup.Name
-				} else {
-					txData.FuncName = "call?"
-				}
-			}
-		}
-	}
-}
-
-func getSlotPageTransactionsEx(pageData *models.SlotPageBlockData, executionBlock beacon.ExecutionBlock) {
-	pageData.Transactions = make([]*models.SlotPageTransaction, 0)
-	sigLookupBytes := []types.TxSignatureBytes{}
-	sigLookupMap := map[types.TxSignatureBytes][]*models.SlotPageTransaction{}
-
-	for idx, tx := range executionBlock.Block.Transactions() {
-		//var tx ethtypes.Transaction
-
-		txHash := tx.Hash()
-		txValue, _ := tx.Value().Float64()
-		ethFloat, _ := utils.ETH.Float64()
-		txValue = txValue / ethFloat
-
-		txData := &models.SlotPageTransaction{
-			Index: uint64(idx),
-			Hash:  txHash[:],
-			Value: txValue,
-			Data:  tx.Data(),
-			Type:  uint64(tx.Type()),
-		}
-		txData.DataLen = uint64(len(txData.Data))
-		//		txFrom , err := ethtypes.Sender(ethtypes.NewPragueSigner(tx.ChainId()), &tx)
-		//txFrom = "";
-		/*if err != nil {
-			txData.From = "unknown"
-			logrus.Warnf("error decoding transaction sender 0x%x.%v: %v\n", pageData.BlockRoot, idx, err)
-		} else {
-			txData.From = txFrom.String()
-		}*/
-		txData.From = ""
-		txTo := tx.To()
-		if txTo == nil {
-			txData.To = "new contract"
-		} else {
-			txData.To = txTo.String()
-		}
-
-		pageData.Transactions = append(pageData.Transactions, txData)
-
-		// check call fn signature
-		if txData.DataLen >= 4 {
-			sigBytes := types.TxSignatureBytes(txData.Data[0:4])
-			if sigLookupMap[sigBytes] == nil {
-				sigLookupMap[sigBytes] = []*models.SlotPageTransaction{
-					txData,
-				}
-				sigLookupBytes = append(sigLookupBytes, sigBytes)
-			} else {
-				sigLookupMap[sigBytes] = append(sigLookupMap[sigBytes], txData)
-			}
-		} else {
-			txData.FuncSigStatus = 10
-			txData.FuncName = "transfer"
-		}
-	}
-	pageData.TransactionsCount = uint64(len(executionBlock.Block.Transactions()))
+	pageData.TransactionsCount = uint64(len(transactions))
 
 	if len(sigLookupBytes) > 0 {
 		sigLookups := services.GlobalTxSignaturesService.LookupSignatures(sigLookupBytes)
@@ -1013,7 +976,6 @@ func getSlotPageTransactionsEx(pageData *models.SlotPageBlockData, executionBloc
 
 func getSlotPageDepositRequests(pageData *models.SlotPageBlockData, depositRequests []*electra.DepositRequest) {
 	pageData.DepositRequests = make([]*models.SlotPageDepositRequest, 0)
-	validatorsMap := services.GlobalBeaconService.GetCachedValidatorPubkeyMap()
 
 	for _, depositRequest := range depositRequests {
 		receiptData := &models.SlotPageDepositRequest{
@@ -1024,13 +986,10 @@ func getSlotPageDepositRequests(pageData *models.SlotPageBlockData, depositReque
 			Index:           depositRequest.Index,
 		}
 
-		if validatorsMap != nil {
-			validator := validatorsMap[depositRequest.Pubkey]
-			if validator != nil {
-				receiptData.Exists = true
-				receiptData.ValidatorIndex = uint64(validator.Index)
-				receiptData.ValidatorName = services.GlobalBeaconService.GetValidatorName(receiptData.ValidatorIndex)
-			}
+		if validatorIdx, found := services.GlobalBeaconService.GetValidatorIndexByPubkey(phase0.BLSPubKey(depositRequest.Pubkey)); found {
+			receiptData.Exists = true
+			receiptData.ValidatorIndex = uint64(validatorIdx)
+			receiptData.ValidatorName = services.GlobalBeaconService.GetValidatorName(receiptData.ValidatorIndex)
 		}
 
 		pageData.DepositRequests = append(pageData.DepositRequests, receiptData)
@@ -1042,8 +1001,6 @@ func getSlotPageDepositRequests(pageData *models.SlotPageBlockData, depositReque
 func getSlotPageWithdrawalRequests(pageData *models.SlotPageBlockData, withdrawalRequests []*electra.WithdrawalRequest) {
 	pageData.WithdrawalRequests = make([]*models.SlotPageWithdrawalRequest, 0)
 
-	validatorsMap := services.GlobalBeaconService.GetCachedValidatorPubkeyMap()
-
 	for _, withdrawalRequest := range withdrawalRequests {
 		requestData := &models.SlotPageWithdrawalRequest{
 			Address:   withdrawalRequest.SourceAddress[:],
@@ -1051,13 +1008,10 @@ func getSlotPageWithdrawalRequests(pageData *models.SlotPageBlockData, withdrawa
 			Amount:    uint64(withdrawalRequest.Amount),
 		}
 
-		if validatorsMap != nil {
-			validator := validatorsMap[withdrawalRequest.ValidatorPubkey]
-			if validator != nil {
-				requestData.Exists = true
-				requestData.ValidatorIndex = uint64(validator.Index)
-				requestData.ValidatorName = services.GlobalBeaconService.GetValidatorName(requestData.ValidatorIndex)
-			}
+		if validatorIdx, found := services.GlobalBeaconService.GetValidatorIndexByPubkey(phase0.BLSPubKey(withdrawalRequest.ValidatorPubkey)); found {
+			requestData.Exists = true
+			requestData.ValidatorIndex = uint64(validatorIdx)
+			requestData.ValidatorName = services.GlobalBeaconService.GetValidatorName(requestData.ValidatorIndex)
 		}
 
 		pageData.WithdrawalRequests = append(pageData.WithdrawalRequests, requestData)
@@ -1069,8 +1023,6 @@ func getSlotPageWithdrawalRequests(pageData *models.SlotPageBlockData, withdrawa
 func getSlotPageConsolidationRequests(pageData *models.SlotPageBlockData, consolidationRequests []*electra.ConsolidationRequest) {
 	pageData.ConsolidationRequests = make([]*models.SlotPageConsolidationRequest, 0)
 
-	validatorsMap := services.GlobalBeaconService.GetCachedValidatorPubkeyMap()
-
 	for _, consolidationRequest := range consolidationRequests {
 		requestData := &models.SlotPageConsolidationRequest{
 			Address:      consolidationRequest.SourceAddress[:],
@@ -1078,24 +1030,90 @@ func getSlotPageConsolidationRequests(pageData *models.SlotPageBlockData, consol
 			TargetPubkey: consolidationRequest.TargetPubkey[:],
 		}
 
-		if validatorsMap != nil {
-			sourceValidator := validatorsMap[consolidationRequest.SourcePubkey]
-			if sourceValidator != nil {
-				requestData.SourceFound = true
-				requestData.SourceIndex = uint64(sourceValidator.Index)
-				requestData.SourceName = services.GlobalBeaconService.GetValidatorName(requestData.SourceIndex)
-			}
+		if sourceValidatorIdx, found := services.GlobalBeaconService.GetValidatorIndexByPubkey(phase0.BLSPubKey(consolidationRequest.SourcePubkey)); found {
+			requestData.SourceFound = true
+			requestData.SourceIndex = uint64(sourceValidatorIdx)
+			requestData.SourceName = services.GlobalBeaconService.GetValidatorName(requestData.SourceIndex)
+		}
 
-			targetValidator := validatorsMap[consolidationRequest.TargetPubkey]
-			if targetValidator != nil {
-				requestData.TargetFound = true
-				requestData.TargetIndex = uint64(targetValidator.Index)
-				requestData.TargetName = services.GlobalBeaconService.GetValidatorName(requestData.TargetIndex)
-			}
+		if targetValidatorIdx, found := services.GlobalBeaconService.GetValidatorIndexByPubkey(phase0.BLSPubKey(consolidationRequest.TargetPubkey)); found {
+			requestData.TargetFound = true
+			requestData.TargetIndex = uint64(targetValidatorIdx)
+			requestData.TargetName = services.GlobalBeaconService.GetValidatorName(requestData.TargetIndex)
 		}
 
 		pageData.ConsolidationRequests = append(pageData.ConsolidationRequests, requestData)
 	}
 
 	pageData.ConsolidationRequestsCount = uint64(len(pageData.ConsolidationRequests))
+}
+
+func handleSlotDownload(ctx context.Context, w http.ResponseWriter, blockSlot int64, blockRoot []byte, downloadType string) error {
+	chainState := services.GlobalBeaconService.GetChainState()
+	currentSlot := chainState.CurrentSlot()
+	var blockData *services.CombinedBlockResponse
+	var err error
+	if blockSlot > -1 {
+		if phase0.Slot(blockSlot) <= currentSlot {
+			blockData, err = services.GlobalBeaconService.GetSlotDetailsBySlot(ctx, phase0.Slot(blockSlot))
+		}
+	} else {
+		blockData, err = services.GlobalBeaconService.GetSlotDetailsByBlockroot(ctx, phase0.Root(blockRoot))
+	}
+
+	if err != nil {
+		return fmt.Errorf("error getting block data: %v", err)
+	}
+
+	if blockData == nil || blockData.Block == nil {
+		return fmt.Errorf("block not found")
+	}
+
+	switch downloadType {
+	case "block-ssz":
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=block-%d-%x.ssz", blockData.Header.Message.Slot, blockData.Root[:]))
+
+		dynSsz := services.GlobalBeaconService.GetBeaconIndexer().GetDynSSZ()
+		_, blockSSZ, err := beacon.MarshalVersionedSignedBeaconBlockSSZ(dynSsz, blockData.Block, false, true)
+		if err != nil {
+			return fmt.Errorf("error serializing block: %v", err)
+		}
+		w.Write(blockSSZ)
+		return nil
+
+	case "block-json":
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=block-%d-%x.json", blockData.Header.Message.Slot, blockData.Root[:]))
+
+		_, jsonRes, err := beacon.MarshalVersionedSignedBeaconBlockJson(blockData.Block)
+		if err != nil {
+			return fmt.Errorf("error serializing block: %v", err)
+		}
+		w.Write(jsonRes)
+		return nil
+
+	case "header-ssz":
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=header-%d-%x.ssz", blockData.Header.Message.Slot, blockData.Root[:]))
+		headerSSZ, err := blockData.Header.MarshalSSZ()
+		if err != nil {
+			return fmt.Errorf("error serializing header: %v", err)
+		}
+		w.Write(headerSSZ)
+		return nil
+
+	case "header-json":
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=header-%d-%x.json", blockData.Header.Message.Slot, blockData.Root[:]))
+		jsonRes, err := blockData.Header.MarshalJSON()
+		if err != nil {
+			return fmt.Errorf("error serializing header: %v", err)
+		}
+		w.Write(jsonRes)
+		return nil
+
+	default:
+		return fmt.Errorf("unknown download type: %s", downloadType)
+	}
 }

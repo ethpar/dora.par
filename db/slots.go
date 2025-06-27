@@ -17,26 +17,30 @@ func InsertSlot(slot *dbtypes.Slot, tx *sqlx.Tx) error {
 		dbtypes.DBEnginePgsql: `
 			INSERT INTO slots (
 				slot, proposer, status, root, parent_root, state_root, graffiti, graffiti_text,
-				attestation_count, deposit_count, exit_count, withdraw_count, withdraw_amount, attester_slashing_count, 
-				proposer_slashing_count, bls_change_count, eth_transaction_count, eth_block_number, eth_block_hash, 
-				eth_block_extra, eth_block_extra_text, sync_participation, fork_id, rank
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+				attestation_count, deposit_count, exit_count, withdraw_count, withdraw_amount, attester_slashing_count,
+				proposer_slashing_count, bls_change_count, eth_transaction_count, eth_block_number, eth_block_hash,
+				eth_block_extra, eth_block_extra_text, sync_participation, fork_id, blob_count, eth_gas_used,
+				eth_gas_limit, eth_base_fee, eth_fee_recipient, block_size, recv_delay, rank
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
 			ON CONFLICT (slot, root, rank) DO UPDATE SET
 				status = excluded.status,
 				eth_block_extra = excluded.eth_block_extra,
-				eth_block_extra_text = excluded.eth_block_extra_text`,
+				eth_block_extra_text = excluded.eth_block_extra_text,
+				fork_id = excluded.fork_id`,
 		dbtypes.DBEngineSqlite: `
 			INSERT OR REPLACE INTO slots (
 				slot, proposer, status, root, parent_root, state_root, graffiti, graffiti_text,
-				attestation_count, deposit_count, exit_count, withdraw_count, withdraw_amount, attester_slashing_count, 
-				proposer_slashing_count, bls_change_count, eth_transaction_count, eth_block_number, eth_block_hash, 
-				eth_block_extra, eth_block_extra_text, sync_participation, fork_id, rank
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)`,
+				attestation_count, deposit_count, exit_count, withdraw_count, withdraw_amount, attester_slashing_count,
+				proposer_slashing_count, bls_change_count, eth_transaction_count, eth_block_number, eth_block_hash,
+				eth_block_extra, eth_block_extra_text, sync_participation, fork_id, blob_count, eth_gas_used,
+				eth_gas_limit, eth_base_fee, eth_fee_recipient, block_size, recv_delay, rank
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)`,
 	}),
 		slot.Slot, slot.Proposer, slot.Status, slot.Root, slot.ParentRoot, slot.StateRoot, slot.Graffiti, slot.GraffitiText,
 		slot.AttestationCount, slot.DepositCount, slot.ExitCount, slot.WithdrawCount, slot.WithdrawAmount, slot.AttesterSlashingCount,
 		slot.ProposerSlashingCount, slot.BLSChangeCount, slot.EthTransactionCount, slot.EthBlockNumber, slot.EthBlockHash,
-		slot.EthBlockExtra, slot.EthBlockExtraText, slot.SyncParticipation, slot.ForkId, slot.Rank)
+		slot.EthBlockExtra, slot.EthBlockExtraText, slot.SyncParticipation, slot.ForkId, slot.BlobCount, slot.EthGasUsed,
+		slot.EthGasLimit, slot.EthBaseFee, slot.EthFeeRecipient, slot.BlockSize, slot.RecvDelay, slot.Rank)
 	if err != nil {
 		return err
 	}
@@ -91,7 +95,8 @@ func GetSlotsRange(firstSlot uint64, lastSlot uint64, withMissing bool, withOrph
 		"state_root", "root", "slot", "proposer", "status", "parent_root", "graffiti", "graffiti_text",
 		"attestation_count", "deposit_count", "exit_count", "withdraw_count", "withdraw_amount", "attester_slashing_count",
 		"proposer_slashing_count", "bls_change_count", "eth_transaction_count", "eth_block_number", "eth_block_hash",
-		"eth_block_extra", "eth_block_extra_text", "sync_participation", "fork_id", "rank",
+		"eth_block_extra", "eth_block_extra_text", "sync_participation", "fork_id", "blob_count", "eth_gas_used",
+		"eth_gas_limit", "eth_base_fee", "eth_fee_recipient", "block_size", "recv_delay", "rank",
 	}
 	for _, blockField := range blockFields {
 		fmt.Fprintf(&sql, ", slots.%v AS \"block.%v\"", blockField, blockField)
@@ -121,9 +126,10 @@ func GetSlotsByParentRoot(parentRoot []byte) []*dbtypes.Slot {
 	err := ReaderDb.Select(&slots, `
 	SELECT
 		slot, proposer, status, root, parent_root, state_root, graffiti, graffiti_text,
-		attestation_count, deposit_count, exit_count, withdraw_count, withdraw_amount, attester_slashing_count, 
-		proposer_slashing_count, bls_change_count, eth_transaction_count, eth_block_number, eth_block_hash, 
-		eth_block_extra, eth_block_extra_text, sync_participation, fork_id, rank
+		attestation_count, deposit_count, exit_count, withdraw_count, withdraw_amount, attester_slashing_count,
+		proposer_slashing_count, bls_change_count, eth_transaction_count, eth_block_number, eth_block_hash,
+		eth_block_extra, eth_block_extra_text, sync_participation, fork_id, blob_count, eth_gas_used,
+		eth_gas_limit, eth_base_fee, eth_fee_recipient, block_size, recv_delay, rank
 	FROM slots
 	WHERE parent_root = $1
 	ORDER BY slot DESC
@@ -140,9 +146,10 @@ func GetSlotByRoot(root []byte) *dbtypes.Slot {
 	err := ReaderDb.Get(&block, `
 	SELECT
 		root, slot, parent_root, state_root, status, proposer, graffiti, graffiti_text,
-		attestation_count, deposit_count, exit_count, withdraw_count, withdraw_amount, attester_slashing_count, 
+		attestation_count, deposit_count, exit_count, withdraw_count, withdraw_amount, attester_slashing_count,
 		proposer_slashing_count, bls_change_count, eth_transaction_count, eth_block_number, eth_block_hash,
-		eth_block_extra, eth_block_extra_text, sync_participation, fork_id, rank
+		eth_block_extra, eth_block_extra_text, sync_participation, fork_id, blob_count, eth_gas_used,
+		eth_gas_limit, eth_base_fee, eth_fee_recipient, block_size, recv_delay, rank
 	FROM slots
 	WHERE root = $1
 	`, root)
@@ -166,9 +173,10 @@ func GetSlotsByRoots(roots [][]byte) map[phase0.Root]*dbtypes.Slot {
 	sql := fmt.Sprintf(
 		`SELECT
 			root, slot, parent_root, state_root, status, proposer, graffiti, graffiti_text,
-			attestation_count, deposit_count, exit_count, withdraw_count, withdraw_amount, attester_slashing_count, 
+			attestation_count, deposit_count, exit_count, withdraw_count, withdraw_amount, attester_slashing_count,
 			proposer_slashing_count, bls_change_count, eth_transaction_count, eth_block_number, eth_block_hash,
-			eth_block_extra, eth_block_extra_text, sync_participation, fork_id, rank
+			eth_block_extra, eth_block_extra_text, sync_participation, fork_id, blob_count, eth_gas_used,
+			eth_gas_limit, eth_base_fee, eth_fee_recipient, block_size, recv_delay, rank
 		FROM slots
 		WHERE root IN (%v)
 		ORDER BY slot DESC`,
@@ -204,14 +212,31 @@ func GetBlockHeadByRoot(root []byte) *dbtypes.BlockHead {
 	return &blockHead
 }
 
+func GetBlockHeadBySlot(slot uint64) *dbtypes.BlockHead {
+	blockHead := dbtypes.BlockHead{}
+	err := ReaderDb.Get(&blockHead, `
+	SELECT
+		root, slot, parent_root, fork_id
+	FROM slots
+	ORDER BY status ASC
+	WHERE status != 0 AND slot = $1
+	LIMIT 1
+	`, slot)
+	if err != nil {
+		return nil
+	}
+	return &blockHead
+}
+
 func GetSlotsByBlockHash(blockHash []byte) []*dbtypes.Slot {
 	slots := []*dbtypes.Slot{}
 	err := ReaderDb.Select(&slots, `
 	SELECT
 		slot, proposer, status, root, parent_root, state_root, graffiti, graffiti_text,
-		attestation_count, deposit_count, exit_count, withdraw_count, withdraw_amount, attester_slashing_count, 
-		proposer_slashing_count, bls_change_count, eth_transaction_count, eth_block_number, eth_block_hash, 
-		eth_block_extra, eth_block_extra_text, sync_participation, fork_id, rank
+		attestation_count, deposit_count, exit_count, withdraw_count, withdraw_amount, attester_slashing_count,
+		proposer_slashing_count, bls_change_count, eth_transaction_count, eth_block_number, eth_block_hash,
+		eth_block_extra, eth_block_extra_text, sync_participation, fork_id, blob_count, eth_gas_used,
+		eth_gas_limit, eth_base_fee, eth_fee_recipient, block_size, recv_delay, rank
 	FROM slots
 	WHERE eth_block_hash = $1
 	ORDER BY slot DESC
@@ -273,7 +298,8 @@ func GetFilteredSlots(filter *dbtypes.BlockFilter, firstSlot uint64, offset uint
 		"state_root", "root", "slot", "proposer", "status", "parent_root", "graffiti", "graffiti_text",
 		"attestation_count", "deposit_count", "exit_count", "withdraw_count", "withdraw_amount", "attester_slashing_count",
 		"proposer_slashing_count", "bls_change_count", "eth_transaction_count", "eth_block_number", "eth_block_hash",
-		"eth_block_extra", "eth_block_extra_text", "sync_participation", "fork_id", "rank",
+		"eth_block_extra", "eth_block_extra_text", "sync_participation", "fork_id", "blob_count", "eth_gas_used",
+		"eth_gas_limit", "eth_base_fee", "eth_fee_recipient", "block_size", "recv_delay", "rank",
 	}
 	for _, blockField := range blockFields {
 		fmt.Fprintf(&sql, ", slots.%v AS \"block.%v\"", blockField, blockField)
@@ -307,26 +333,47 @@ func GetFilteredSlots(filter *dbtypes.BlockFilter, firstSlot uint64, offset uint
 	}
 	if filter.Graffiti != "" {
 		argIdx++
-		fmt.Fprintf(&sql, EngineQuery(map[dbtypes.DBEngineType]string{
-			dbtypes.DBEnginePgsql:  ` AND slots.graffiti_text ilike $%v `,
-			dbtypes.DBEngineSqlite: ` AND slots.graffiti_text LIKE $%v `,
-		}), argIdx)
+		if filter.InvertGraffiti {
+			fmt.Fprintf(&sql, EngineQuery(map[dbtypes.DBEngineType]string{
+				dbtypes.DBEnginePgsql:  ` AND (slots.graffiti_text IS NULL OR slots.graffiti_text = '' OR slots.graffiti_text NOT ilike $%v) `,
+				dbtypes.DBEngineSqlite: ` AND (slots.graffiti_text IS NULL OR slots.graffiti_text = '' OR slots.graffiti_text NOT LIKE $%v) `,
+			}), argIdx)
+		} else {
+			fmt.Fprintf(&sql, EngineQuery(map[dbtypes.DBEngineType]string{
+				dbtypes.DBEnginePgsql:  ` AND slots.graffiti_text ilike $%v `,
+				dbtypes.DBEngineSqlite: ` AND slots.graffiti_text LIKE $%v `,
+			}), argIdx)
+		}
 		args = append(args, "%"+filter.Graffiti+"%")
 	}
 	if filter.ExtraData != "" {
 		argIdx++
-		fmt.Fprintf(&sql, EngineQuery(map[dbtypes.DBEngineType]string{
-			dbtypes.DBEnginePgsql:  ` AND slots.eth_block_extra_text ilike $%v `,
-			dbtypes.DBEngineSqlite: ` AND slots.eth_block_extra_text LIKE $%v `,
-		}), argIdx)
+		if filter.InvertExtraData {
+			fmt.Fprintf(&sql, EngineQuery(map[dbtypes.DBEngineType]string{
+				dbtypes.DBEnginePgsql:  ` AND (slots.eth_block_extra_text IS NULL OR slots.eth_block_extra_text = '' OR slots.eth_block_extra_text NOT ilike $%v) `,
+				dbtypes.DBEngineSqlite: ` AND (slots.eth_block_extra_text IS NULL OR slots.eth_block_extra_text = '' OR slots.eth_block_extra_text NOT LIKE $%v) `,
+			}), argIdx)
+		} else {
+			fmt.Fprintf(&sql, EngineQuery(map[dbtypes.DBEngineType]string{
+				dbtypes.DBEnginePgsql:  ` AND slots.eth_block_extra_text ilike $%v `,
+				dbtypes.DBEngineSqlite: ` AND slots.eth_block_extra_text LIKE $%v `,
+			}), argIdx)
+		}
 		args = append(args, "%"+filter.ExtraData+"%")
 	}
 	if filter.ProposerName != "" {
 		argIdx++
-		fmt.Fprintf(&sql, EngineQuery(map[dbtypes.DBEngineType]string{
-			dbtypes.DBEnginePgsql:  ` AND validator_names.name ilike $%v `,
-			dbtypes.DBEngineSqlite: ` AND validator_names.name LIKE $%v `,
-		}), argIdx)
+		if filter.InvertProposer {
+			fmt.Fprintf(&sql, EngineQuery(map[dbtypes.DBEngineType]string{
+				dbtypes.DBEnginePgsql:  ` AND (validator_names.name IS NULL OR validator_names.name = '' OR validator_names.name NOT ilike $%v) `,
+				dbtypes.DBEngineSqlite: ` AND (validator_names.name IS NULL OR validator_names.name = '' OR validator_names.name NOT LIKE $%v) `,
+			}), argIdx)
+		} else {
+			fmt.Fprintf(&sql, EngineQuery(map[dbtypes.DBEngineType]string{
+				dbtypes.DBEnginePgsql:  ` AND validator_names.name ilike $%v `,
+				dbtypes.DBEngineSqlite: ` AND validator_names.name LIKE $%v `,
+			}), argIdx)
+		}
 		args = append(args, "%"+filter.ProposerName+"%")
 	}
 
@@ -387,7 +434,6 @@ func GetHighestRootBeforeSlot(slot uint64, withOrphaned bool) []byte {
 	SELECT root FROM slots WHERE slot < $1 `+statusFilter+` AND status != 0 ORDER BY slot DESC LIMIT 1
 	`, slot)
 	if err != nil {
-		logger.Errorf("Error while fetching highest root before %v: %v", slot, err)
 		return nil
 	}
 	return result

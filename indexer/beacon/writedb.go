@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethpandaops/dora/clients/consensus"
 	"github.com/ethpandaops/dora/db"
 	"github.com/ethpandaops/dora/dbtypes"
 	"github.com/ethpandaops/dora/utils"
 	"github.com/jmoiron/sqlx"
-	"github.com/juliangruber/go-intersect"
 )
 
 type dbWriter struct {
@@ -57,7 +58,7 @@ func (dbw *dbWriter) persistMissedSlots(tx *sqlx.Tx, epoch phase0.Epoch, blocks 
 	return nil
 }
 
-func (dbw *dbWriter) persistBlockData(tx *sqlx.Tx, block *Block, epochStats *EpochStats, depositIndex *uint64, orphaned bool, overrideForkId *ForkKey) (*dbtypes.Slot, error) {
+func (dbw *dbWriter) persistBlockData(tx *sqlx.Tx, block *Block, epochStats *EpochStats, depositIndex *uint64, orphaned bool, overrideForkId *ForkKey, sim *stateSimulator) (*dbtypes.Slot, error) {
 	// insert block
 	dbBlock := dbw.buildDbBlock(block, epochStats, overrideForkId)
 	if dbBlock == nil {
@@ -77,7 +78,7 @@ func (dbw *dbWriter) persistBlockData(tx *sqlx.Tx, block *Block, epochStats *Epo
 
 	// insert child objects
 	if block.Slot > 0 {
-		err = dbw.persistBlockChildObjects(tx, block, depositIndex, orphaned, overrideForkId)
+		err = dbw.persistBlockChildObjects(tx, block, depositIndex, orphaned, overrideForkId, sim)
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +87,7 @@ func (dbw *dbWriter) persistBlockData(tx *sqlx.Tx, block *Block, epochStats *Epo
 	return dbBlock, nil
 }
 
-func (dbw *dbWriter) persistBlockChildObjects(tx *sqlx.Tx, block *Block, depositIndex *uint64, orphaned bool, overrideForkId *ForkKey) error {
+func (dbw *dbWriter) persistBlockChildObjects(tx *sqlx.Tx, block *Block, depositIndex *uint64, orphaned bool, overrideForkId *ForkKey, sim *stateSimulator) error {
 	var err error
 
 	// insert deposits (pre/early electra)
@@ -114,13 +115,13 @@ func (dbw *dbWriter) persistBlockChildObjects(tx *sqlx.Tx, block *Block, deposit
 	}
 
 	// insert consolidation requests
-	err = dbw.persistBlockConsolidationRequests(tx, block, orphaned, overrideForkId)
+	err = dbw.persistBlockConsolidationRequests(tx, block, orphaned, overrideForkId, sim)
 	if err != nil {
 		return err
 	}
 
 	// insert withdrawal requests
-	err = dbw.persistBlockWithdrawalRequests(tx, block, orphaned, overrideForkId)
+	err = dbw.persistBlockWithdrawalRequests(tx, block, orphaned, overrideForkId, sim)
 	if err != nil {
 		return err
 	}
@@ -128,20 +129,23 @@ func (dbw *dbWriter) persistBlockChildObjects(tx *sqlx.Tx, block *Block, deposit
 	return nil
 }
 
-func (dbw *dbWriter) persistEpochData(tx *sqlx.Tx, epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes) error {
+func (dbw *dbWriter) persistEpochData(tx *sqlx.Tx, epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes, sim *stateSimulator) error {
 	if tx == nil {
 		return db.RunDBTransaction(func(tx *sqlx.Tx) error {
-			return dbw.persistEpochData(tx, epoch, blocks, epochStats, epochVotes)
+			return dbw.persistEpochData(tx, epoch, blocks, epochStats, epochVotes, sim)
 		})
 	}
 	canonicalForkId := ForkKey(0)
 
+	if sim == nil {
+		sim = newStateSimulator(dbw.indexer, epochStats)
+	}
+
 	dbEpoch := dbw.buildDbEpoch(epoch, blocks, epochStats, epochVotes, func(block *Block, depositIndex *uint64) {
-		_, err := dbw.persistBlockData(tx, block, epochStats, depositIndex, false, &canonicalForkId)
+		_, err := dbw.persistBlockData(tx, block, epochStats, depositIndex, false, &canonicalForkId, sim)
 		if err != nil {
 			dbw.indexer.logger.Errorf("error persisting slot: %v", err)
 		}
-
 	})
 
 	// insert missing slots
@@ -195,10 +199,6 @@ func (dbw *dbWriter) persistSyncAssignments(tx *sqlx.Tx, epoch phase0.Epoch, epo
 }
 
 func (dbw *dbWriter) buildDbBlock(block *Block, epochStats *EpochStats, overrideForkId *ForkKey) *dbtypes.Slot {
-	//if block.Rank > 0 {
-	//parallelBlock, _ := dbw.indexer.executionPool.GetReadyEndpoint(execution.AnyClient).GetRPCClient().DecodeBlockRaw(nil, block.parallelBlock)
-	//return dbw.buildDbParallelBlock(block, parallelBlock, block.Rank, epochStats, overrideForkId)
-	//}
 	if block.Slot == 0 {
 		// genesis block
 		header := block.GetHeader()
@@ -248,6 +248,14 @@ func (dbw *dbWriter) buildDbBlock(block *Block, epochStats *EpochStats, override
 	executionExtraData, _ := getBlockExecutionExtraData(blockBody)
 	executionTransactions, _ := blockBody.ExecutionTransactions()
 	executionWithdrawals, _ := blockBody.Withdrawals()
+	blobKzgCommitments, _ := blockBody.BlobKZGCommitments()
+
+	var depositRequests []*electra.DepositRequest
+
+	executionRequests, _ := blockBody.ExecutionRequests()
+	if executionRequests != nil {
+		depositRequests = executionRequests.Deposits
+	}
 	var rank, _ = blockBody.Rank()
 
 	dbBlock := dbtypes.Slot{
@@ -261,11 +269,20 @@ func (dbw *dbWriter) buildDbBlock(block *Block, epochStats *EpochStats, override
 		Graffiti:              graffiti[:],
 		GraffitiText:          utils.GraffitiToString(graffiti[:]),
 		AttestationCount:      uint64(len(attestations)),
-		DepositCount:          uint64(len(deposits)),
+		DepositCount:          uint64(len(deposits) + len(depositRequests)),
 		ExitCount:             uint64(len(voluntaryExits)),
 		AttesterSlashingCount: uint64(len(attesterSlashings)),
 		ProposerSlashingCount: uint64(len(proposerSlashings)),
 		BLSChangeCount:        uint64(len(blsToExecChanges)),
+		BlobCount:             uint64(len(blobKzgCommitments)),
+		RecvDelay:             block.recvDelay,
+	}
+
+	blockSize, err := getBlockSize(block.dynSsz, blockBody)
+	if err != nil {
+		dbw.indexer.logger.Warnf("error while building db blocks: failed to get block size: %v", err)
+	} else {
+		dbBlock.BlockSize = uint64(blockSize)
 	}
 
 	if overrideForkId != nil {
@@ -297,8 +314,55 @@ func (dbw *dbWriter) buildDbBlock(block *Block, epochStats *EpochStats, override
 		dbBlock.EthBlockExtra = executionExtraData
 		dbBlock.EthBlockExtraText = utils.GraffitiToString(executionExtraData[:])
 		dbBlock.WithdrawCount = uint64(len(executionWithdrawals))
+
+		withdrawalAmountOverflow := false
 		for _, withdrawal := range executionWithdrawals {
 			dbBlock.WithdrawAmount += uint64(withdrawal.Amount)
+			if dbBlock.WithdrawAmount < uint64(withdrawal.Amount) {
+				withdrawalAmountOverflow = true
+			}
+		}
+		if withdrawalAmountOverflow || dbBlock.WithdrawAmount >= math.MaxInt64 {
+			dbBlock.WithdrawAmount = math.MaxInt64
+		}
+
+		switch blockBody.Version {
+		case spec.DataVersionBellatrix:
+			if blockBody.Bellatrix != nil && blockBody.Bellatrix.Message != nil &&
+				blockBody.Bellatrix.Message.Body != nil && blockBody.Bellatrix.Message.Body.ExecutionPayload != nil {
+				payload := blockBody.Bellatrix.Message.Body.ExecutionPayload
+				dbBlock.EthGasUsed = payload.GasUsed
+				dbBlock.EthGasLimit = payload.GasLimit
+				dbBlock.EthBaseFee = utils.GetBaseFeeAsUint64(payload.BaseFeePerGas)
+				dbBlock.EthFeeRecipient = payload.FeeRecipient[:]
+			}
+		case spec.DataVersionCapella:
+			if blockBody.Capella != nil && blockBody.Capella.Message != nil &&
+				blockBody.Capella.Message.Body != nil && blockBody.Capella.Message.Body.ExecutionPayload != nil {
+				payload := blockBody.Capella.Message.Body.ExecutionPayload
+				dbBlock.EthGasUsed = payload.GasUsed
+				dbBlock.EthGasLimit = payload.GasLimit
+				dbBlock.EthBaseFee = utils.GetBaseFeeAsUint64(payload.BaseFeePerGas)
+				dbBlock.EthFeeRecipient = payload.FeeRecipient[:]
+			}
+		case spec.DataVersionDeneb:
+			if blockBody.Deneb != nil && blockBody.Deneb.Message != nil &&
+				blockBody.Deneb.Message.Body != nil && blockBody.Deneb.Message.Body.ExecutionPayload != nil {
+				payload := blockBody.Deneb.Message.Body.ExecutionPayload
+				dbBlock.EthGasUsed = payload.GasUsed
+				dbBlock.EthGasLimit = payload.GasLimit
+				dbBlock.EthBaseFee = utils.GetBaseFeeAsUint64(payload.BaseFeePerGas)
+				dbBlock.EthFeeRecipient = payload.FeeRecipient[:]
+			}
+		case spec.DataVersionElectra:
+			if blockBody.Electra != nil && blockBody.Electra.Message != nil &&
+				blockBody.Electra.Message.Body != nil && blockBody.Electra.Message.Body.ExecutionPayload != nil {
+				payload := blockBody.Electra.Message.Body.ExecutionPayload
+				dbBlock.EthGasUsed = payload.GasUsed
+				dbBlock.EthGasLimit = payload.GasLimit
+				dbBlock.EthBaseFee = utils.GetBaseFeeAsUint64(payload.BaseFeePerGas)
+				dbBlock.EthFeeRecipient = payload.FeeRecipient[:]
+			}
 		}
 		dbBlock.Rank = rank
 	}
@@ -375,9 +439,17 @@ func (dbw *dbWriter) buildDbEpoch(epoch phase0.Epoch, blocks []*Block, epochStat
 			syncAggregate, _ := blockBody.SyncAggregate()
 			executionTransactions, _ := blockBody.ExecutionTransactions()
 			executionWithdrawals, _ := blockBody.Withdrawals()
+			blobKzgCommitments, _ := blockBody.BlobKZGCommitments()
+
+			var depositRequests []*electra.DepositRequest
+
+			executionRequests, _ := blockBody.ExecutionRequests()
+			if executionRequests != nil {
+				depositRequests = executionRequests.Deposits
+			}
 
 			dbEpoch.AttestationCount += uint64(len(attestations))
-			dbEpoch.DepositCount += uint64(len(deposits))
+			dbEpoch.DepositCount += uint64(len(deposits) + len(depositRequests))
 			dbEpoch.ExitCount += uint64(len(voluntaryExits))
 			dbEpoch.AttesterSlashingCount += uint64(len(attesterSlashings))
 			dbEpoch.ProposerSlashingCount += uint64(len(proposerSlashings))
@@ -396,9 +468,50 @@ func (dbw *dbWriter) buildDbEpoch(epoch phase0.Epoch, blocks []*Block, epochStat
 			}
 
 			dbEpoch.EthTransactionCount += uint64(len(executionTransactions))
+			dbEpoch.BlobCount += uint64(len(blobKzgCommitments))
 			dbEpoch.WithdrawCount += uint64(len(executionWithdrawals))
+
+			withdrawalAmountOverflow := false
 			for _, withdrawal := range executionWithdrawals {
 				dbEpoch.WithdrawAmount += uint64(withdrawal.Amount)
+				if dbEpoch.WithdrawAmount < uint64(withdrawal.Amount) {
+					withdrawalAmountOverflow = true
+				}
+			}
+			if withdrawalAmountOverflow || dbEpoch.WithdrawAmount >= math.MaxInt64 {
+				dbEpoch.WithdrawAmount = math.MaxInt64
+			}
+
+			// Aggregate gas used and gas limit
+			switch blockBody.Version {
+			case spec.DataVersionBellatrix:
+				if blockBody.Bellatrix != nil && blockBody.Bellatrix.Message != nil &&
+					blockBody.Bellatrix.Message.Body != nil && blockBody.Bellatrix.Message.Body.ExecutionPayload != nil {
+					payload := blockBody.Bellatrix.Message.Body.ExecutionPayload
+					dbEpoch.EthGasUsed += payload.GasUsed
+					dbEpoch.EthGasLimit += payload.GasLimit
+				}
+			case spec.DataVersionCapella:
+				if blockBody.Capella != nil && blockBody.Capella.Message != nil &&
+					blockBody.Capella.Message.Body != nil && blockBody.Capella.Message.Body.ExecutionPayload != nil {
+					payload := blockBody.Capella.Message.Body.ExecutionPayload
+					dbEpoch.EthGasUsed += payload.GasUsed
+					dbEpoch.EthGasLimit += payload.GasLimit
+				}
+			case spec.DataVersionDeneb:
+				if blockBody.Deneb != nil && blockBody.Deneb.Message != nil &&
+					blockBody.Deneb.Message.Body != nil && blockBody.Deneb.Message.Body.ExecutionPayload != nil {
+					payload := blockBody.Deneb.Message.Body.ExecutionPayload
+					dbEpoch.EthGasUsed += payload.GasUsed
+					dbEpoch.EthGasLimit += payload.GasLimit
+				}
+			case spec.DataVersionElectra:
+				if blockBody.Electra != nil && blockBody.Electra.Message != nil &&
+					blockBody.Electra.Message.Body != nil && blockBody.Electra.Message.Body.ExecutionPayload != nil {
+					payload := blockBody.Electra.Message.Body.ExecutionPayload
+					dbEpoch.EthGasUsed += payload.GasUsed
+					dbEpoch.EthGasLimit += payload.GasLimit
+				}
 			}
 		}
 	}
@@ -492,10 +605,12 @@ func (dbw *dbWriter) buildDbDepositRequests(block *Block, orphaned bool, overrid
 		return nil
 	}
 
-	deposits, err := getBlockExecutionDepositRequests(blockBody)
+	requests, err := blockBody.ExecutionRequests()
 	if err != nil {
 		return nil
 	}
+
+	deposits := requests.Deposits
 
 	dbDeposits := make([]*dbtypes.Deposit, len(deposits))
 	for idx, deposit := range deposits {
@@ -633,10 +748,7 @@ func (dbw *dbWriter) buildDbSlashings(block *Block, orphaned bool, overrideForkI
 			continue
 		}
 
-		inter := intersect.Simple(att1AttestingIndices, att2AttestingIndices)
-		for _, j := range inter {
-			valIdx := j.(uint64)
-
+		for _, valIdx := range utils.FindMatchingIndices(att1AttestingIndices, att2AttestingIndices) {
 			dbSlashing := &dbtypes.Slashing{
 				SlotNumber:     uint64(block.Slot),
 				SlotIndex:      uint64(slashingIndex),
@@ -655,9 +767,9 @@ func (dbw *dbWriter) buildDbSlashings(block *Block, orphaned bool, overrideForkI
 	return dbSlashings
 }
 
-func (dbw *dbWriter) persistBlockConsolidationRequests(tx *sqlx.Tx, block *Block, orphaned bool, overrideForkId *ForkKey) error {
+func (dbw *dbWriter) persistBlockConsolidationRequests(tx *sqlx.Tx, block *Block, orphaned bool, overrideForkId *ForkKey, sim *stateSimulator) error {
 	// insert consolidation requests
-	dbConsolidations := dbw.buildDbConsolidationRequests(block, orphaned, overrideForkId)
+	dbConsolidations := dbw.buildDbConsolidationRequests(block, orphaned, overrideForkId, sim)
 	if orphaned {
 		for idx := range dbConsolidations {
 			dbConsolidations[idx].Orphaned = true
@@ -674,26 +786,37 @@ func (dbw *dbWriter) persistBlockConsolidationRequests(tx *sqlx.Tx, block *Block
 	return nil
 }
 
-func (dbw *dbWriter) buildDbConsolidationRequests(block *Block, orphaned bool, overrideForkId *ForkKey) []*dbtypes.ConsolidationRequest {
+func (dbw *dbWriter) buildDbConsolidationRequests(block *Block, orphaned bool, overrideForkId *ForkKey, sim *stateSimulator) []*dbtypes.ConsolidationRequest {
 	blockBody := block.GetBlock()
 	if blockBody == nil {
 		return nil
 	}
 
-	consolidations, err := getBlockExecutionConsolidationRequests(blockBody)
+	requests, err := blockBody.ExecutionRequests()
 	if err != nil {
 		return nil
 	}
+
+	if sim == nil {
+		chainState := dbw.indexer.consensusPool.GetChainState()
+		epochStats := dbw.indexer.epochCache.getEpochStatsByEpochAndRoot(chainState.EpochOfSlot(block.Slot), block.Root)
+		if epochStats != nil {
+			sim = newStateSimulator(dbw.indexer, epochStats)
+		}
+	}
+
+	consolidations := requests.Consolidations
 
 	if len(consolidations) == 0 {
 		return []*dbtypes.ConsolidationRequest{}
 	}
 
-	validatorSet := dbw.indexer.GetCanonicalValidatorSet(nil)
-	validatorSetMap := make(map[phase0.BLSPubKey]uint64, len(validatorSet))
-	for idx, validator := range validatorSet {
-		validatorSetMap[validator.Validator.PublicKey] = uint64(idx)
+	var blockResults [][]uint8
+	if sim != nil {
+		blockResults = sim.replayBlockResults(block)
 	}
+
+	blockNumber, _ := blockBody.ExecutionBlockNumber()
 
 	dbConsolidations := make([]*dbtypes.ConsolidationRequest, len(consolidations))
 	for idx, consolidation := range consolidations {
@@ -706,15 +829,22 @@ func (dbw *dbWriter) buildDbConsolidationRequests(block *Block, orphaned bool, o
 			SourceAddress: consolidation.SourceAddress[:],
 			SourcePubkey:  consolidation.SourcePubkey[:],
 			TargetPubkey:  consolidation.TargetPubkey[:],
+			BlockNumber:   blockNumber,
 		}
 		if overrideForkId != nil {
 			dbConsolidation.ForkId = uint64(*overrideForkId)
 		}
-		if sourceIdx, found := validatorSetMap[consolidation.SourcePubkey]; found {
+		if sourceIdx, found := dbw.indexer.pubkeyCache.Get(consolidation.SourcePubkey); found {
+			sourceIdx := uint64(sourceIdx)
 			dbConsolidation.SourceIndex = &sourceIdx
 		}
-		if targetIdx, found := validatorSetMap[consolidation.TargetPubkey]; found {
+		if targetIdx, found := dbw.indexer.pubkeyCache.Get(consolidation.TargetPubkey); found {
+			targetIdx := uint64(targetIdx)
 			dbConsolidation.TargetIndex = &targetIdx
+		}
+
+		if blockResults != nil {
+			dbConsolidation.Result = blockResults[1][idx]
 		}
 
 		dbConsolidations[idx] = dbConsolidation
@@ -723,9 +853,9 @@ func (dbw *dbWriter) buildDbConsolidationRequests(block *Block, orphaned bool, o
 	return dbConsolidations
 }
 
-func (dbw *dbWriter) persistBlockWithdrawalRequests(tx *sqlx.Tx, block *Block, orphaned bool, overrideForkId *ForkKey) error {
+func (dbw *dbWriter) persistBlockWithdrawalRequests(tx *sqlx.Tx, block *Block, orphaned bool, overrideForkId *ForkKey, sim *stateSimulator) error {
 	// insert deposits
-	dbWithdrawalRequests := dbw.buildDbWithdrawalRequests(block, orphaned, overrideForkId)
+	dbWithdrawalRequests := dbw.buildDbWithdrawalRequests(block, orphaned, overrideForkId, sim)
 
 	if len(dbWithdrawalRequests) > 0 {
 		err := db.InsertWithdrawalRequests(dbWithdrawalRequests, tx)
@@ -737,26 +867,37 @@ func (dbw *dbWriter) persistBlockWithdrawalRequests(tx *sqlx.Tx, block *Block, o
 	return nil
 }
 
-func (dbw *dbWriter) buildDbWithdrawalRequests(block *Block, orphaned bool, overrideForkId *ForkKey) []*dbtypes.WithdrawalRequest {
+func (dbw *dbWriter) buildDbWithdrawalRequests(block *Block, orphaned bool, overrideForkId *ForkKey, sim *stateSimulator) []*dbtypes.WithdrawalRequest {
 	blockBody := block.GetBlock()
 	if blockBody == nil {
 		return nil
 	}
 
-	withdrawalRequests, err := getBlockExecutionWithdrawalRequests(blockBody)
+	requests, err := blockBody.ExecutionRequests()
 	if err != nil {
 		return nil
 	}
+
+	if sim == nil {
+		chainState := dbw.indexer.consensusPool.GetChainState()
+		epochStats := dbw.indexer.epochCache.getEpochStatsByEpochAndRoot(chainState.EpochOfSlot(block.Slot), block.Root)
+		if epochStats != nil {
+			sim = newStateSimulator(dbw.indexer, epochStats)
+		}
+	}
+
+	withdrawalRequests := requests.Withdrawals
 
 	if len(withdrawalRequests) == 0 {
 		return []*dbtypes.WithdrawalRequest{}
 	}
 
-	validatorSet := dbw.indexer.GetCanonicalValidatorSet(nil)
-	validatorSetMap := make(map[phase0.BLSPubKey]uint64, len(validatorSet))
-	for idx, validator := range validatorSet {
-		validatorSetMap[validator.Validator.PublicKey] = uint64(idx)
+	var blockResults [][]uint8
+	if sim != nil {
+		blockResults = sim.replayBlockResults(block)
 	}
+
+	blockNumber, _ := blockBody.ExecutionBlockNumber()
 
 	dbWithdrawalRequests := make([]*dbtypes.WithdrawalRequest, len(withdrawalRequests))
 	for idx, withdrawalRequest := range withdrawalRequests {
@@ -768,13 +909,19 @@ func (dbw *dbWriter) buildDbWithdrawalRequests(block *Block, orphaned bool, over
 			ForkId:          uint64(block.forkId),
 			SourceAddress:   withdrawalRequest.SourceAddress[:],
 			ValidatorPubkey: withdrawalRequest.ValidatorPubkey[:],
-			Amount:          uint64(withdrawalRequest.Amount),
+			Amount:          db.ConvertUint64ToInt64(uint64(withdrawalRequest.Amount)),
+			BlockNumber:     blockNumber,
 		}
 		if overrideForkId != nil {
 			dbWithdrawalRequest.ForkId = uint64(*overrideForkId)
 		}
-		if validatorIdx, found := validatorSetMap[withdrawalRequest.ValidatorPubkey]; found {
+		if validatorIdx, found := dbw.indexer.pubkeyCache.Get(withdrawalRequest.ValidatorPubkey); found {
+			validatorIdx := uint64(validatorIdx)
 			dbWithdrawalRequest.ValidatorIndex = &validatorIdx
+		}
+
+		if blockResults != nil {
+			dbWithdrawalRequest.Result = blockResults[0][idx]
 		}
 
 		dbWithdrawalRequests[idx] = dbWithdrawalRequest

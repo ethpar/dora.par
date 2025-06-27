@@ -46,12 +46,19 @@ type Slot struct {
 	ProposerSlashingCount uint64     `db:"proposer_slashing_count"`
 	BLSChangeCount        uint64     `db:"bls_change_count"`
 	EthTransactionCount   uint64     `db:"eth_transaction_count"`
+	BlobCount             uint64     `db:"blob_count"`
+	EthGasUsed            uint64     `db:"eth_gas_used"`
+	EthGasLimit           uint64     `db:"eth_gas_limit"`
+	EthBaseFee            uint64     `db:"eth_base_fee"`
+	EthFeeRecipient       []byte     `db:"eth_fee_recipient"`
 	EthBlockNumber        *uint64    `db:"eth_block_number"`
 	EthBlockHash          []byte     `db:"eth_block_hash"`
 	EthBlockExtra         []byte     `db:"eth_block_extra"`
 	EthBlockExtraText     string     `db:"eth_block_extra_text"`
 	SyncParticipation     float32    `db:"sync_participation"`
 	ForkId                uint64     `db:"fork_id"`
+	BlockSize             uint64     `db:"block_size"`
+	RecvDelay             int32      `db:"recv_delay"`
 	Rank                  uint64     `db:"rank"`
 	ExecutionBlocks       []*UnfinalizedExecutionBlock
 	ExecutionBlocksCount  int
@@ -77,6 +84,9 @@ type Epoch struct {
 	ProposerSlashingCount uint64  `db:"proposer_slashing_count"`
 	BLSChangeCount        uint64  `db:"bls_change_count"`
 	EthTransactionCount   uint64  `db:"eth_transaction_count"`
+	BlobCount             uint64  `db:"blob_count"`
+	EthGasUsed            uint64  `db:"eth_gas_used"`
+	EthGasLimit           uint64  `db:"eth_gas_limit"`
 	SyncParticipation     float32 `db:"sync_participation"`
 }
 
@@ -116,6 +126,7 @@ type UnfinalizedBlock struct {
 	BlockSSZ  []byte                 `db:"block_ssz"`
 	Status    UnfinalizedBlockStatus `db:"status"`
 	ForkId    uint64                 `db:"fork_id"`
+	RecvDelay int32                  `db:"recv_delay"`
 	Rank      uint64                 `db:"rank"`
 }
 
@@ -189,6 +200,9 @@ type UnfinalizedEpoch struct {
 	ProposerSlashingCount uint64  `db:"proposer_slashing_count"`
 	BLSChangeCount        uint64  `db:"bls_change_count"`
 	EthTransactionCount   uint64  `db:"eth_transaction_count"`
+	BlobCount             uint64  `db:"blob_count"`
+	EthGasUsed            uint64  `db:"eth_gas_used"`
+	EthGasLimit           uint64  `db:"eth_gas_limit"`
 	SyncParticipation     float32 `db:"sync_participation"`
 }
 
@@ -260,7 +274,7 @@ type DepositTx struct {
 	WithdrawalCredentials []byte `db:"withdrawalcredentials"`
 	Amount                uint64 `db:"amount"`
 	Signature             []byte `db:"signature"`
-	ValidSignature        bool   `db:"valid_signature"`
+	ValidSignature        uint8  `db:"valid_signature"`
 	Orphaned              bool   `db:"orphaned"`
 	TxHash                []byte `db:"tx_hash"`
 	TxSender              []byte `db:"tx_sender"`
@@ -278,6 +292,17 @@ type Deposit struct {
 	WithdrawalCredentials []byte  `db:"withdrawalcredentials"`
 	Amount                uint64  `db:"amount"`
 	ForkId                uint64  `db:"fork_id"`
+}
+
+type DepositWithTx struct {
+	Deposit
+	BlockNumber    *uint64 `db:"block_number"`
+	BlockTime      *uint64 `db:"block_time"`
+	BlockRoot      []byte  `db:"block_root"`
+	ValidSignature *uint8  `db:"valid_signature"`
+	TxHash         []byte  `db:"tx_hash"`
+	TxSender       []byte  `db:"tx_sender"`
+	TxTarget       []byte  `db:"tx_target"`
 }
 
 type VoluntaryExit struct {
@@ -308,6 +333,29 @@ type Slashing struct {
 	ForkId         uint64         `db:"fork_id"`
 }
 
+const (
+	ConsolidationRequestResultUnknown uint8 = 0
+	ConsolidationRequestResultSuccess uint8 = 1
+
+	// global errors
+	ConsolidationRequestResultTotalBalanceTooLow uint8 = 10
+	ConsolidationRequestResultQueueFull          uint8 = 11
+
+	// source validator errors
+	ConsolidationRequestResultSrcNotFound             uint8 = 20
+	ConsolidationRequestResultSrcInvalidCredentials   uint8 = 21
+	ConsolidationRequestResultSrcInvalidSender        uint8 = 22
+	ConsolidationRequestResultSrcNotActive            uint8 = 23
+	ConsolidationRequestResultSrcNotOldEnough         uint8 = 24
+	ConsolidationRequestResultSrcHasPendingWithdrawal uint8 = 25
+
+	// target validator errors
+	ConsolidationRequestResultTgtNotFound           uint8 = 30
+	ConsolidationRequestResultTgtInvalidCredentials uint8 = 31
+	ConsolidationRequestResultTgtNotCompounding     uint8 = 33
+	ConsolidationRequestResultTgtNotActive          uint8 = 34
+)
+
 type ConsolidationRequest struct {
 	SlotNumber    uint64  `db:"slot_number"`
 	SlotRoot      []byte  `db:"slot_root"`
@@ -320,7 +368,44 @@ type ConsolidationRequest struct {
 	TargetIndex   *uint64 `db:"target_index"`
 	TargetPubkey  []byte  `db:"target_pubkey"`
 	TxHash        []byte  `db:"tx_hash"`
+	BlockNumber   uint64  `db:"block_number"`
+	Result        uint8   `db:"result"`
 }
+
+type ConsolidationRequestTx struct {
+	BlockNumber   uint64  `db:"block_number"`
+	BlockIndex    uint64  `db:"block_index"`
+	BlockTime     uint64  `db:"block_time"`
+	BlockRoot     []byte  `db:"block_root"`
+	ForkId        uint64  `db:"fork_id"`
+	SourceAddress []byte  `db:"source_address"`
+	SourcePubkey  []byte  `db:"source_pubkey"`
+	SourceIndex   *uint64 `db:"source_index"`
+	TargetPubkey  []byte  `db:"target_pubkey"`
+	TargetIndex   *uint64 `db:"target_index"`
+	TxHash        []byte  `db:"tx_hash"`
+	TxSender      []byte  `db:"tx_sender"`
+	TxTarget      []byte  `db:"tx_target"`
+	DequeueBlock  uint64  `db:"dequeue_block"`
+}
+
+const (
+	WithdrawalRequestResultUnknown uint8 = 0
+	WithdrawalRequestResultSuccess uint8 = 1
+
+	// global errors
+	WithdrawalRequestResultQueueFull uint8 = 10
+
+	// validator errors
+	WithdrawalRequestResultValidatorNotFound             uint8 = 20
+	WithdrawalRequestResultValidatorInvalidCredentials   uint8 = 21
+	WithdrawalRequestResultValidatorInvalidSender        uint8 = 22
+	WithdrawalRequestResultValidatorNotActive            uint8 = 23
+	WithdrawalRequestResultValidatorNotOldEnough         uint8 = 24
+	WithdrawalRequestResultValidatorNotCompounding       uint8 = 25
+	WithdrawalRequestResultValidatorHasPendingWithdrawal uint8 = 26
+	WithdrawalRequestResultValidatorBalanceTooLow        uint8 = 27
+)
 
 type WithdrawalRequest struct {
 	SlotNumber      uint64  `db:"slot_number"`
@@ -331,6 +416,36 @@ type WithdrawalRequest struct {
 	SourceAddress   []byte  `db:"source_address"`
 	ValidatorIndex  *uint64 `db:"validator_index"`
 	ValidatorPubkey []byte  `db:"validator_pubkey"`
-	Amount          uint64  `db:"amount"`
+	Amount          int64   `db:"amount"`
 	TxHash          []byte  `db:"tx_hash"`
+	BlockNumber     uint64  `db:"block_number"`
+	Result          uint8   `db:"result"`
+}
+
+type WithdrawalRequestTx struct {
+	BlockNumber     uint64  `db:"block_number"`
+	BlockIndex      uint64  `db:"block_index"`
+	BlockTime       uint64  `db:"block_time"`
+	BlockRoot       []byte  `db:"block_root"`
+	ForkId          uint64  `db:"fork_id"`
+	SourceAddress   []byte  `db:"source_address"`
+	ValidatorPubkey []byte  `db:"validator_pubkey"`
+	ValidatorIndex  *uint64 `db:"validator_index"`
+	Amount          int64   `db:"amount"`
+	TxHash          []byte  `db:"tx_hash"`
+	TxSender        []byte  `db:"tx_sender"`
+	TxTarget        []byte  `db:"tx_target"`
+	DequeueBlock    uint64  `db:"dequeue_block"`
+}
+
+type Validator struct {
+	ValidatorIndex             uint64 `db:"validator_index"`
+	Pubkey                     []byte `db:"pubkey"`
+	WithdrawalCredentials      []byte `db:"withdrawal_credentials"`
+	EffectiveBalance           uint64 `db:"effective_balance"`
+	Slashed                    bool   `db:"slashed"`
+	ActivationEligibilityEpoch int64  `db:"activation_eligibility_epoch"`
+	ActivationEpoch            int64  `db:"activation_epoch"`
+	ExitEpoch                  int64  `db:"exit_epoch"`
+	WithdrawableEpoch          int64  `db:"withdrawable_epoch"`
 }

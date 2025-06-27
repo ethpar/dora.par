@@ -32,7 +32,7 @@ func FormatETHFromGweiShort(gwei uint64) string {
 	return fmt.Sprintf("%.4f", float64(gwei)/math.Pow10(9))
 }
 
-func FormatFullETHFromGwei(gwei uint64) string {
+func FormatFullEthFromGwei(gwei uint64) string {
 	return fmt.Sprintf("%v ETP", uint64(float64(gwei)/math.Pow10(9)))
 }
 
@@ -48,7 +48,22 @@ func FormatFloat(num float64, precision int) string {
 	return string(r)
 }
 
-func FormatAddCommasFormated(num float64, precision uint) template.HTML {
+func formatPercentageAlert(num float64, precision int, warnBelow float64, errBelow float64) template.HTML {
+	p := message.NewPrinter(language.English)
+	f := fmt.Sprintf("%%.%vf", precision)
+	s := strings.TrimRight(strings.TrimRight(p.Sprintf(f, num), "0"), ".")
+	r := []rune(p.Sprintf(s, num))
+	switch {
+	case num < errBelow:
+		return template.HTML(fmt.Sprintf("<span class=\"text-danger\">%s%%</span>", string(r)))
+	case num < warnBelow:
+		return template.HTML(fmt.Sprintf("<span class=\"text-warning\">%s%%</span>", string(r)))
+	default:
+		return template.HTML(fmt.Sprintf("%s%%", string(r)))
+	}
+}
+
+func FormatAddCommasFormatted(num float64, precision uint) template.HTML {
 	p := message.NewPrinter(language.English)
 	s := p.Sprintf(fmt.Sprintf("%%.%vf", precision), num)
 	if precision > 0 {
@@ -57,8 +72,8 @@ func FormatAddCommasFormated(num float64, precision uint) template.HTML {
 	return template.HTML(strings.ReplaceAll(string([]rune(p.Sprintf(s, num))), ",", `<span class="thousands-separator"></span>`))
 }
 
-func FormatBigNumberAddCommasFormated(val hexutil.Big, precision uint) template.HTML {
-	return FormatAddCommasFormated(float64(val.ToInt().Int64()), 0)
+func FormatBigNumberAddCommasFormatted(val hexutil.Big, precision uint) template.HTML {
+	return FormatAddCommasFormatted(float64(val.ToInt().Int64()), 0)
 }
 
 func FormatAddCommas(n uint64) template.HTML {
@@ -330,23 +345,33 @@ func FormatEthAddress(address []byte) template.HTML {
 }
 
 func FormatValidator(index uint64, name string) template.HTML {
-	return formatValidator(index, name, "fa-male mr-2")
+	return formatValidator(index, name, "fa-male mr-2", false)
+}
+
+func FormatValidatorWithIndex(index uint64, name string) template.HTML {
+	return formatValidator(index, name, "fa-male mr-2", true)
 }
 
 func FormatSlashedValidator(index uint64, name string) template.HTML {
-	return formatValidator(index, name, "fa-user-slash mr-2 text-danger")
+	return formatValidator(index, name, "fa-user-slash mr-2 text-danger", true)
 }
 
-func formatValidator(index uint64, name string, icon string) template.HTML {
+func formatValidator(index uint64, name string, icon string, withIndex bool) template.HTML {
 	if index == math.MaxInt64 {
 		return template.HTML(fmt.Sprintf("<span class=\"validator-label validator-index\"><i class=\"fas %v\"></i> unknown</span>", icon))
 	} else if name != "" {
-		return template.HTML(fmt.Sprintf("<span class=\"validator-label validator-name\" data-bs-toggle=\"tooltip\" data-bs-placement=\"top\" data-bs-title=\"%v\"><i class=\"fas %v\"></i> <a href=\"/validator/%v\">%v</a></span>", index, icon, index, html.EscapeString(name)))
+		var nameLabel string
+		if withIndex {
+			nameLabel = fmt.Sprintf("%v (%v)", html.EscapeString(name), index)
+		} else {
+			nameLabel = html.EscapeString(name)
+		}
+		return template.HTML(fmt.Sprintf("<span class=\"validator-label validator-name\" data-bs-toggle=\"tooltip\" data-bs-placement=\"top\" data-bs-title=\"%v\"><i class=\"fas %v\"></i> <a href=\"/validator/%v\">%v</a></span>", index, icon, index, nameLabel))
 	}
 	return template.HTML(fmt.Sprintf("<span class=\"validator-label validator-index\"><i class=\"fas %v\"></i> <a href=\"/validator/%v\">%v</a></span>", icon, index, index))
 }
 
-func FormatValidatorWithIndex(index uint64, name string) template.HTML {
+func FormatValidatorNameWithIndex(index uint64, name string) template.HTML {
 	if name != "" {
 		return template.HTML(fmt.Sprintf("<span class=\"validator-label validator-name\">%v (%v)</span>", html.EscapeString(name), index))
 	}
@@ -383,6 +408,8 @@ func formatWithdrawalHash(hash []byte) template.HTML {
 	var colorClass string
 	if hash[0] == 0x01 {
 		colorClass = "text-success"
+	} else if hash[0] == 0x02 {
+		colorClass = "text-info"
 	} else {
 		colorClass = "text-warning"
 	}
@@ -395,7 +422,7 @@ func FormatWithdawalCredentials(hash []byte) template.HTML {
 		return "INVALID CREDENTIALS"
 	}
 
-	if hash[0] == 0x01 && Config.Frontend.EthExplorerLink != "" {
+	if (hash[0] == 0x01 || hash[0] == 0x02) && Config.Frontend.EthExplorerLink != "" {
 		link, err := url.JoinPath(Config.Frontend.EthExplorerLink, "address", fmt.Sprintf("0x%x", hash[12:]))
 		if err == nil {
 			return template.HTML(fmt.Sprintf(`<a href="%v">%v</a>`, link, formatWithdrawalHash(hash)))
@@ -403,4 +430,39 @@ func FormatWithdawalCredentials(hash []byte) template.HTML {
 	}
 
 	return formatWithdrawalHash(hash)
+}
+
+// FormatGweiValue formats a gas value in Gwei
+func FormatGweiValue(val uint64) string {
+	return FormatFloat(float64(val)/float64(1e9), 2) + " Gwei"
+}
+
+// CalculatePercentage calculates the percentage of a value from a total
+func CalculatePercentage(value uint64, total uint64) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(value) * 100 / float64(total)
+}
+
+// FormatByteAmount converts a byte count to a human-readable string with appropriate unit (B, kB, MB, GB)
+func FormatByteAmount(bytes uint64) template.HTML {
+	const unit = 1024
+	if bytes < unit {
+		return template.HTML(fmt.Sprintf("%d B", bytes))
+	}
+	div, exp := uint64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	value := float64(bytes) / float64(div)
+	return template.HTML(fmt.Sprintf("%.2f %ciB", value, "kMGTPE"[exp]))
+}
+
+func FormatRecvDelay(delay int32) template.HTML {
+	if delay == 0 {
+		return template.HTML("-")
+	}
+	return template.HTML(fmt.Sprintf("%.2f s", float64(delay)/1000))
 }

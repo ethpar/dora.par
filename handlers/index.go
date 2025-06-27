@@ -8,10 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
-	v1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethpandaops/dora/db"
@@ -120,6 +118,8 @@ func buildIndexPageData() (*models.IndexPageData, time.Duration) {
 		DepositContract:       common.Address(specs.DepositContractAddress).String(),
 		ShowSyncingMessage:    !isSynced,
 		SlotsPerEpoch:         specs.SlotsPerEpoch,
+		SecondsPerSlot:        uint64(specs.SecondsPerSlot.Seconds()),
+		SecondsPerEpoch:       uint64(specs.SecondsPerSlot.Seconds() * float64(specs.SlotsPerEpoch)),
 		CurrentEpoch:          uint64(currentEpoch),
 		CurrentFinalizedEpoch: int64(finalizedEpoch) - 1,
 		CurrentJustifiedEpoch: int64(justifiedEpoch) - 1,
@@ -131,33 +131,60 @@ func buildIndexPageData() (*models.IndexPageData, time.Duration) {
 		pageData.NetworkName = utils.Config.Chain.DisplayName
 	}
 
-	currentValidatorSet := services.GlobalBeaconService.GetCachedValidatorSet()
-	if currentValidatorSet != nil {
-		for _, validator := range currentValidatorSet {
-			if strings.HasPrefix(validator.Status.String(), "active") {
-				pageData.ActiveValidatorCount++
-				pageData.TotalEligibleEther += uint64(validator.Validator.EffectiveBalance)
-				pageData.AverageValidatorBalance += uint64(validator.Balance)
-			}
-			if validator.Status == v1.ValidatorStatePendingQueued {
-				pageData.EnteringValidatorCount++
-			}
-			if validator.Status == v1.ValidatorStateActiveExiting {
-				pageData.ExitingValidatorCount++
-			}
-		}
-		if pageData.AverageValidatorBalance > 0 {
-			pageData.AverageValidatorBalance = pageData.AverageValidatorBalance / pageData.ActiveValidatorCount
-		}
+	recentEpochStatsValues, _ := services.GlobalBeaconService.GetRecentEpochStats(nil)
+
+	if recentEpochStatsValues != nil {
+		pageData.ActiveValidatorCount = recentEpochStatsValues.ActiveValidators
+		pageData.TotalEligibleEther = uint64(recentEpochStatsValues.EffectiveBalance)
+		pageData.AverageValidatorBalance = uint64(recentEpochStatsValues.ActiveBalance) / recentEpochStatsValues.ActiveValidators
 	}
 
-	pageData.ValidatorsPerEpoch = chainState.GetValidatorChurnLimit(pageData.ActiveValidatorCount)
-	pageData.ValidatorsPerDay = pageData.ValidatorsPerEpoch * 225
-	depositQueueTime := float64(pageData.EnteringValidatorCount) / float64(pageData.ValidatorsPerDay)
-	if depositQueueTime > 0 {
-		depositQueueDays, depositQueueFractionalDays := math.Modf(depositQueueTime)
-		depositQueueHours := int(depositQueueFractionalDays * 24)
-		pageData.NewDepositProcessAfter = fmt.Sprintf("%d days and %d hours", int(depositQueueDays), depositQueueHours)
+	activationQueueLength, exitQueueLength := services.GlobalBeaconService.GetBeaconIndexer().GetActivationExitQueueLengths(currentEpoch, nil)
+	pageData.EnteringValidatorCount = activationQueueLength
+	pageData.ExitingValidatorCount = exitQueueLength
+
+	if specs.ElectraForkEpoch != nil && *specs.ElectraForkEpoch <= uint64(currentEpoch) {
+		// electra deposit queue
+		depositQueue := services.GlobalBeaconService.GetBeaconIndexer().GetLatestDepositQueue(nil)
+		if depositQueue != nil {
+			depositAmount := phase0.Gwei(0)
+			validatorCount := uint64(0)
+
+			newValidators := map[phase0.BLSPubKey]interface{}{}
+			for _, deposit := range depositQueue {
+				depositAmount += deposit.Amount
+				_, found := services.GlobalBeaconService.GetValidatorIndexByPubkey(deposit.Pubkey)
+				if !found {
+					_, isNew := newValidators[deposit.Pubkey]
+					if !isNew {
+						newValidators[deposit.Pubkey] = nil
+						validatorCount++
+					}
+				}
+			}
+
+			pageData.EnteringValidatorCount += validatorCount
+			pageData.EnteringEtherAmount = uint64(depositAmount)
+			pageData.EtherChurnPerEpoch = chainState.GetActivationExitChurnLimit(pageData.TotalEligibleEther)
+			pageData.EtherChurnPerDay = pageData.EtherChurnPerEpoch * 225
+
+			depositQueueTime := float64(depositAmount) / float64(pageData.EtherChurnPerDay)
+			if depositQueueTime > 0 {
+				depositQueueDays, depositQueueFractionalDays := math.Modf(depositQueueTime)
+				depositQueueHours := int(depositQueueFractionalDays * 24)
+				pageData.NewDepositProcessAfter = fmt.Sprintf("%d days and %d hours", int(depositQueueDays), depositQueueHours)
+			}
+		}
+	} else {
+		// pre-electra
+		pageData.ValidatorsPerEpoch = chainState.GetValidatorChurnLimit(pageData.ActiveValidatorCount)
+		pageData.ValidatorsPerDay = pageData.ValidatorsPerEpoch * 225
+		depositQueueTime := float64(pageData.EnteringValidatorCount) / float64(pageData.ValidatorsPerDay)
+		if depositQueueTime > 0 {
+			depositQueueDays, depositQueueFractionalDays := math.Modf(depositQueueTime)
+			depositQueueHours := int(depositQueueFractionalDays * 24)
+			pageData.NewDepositProcessAfter = fmt.Sprintf("%d days and %d hours", int(depositQueueDays), depositQueueHours)
+		}
 	}
 
 	networkGenesis, _ := services.GlobalBeaconService.GetGenesis()

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
@@ -22,11 +23,15 @@ type epochState struct {
 	readyChan      chan bool
 	highPriority   bool
 
-	validatorList     []*phase0.Validator
-	validatorBalances []phase0.Gwei
-	randaoMixes       []phase0.Root
-	depositIndex      uint64
-	syncCommittee     []phase0.ValidatorIndex
+	stateSlot                 phase0.Slot
+	validatorBalances         []phase0.Gwei
+	randaoMixes               []phase0.Root
+	depositIndex              uint64
+	syncCommittee             []phase0.ValidatorIndex
+	depositBalanceToConsume   phase0.Gwei
+	pendingDeposits           []*electra.PendingDeposit
+	pendingPartialWithdrawals []*electra.PendingPartialWithdrawal
+	pendingConsolidations     []*electra.PendingConsolidation
 }
 
 // newEpochState creates a new epochState instance with the root of the state to be loaded.
@@ -78,9 +83,9 @@ func (s *epochState) awaitStateLoaded(ctx context.Context, timeout time.Duration
 }
 
 // loadState loads the state for the epoch from the client.
-func (s *epochState) loadState(ctx context.Context, client *Client, cache *epochCache) error {
+func (s *epochState) loadState(ctx context.Context, client *Client, cache *epochCache) (*spec.VersionedBeaconState, error) {
 	if s.loadingStatus > 0 {
-		return fmt.Errorf("already loading")
+		return nil, fmt.Errorf("already loading")
 	}
 
 	s.loadingStatus = 1
@@ -109,7 +114,7 @@ func (s *epochState) loadState(ctx context.Context, client *Client, cache *epoch
 		var err error
 		blockHeader, err = LoadBeaconHeader(ctx, client, s.slotRoot)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -117,12 +122,12 @@ func (s *epochState) loadState(ctx context.Context, client *Client, cache *epoch
 
 	resState, err := LoadBeaconState(ctx, client, blockHeader.Message.StateRoot)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = s.processState(resState, cache)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	s.readyChanMutex.Lock()
@@ -133,29 +138,32 @@ func (s *epochState) loadState(ctx context.Context, client *Client, cache *epoch
 	}
 
 	s.loadingStatus = 2
-	return nil
+	return resState, nil
 }
 
 // processState processes the state and updates the epochState instance.
 // the function extracts and unifies all relevant information from the beacon state, so the full beacon state can be dropped from memory afterwards.
 func (s *epochState) processState(state *spec.VersionedBeaconState, cache *epochCache) error {
+	slot, err := state.Slot()
+	if err != nil {
+		return fmt.Errorf("error getting slot from state %v: %v", s.slotRoot.String(), err)
+	}
+
+	s.stateSlot = slot
+
 	validatorList, err := state.Validators()
 	if err != nil {
 		return fmt.Errorf("error getting validators from state %v: %v", s.slotRoot.String(), err)
 	}
 
-	unifiedValidatorList := make([]*phase0.Validator, len(validatorList))
-	validatorPubkeyMap := map[phase0.BLSPubKey]phase0.ValidatorIndex{}
-	for i, v := range validatorList {
-		if cache != nil {
-			unifiedValidatorList[i] = cache.getOrCreateValidator(phase0.ValidatorIndex(i), v)
-		} else {
-			unifiedValidatorList[i] = v
-		}
-		validatorPubkeyMap[v.PublicKey] = phase0.ValidatorIndex(i)
+	if cache != nil {
+		cache.indexer.validatorCache.updateValidatorSet(slot, s.slotRoot, validatorList)
 	}
 
-	s.validatorList = unifiedValidatorList
+	validatorPubkeyMap := make(map[phase0.BLSPubKey]phase0.ValidatorIndex)
+	for i, v := range validatorList {
+		validatorPubkeyMap[v.PublicKey] = phase0.ValidatorIndex(i)
+	}
 
 	validatorBalances, err := state.ValidatorBalances()
 	if err != nil {
@@ -172,19 +180,51 @@ func (s *epochState) processState(state *spec.VersionedBeaconState, cache *epoch
 	s.randaoMixes = randaoMixes
 	s.depositIndex = getStateDepositIndex(state)
 
-	currentSyncCommittee, err := getStateCurrentSyncCommittee(state)
-	if err != nil {
-		return fmt.Errorf("error getting current sync committee from state %v: %v", s.slotRoot.String(), err)
+	if state.Version >= spec.DataVersionAltair {
+		currentSyncCommittee, err := getStateCurrentSyncCommittee(state)
+		if err != nil {
+			return fmt.Errorf("error getting current sync committee from state %v: %v", s.slotRoot.String(), err)
+		}
+
+		syncCommittee := make([]phase0.ValidatorIndex, len(currentSyncCommittee))
+		for i, v := range currentSyncCommittee {
+			syncCommittee[i] = validatorPubkeyMap[v]
+		}
+		if cache != nil {
+			syncCommittee = cache.getOrUpdateSyncCommittee(syncCommittee)
+		}
+		s.syncCommittee = syncCommittee
+	} else {
+		s.syncCommittee = []phase0.ValidatorIndex{}
 	}
 
-	syncCommittee := make([]phase0.ValidatorIndex, len(currentSyncCommittee))
-	for i, v := range currentSyncCommittee {
-		syncCommittee[i] = validatorPubkeyMap[v]
+	if state.Version >= spec.DataVersionElectra {
+		depositBalanceToConsume, err := getStateDepositBalanceToConsume(state)
+		if err != nil {
+			return fmt.Errorf("error getting deposit balance to consume from state %v: %v", s.slotRoot.String(), err)
+		}
+		s.depositBalanceToConsume = depositBalanceToConsume
+
+		pendingDeposits, err := getStatePendingDeposits(state)
+		if err != nil {
+			return fmt.Errorf("error getting pending deposit indices from state %v: %v", s.slotRoot.String(), err)
+		}
+		s.pendingDeposits = pendingDeposits
+
+		pendingPartialWithdrawals, err := getStatePendingWithdrawals(state)
+		if err != nil {
+			return fmt.Errorf("error getting pending withdrawal indices from state %v: %v", s.slotRoot.String(), err)
+		}
+		s.pendingPartialWithdrawals = pendingPartialWithdrawals
+
+		pendingConsolidations, err := getStatePendingConsolidations(state)
+		if err != nil {
+			return fmt.Errorf("error getting pending consolidation indices from state %v: %v", s.slotRoot.String(), err)
+		}
+
+		// apply epoch transition to get remaining pending consolidations
+		s.pendingConsolidations = pendingConsolidations
 	}
-	if cache != nil {
-		syncCommittee = cache.getOrUpdateSyncCommittee(syncCommittee)
-	}
-	s.syncCommittee = syncCommittee
 
 	return nil
 }

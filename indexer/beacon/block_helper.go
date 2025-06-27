@@ -19,11 +19,11 @@ import (
 var jsonVersionFlag uint64 = 0x40000000
 var compressionFlag uint64 = 0x20000000
 
-// marshalVersionedSignedBeaconBlockSSZ marshals a versioned signed beacon block using SSZ encoding.
-func marshalVersionedSignedBeaconBlockSSZ(dynSsz *dynssz.DynSsz, block *spec.VersionedSignedBeaconBlock, compress bool) (version uint64, ssz []byte, err error) {
-	if utils.Config.KillSwitch.DisableSSZEncoding {
+// MarshalVersionedSignedBeaconBlockSSZ marshals a versioned signed beacon block using SSZ encoding.
+func MarshalVersionedSignedBeaconBlockSSZ(dynSsz *dynssz.DynSsz, block *spec.VersionedSignedBeaconBlock, compress bool, forceSSZ bool) (version uint64, ssz []byte, err error) {
+	if utils.Config.KillSwitch.DisableSSZEncoding && !forceSSZ {
 		// SSZ encoding disabled, use json instead
-		version, ssz, err = marshalVersionedSignedBeaconBlockJson(block)
+		version, ssz, err = MarshalVersionedSignedBeaconBlockJson(block)
 	} else {
 		// SSZ encoding
 		switch block.Version {
@@ -61,8 +61,8 @@ func marshalVersionedSignedBeaconBlockSSZ(dynSsz *dynssz.DynSsz, block *spec.Ver
 	return
 }
 
-// unmarshalVersionedSignedBeaconBlockSSZ unmarshals a versioned signed beacon block using SSZ encoding.
-func unmarshalVersionedSignedBeaconBlockSSZ(dynSsz *dynssz.DynSsz, version uint64, ssz []byte) (*spec.VersionedSignedBeaconBlock, error) {
+// UnmarshalVersionedSignedBeaconBlockSSZ unmarshals a versioned signed beacon block using SSZ encoding.
+func UnmarshalVersionedSignedBeaconBlockSSZ(dynSsz *dynssz.DynSsz, version uint64, ssz []byte) (*spec.VersionedSignedBeaconBlock, error) {
 	if (version & compressionFlag) != 0 {
 		// decompress
 		if d, err := decompressBytes(ssz); err != nil {
@@ -126,8 +126,8 @@ func unmarshalVersionedSignedBeaconBlockSSZ(dynSsz *dynssz.DynSsz, version uint6
 	return block, nil
 }
 
-// marshalVersionedSignedBeaconBlockJson marshals a versioned signed beacon block using JSON encoding.
-func marshalVersionedSignedBeaconBlockJson(block *spec.VersionedSignedBeaconBlock) (version uint64, jsonRes []byte, err error) {
+// MarshalVersionedSignedBeaconBlockJson marshals a versioned signed beacon block using JSON encoding.
+func MarshalVersionedSignedBeaconBlockJson(block *spec.VersionedSignedBeaconBlock) (version uint64, jsonRes []byte, err error) {
 	switch block.Version {
 	case spec.DataVersionPhase0:
 		version = uint64(block.Version)
@@ -247,81 +247,6 @@ func getBlockExecutionExtraData(v *spec.VersionedSignedBeaconBlock) ([]byte, err
 	}
 }
 
-func getBlockExecutionDepositRequests(v *spec.VersionedSignedBeaconBlock) ([]*electra.DepositRequest, error) {
-	switch v.Version {
-	case spec.DataVersionPhase0:
-		return nil, errors.New("no deposit requests in phase0")
-	case spec.DataVersionAltair:
-		return nil, errors.New("no deposit requests in altair")
-	case spec.DataVersionBellatrix:
-		return nil, errors.New("no deposit requests in bellatrix")
-	case spec.DataVersionCapella:
-		return nil, errors.New("no deposit requests in capella")
-	case spec.DataVersionDeneb:
-		return nil, errors.New("no deposit requests in deneb")
-	case spec.DataVersionAlpha:
-		return nil, errors.New("no deposit requests in alpha")
-	case spec.DataVersionElectra:
-		if v.Electra == nil || v.Electra.Message == nil || v.Electra.Message.Body == nil || v.Electra.Message.Body.ExecutionPayload == nil {
-			return nil, errors.New("no electra block")
-		}
-
-		return v.Electra.Message.Body.ExecutionPayload.DepositRequests, nil
-	default:
-		return nil, errors.New("unknown version")
-	}
-}
-
-func getBlockExecutionConsolidationRequests(v *spec.VersionedSignedBeaconBlock) ([]*electra.ConsolidationRequest, error) {
-	switch v.Version {
-	case spec.DataVersionPhase0:
-		return nil, errors.New("no deposit requests in phase0")
-	case spec.DataVersionAltair:
-		return nil, errors.New("no deposit requests in altair")
-	case spec.DataVersionBellatrix:
-		return nil, errors.New("no deposit requests in bellatrix")
-	case spec.DataVersionCapella:
-		return nil, errors.New("no deposit requests in capella")
-	case spec.DataVersionDeneb:
-		return nil, errors.New("no deposit requests in deneb")
-	case spec.DataVersionAlpha:
-		return nil, errors.New("no deposit requests in alpha")
-	case spec.DataVersionElectra:
-		if v.Electra == nil || v.Electra.Message == nil || v.Electra.Message.Body == nil || v.Electra.Message.Body.ExecutionPayload == nil {
-			return nil, errors.New("no electra block")
-		}
-
-		return v.Electra.Message.Body.ExecutionPayload.ConsolidationRequests, nil
-	default:
-		return nil, errors.New("unknown version")
-	}
-}
-
-func getBlockExecutionWithdrawalRequests(v *spec.VersionedSignedBeaconBlock) ([]*electra.WithdrawalRequest, error) {
-	switch v.Version {
-	case spec.DataVersionPhase0:
-		return nil, errors.New("no deposit requests in phase0")
-	case spec.DataVersionAltair:
-		return nil, errors.New("no deposit requests in altair")
-	case spec.DataVersionBellatrix:
-		return nil, errors.New("no deposit requests in bellatrix")
-	case spec.DataVersionCapella:
-		return nil, errors.New("no deposit requests in capella")
-	case spec.DataVersionDeneb:
-		return nil, errors.New("no deposit requests in deneb")
-	case spec.DataVersionAlpha:
-		return nil, errors.New("no deposit requests in alpha")
-	case spec.DataVersionElectra:
-		if v.Electra == nil || v.Electra.Message == nil || v.Electra.Message.Body == nil || v.Electra.Message.Body.ExecutionPayload == nil {
-			return nil, errors.New("no electra block")
-		}
-
-		return v.Electra.Message.Body.ExecutionPayload.WithdrawalRequests, nil
-	default:
-		return nil, errors.New("unknown version")
-	}
-}
-
 // getStateRandaoMixes returns the RANDAO mixes from a versioned beacon state.
 func getStateRandaoMixes(v *spec.VersionedBeaconState) ([]phase0.Root, error) {
 	switch v.Version {
@@ -393,7 +318,7 @@ func getStateDepositIndex(state *spec.VersionedBeaconState) uint64 {
 	return 0
 }
 
-// getStateRandaoMixes returns the RANDAO mixes from a versioned beacon state.
+// getStateCurrentSyncCommittee returns the current sync committee from a versioned beacon state.
 func getStateCurrentSyncCommittee(v *spec.VersionedBeaconState) ([]phase0.BLSPubKey, error) {
 	switch v.Version {
 	case spec.DataVersionPhase0:
@@ -436,5 +361,121 @@ func getStateCurrentSyncCommittee(v *spec.VersionedBeaconState) ([]phase0.BLSPub
 		return v.Electra.CurrentSyncCommittee.Pubkeys, nil
 	default:
 		return nil, errors.New("unknown version")
+	}
+}
+
+// getStateDepositBalanceToConsume returns the deposit balance to consume from a versioned beacon state.
+func getStateDepositBalanceToConsume(v *spec.VersionedBeaconState) (phase0.Gwei, error) {
+	switch v.Version {
+	case spec.DataVersionPhase0:
+		return 0, errors.New("no pending deposits in phase0")
+	case spec.DataVersionAltair:
+		return 0, errors.New("no pending deposits in altair")
+	case spec.DataVersionBellatrix:
+		return 0, errors.New("no pending deposits in bellatrix")
+	case spec.DataVersionCapella:
+		return 0, errors.New("no pending deposits in capella")
+	case spec.DataVersionDeneb:
+		return 0, errors.New("no pending deposits in deneb")
+	case spec.DataVersionElectra:
+		if v.Electra == nil {
+			return 0, errors.New("no electra block")
+		}
+
+		return v.Electra.DepositBalanceToConsume, nil
+	default:
+		return 0, errors.New("unknown version")
+	}
+}
+
+// getStatePendingDeposits returns the pending deposits from a versioned beacon state.
+func getStatePendingDeposits(v *spec.VersionedBeaconState) ([]*electra.PendingDeposit, error) {
+	switch v.Version {
+	case spec.DataVersionPhase0:
+		return nil, errors.New("no pending deposits in phase0")
+	case spec.DataVersionAltair:
+		return nil, errors.New("no pending deposits in altair")
+	case spec.DataVersionBellatrix:
+		return nil, errors.New("no pending deposits in bellatrix")
+	case spec.DataVersionCapella:
+		return nil, errors.New("no pending deposits in capella")
+	case spec.DataVersionDeneb:
+		return nil, errors.New("no pending deposits in deneb")
+	case spec.DataVersionElectra:
+		if v.Electra == nil || v.Electra.PendingDeposits == nil {
+			return nil, errors.New("no electra block")
+		}
+
+		return v.Electra.PendingDeposits, nil
+	default:
+		return nil, errors.New("unknown version")
+	}
+}
+
+// getStatePendingWithdrawals returns the pending withdrawals from a versioned beacon state.
+func getStatePendingWithdrawals(v *spec.VersionedBeaconState) ([]*electra.PendingPartialWithdrawal, error) {
+	switch v.Version {
+	case spec.DataVersionPhase0:
+		return nil, errors.New("no pending withdrawals in phase0")
+	case spec.DataVersionAltair:
+		return nil, errors.New("no pending withdrawals in altair")
+	case spec.DataVersionBellatrix:
+		return nil, errors.New("no pending withdrawals in bellatrix")
+	case spec.DataVersionCapella:
+		return nil, errors.New("no pending withdrawals in capella")
+	case spec.DataVersionDeneb:
+		return nil, errors.New("no pending withdrawals in deneb")
+	case spec.DataVersionElectra:
+		if v.Electra == nil || v.Electra.PendingPartialWithdrawals == nil {
+			return nil, errors.New("no electra block")
+		}
+
+		return v.Electra.PendingPartialWithdrawals, nil
+	default:
+		return nil, errors.New("unknown version")
+	}
+}
+
+// getStatePendingConsolidations returns the pending consolidations from a versioned beacon state.
+func getStatePendingConsolidations(v *spec.VersionedBeaconState) ([]*electra.PendingConsolidation, error) {
+	switch v.Version {
+	case spec.DataVersionPhase0:
+		return nil, errors.New("no pending consolidations in phase0")
+	case spec.DataVersionAltair:
+		return nil, errors.New("no pending consolidations in altair")
+	case spec.DataVersionBellatrix:
+		return nil, errors.New("no pending consolidations in bellatrix")
+	case spec.DataVersionCapella:
+		return nil, errors.New("no pending consolidations in capella")
+	case spec.DataVersionDeneb:
+		return nil, errors.New("no pending consolidations in deneb")
+	case spec.DataVersionElectra:
+		if v.Electra == nil || v.Electra.PendingConsolidations == nil {
+			return nil, errors.New("no electra block")
+		}
+
+		return v.Electra.PendingConsolidations, nil
+	default:
+		return nil, errors.New("unknown version")
+	}
+}
+
+// getBlockSize returns the block size from a versioned beacon block.
+func getBlockSize(dynSsz *dynssz.DynSsz, block *spec.VersionedSignedBeaconBlock) (int, error) {
+	switch block.Version {
+	case spec.DataVersionPhase0:
+		return dynSsz.SizeSSZ(block.Phase0)
+	case spec.DataVersionAltair:
+		return dynSsz.SizeSSZ(block.Altair)
+	case spec.DataVersionBellatrix:
+		return dynSsz.SizeSSZ(block.Bellatrix)
+	case spec.DataVersionCapella:
+		return dynSsz.SizeSSZ(block.Capella)
+	case spec.DataVersionDeneb:
+		return dynSsz.SizeSSZ(block.Deneb)
+	case spec.DataVersionElectra:
+		return dynSsz.SizeSSZ(block.Electra)
+	default:
+		return 0, errors.New("unknown version")
 	}
 }

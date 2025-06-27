@@ -117,6 +117,11 @@ func createMenuItems(active string) []types.MainMenuItem {
 			{
 				Label: "Slots",
 				Path:  "/slots",
+				Icon:  "fa-table-list",
+			},
+			{
+				Label: "Blocks",
+				Path:  "/blocks",
 				Icon:  "fa-cube",
 			},
 		},
@@ -192,20 +197,53 @@ func createMenuItems(active string) []types.MainMenuItem {
 			},
 		},
 	})
-	validatorMenu = append(validatorMenu, types.NavigationGroup{
-		Links: []types.NavigationLink{
-			{
-				Label: "Withdrawal Requests",
-				Path:  "/validators/el_withdrawals",
-				Icon:  "fa-money-bill-transfer",
+
+	chainState := services.GlobalBeaconService.GetChainState()
+	specs := chainState.GetSpecs()
+	if specs != nil && specs.ElectraForkEpoch != nil && uint64(chainState.CurrentEpoch()) >= *specs.ElectraForkEpoch {
+		validatorMenu = append(validatorMenu, types.NavigationGroup{
+			Links: []types.NavigationLink{
+				{
+					Label: "Withdrawal Requests",
+					Path:  "/validators/el_withdrawals",
+					Icon:  "fa-money-bill-transfer",
+				},
+				{
+					Label: "Consolidation Requests",
+					Path:  "/validators/el_consolidations",
+					Icon:  "fa-square-plus",
+				},
 			},
-			{
-				Label: "Consolidation Requests",
-				Path:  "/validators/el_consolidations",
-				Icon:  "fa-square-plus",
-			},
-		},
-	})
+		})
+	}
+
+	submitLinks := []types.NavigationLink{}
+	if utils.Config.Frontend.ShowSubmitDeposit {
+		submitLinks = append(submitLinks, types.NavigationLink{
+			Label: "Submit Deposits",
+			Path:  "/validators/deposits/submit",
+			Icon:  "fa-file-import",
+		})
+	}
+
+	if utils.Config.Frontend.ShowSubmitElRequests {
+		submitLinks = append(submitLinks, types.NavigationLink{
+			Label: "Submit Consolidations",
+			Path:  "/validators/submit_consolidations",
+			Icon:  "fa-square-plus",
+		})
+		submitLinks = append(submitLinks, types.NavigationLink{
+			Label: "Submit Withdrawals & Exits",
+			Path:  "/validators/submit_withdrawals",
+			Icon:  "fa-money-bill-transfer",
+		})
+	}
+
+	if len(submitLinks) > 0 {
+		validatorMenu = append(validatorMenu, types.NavigationGroup{
+			Links: submitLinks,
+		})
+	}
 
 	return []types.MainMenuItem{
 		{

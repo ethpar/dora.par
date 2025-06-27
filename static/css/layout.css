@@ -1,4 +1,3 @@
-
 .bi {
   vertical-align: -.125em;
   fill: currentColor;
@@ -16,6 +15,12 @@
 
 body main {
   min-height: calc(100vh - 180px)!important;
+}
+
+@media (min-width: 1650px) {
+  .container, .container-lg, .container-md, .container-sm, .container-xl, .container-xxl {
+      max-width: 1520px;
+  }
 }
 
 .header {
@@ -291,7 +296,8 @@ span.validator-label {
 }
 
 .table-sorting thead .col-sorting {
-  float: right;
+  display: inline-block;
+  margin-left: 5px;
 }
 
 .table-sorting thead .sort-link {
@@ -321,4 +327,8 @@ span.validator-label {
 
 .table-sm>:not(caption)>*>* {
   padding: 1px .25rem;
+}
+
+.text-monospace {
+  font-family: var(--bs-font-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace) !important;
 }

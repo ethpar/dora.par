@@ -6,12 +6,15 @@ import (
 
 // SlotsPageData is a struct to hold info for the slots page
 type SlotsFilteredPageData struct {
-	FilterGraffiti     string `json:"filter_graffiti"`
-	FilterExtraData    string `json:"filter_extra_data"`
-	FilterProposer     string `json:"filter_proposer"`
-	FilterProposerName string `json:"filter_pname"`
-	FilterWithOrphaned uint8  `json:"filter_orphaned"`
-	FilterWithMissing  uint8  `json:"filter_missing"`
+	FilterGraffiti        string `json:"filter_graffiti"`
+	FilterInvertGraffiti  bool   `json:"filter_invert_graffiti"`
+	FilterExtraData       string `json:"filter_extra_data"`
+	FilterInvertExtraData bool   `json:"filter_invert_extra_data"`
+	FilterProposer        string `json:"filter_proposer"`
+	FilterProposerName    string `json:"filter_pname"`
+	FilterInvertProposer  bool   `json:"filter_invert_proposer"`
+	FilterWithOrphaned    uint8  `json:"filter_orphaned"`
+	FilterWithMissing     uint8  `json:"filter_missing"`
 
 	DisplayEpoch        bool   `json:"dp_epoch"`
 	DisplaySlot         bool   `json:"dp_slot"`
@@ -25,6 +28,11 @@ type SlotsFilteredPageData struct {
 	DisplaySyncAgg      bool   `json:"dp_syncagg"`
 	DisplayGraffiti     bool   `json:"dp_graffiti"`
 	DisplayElExtraData  bool   `json:"dp_elextra"`
+	DisplayGasUsage     bool   `json:"dp_gasusage"`
+	DisplayGasLimit     bool   `json:"dp_gaslimit"`
+	DisplayMevBlock     bool   `json:"dp_mevblock"`
+	DisplayBlockSize    bool   `json:"dp_blocksize"`
+	DisplayRecvDelay    bool   `json:"dp_recvdelay"`
 	DisplayColCount     uint64 `json:"display_col_count"`
 
 	Slots     []*SlotsFilteredPageDataSlot `json:"slots"`
@@ -66,10 +74,17 @@ type SlotsFilteredPageDataSlot struct {
 	AttesterSlashingCount uint64    `json:"attester_slashing_count"`
 	SyncParticipation     float64   `json:"sync_participation"`
 	EthTransactionCount   uint64    `json:"eth_transaction_count"`
+	BlobCount             uint64    `json:"blob_count"`
 	WithEthBlock          bool      `json:"with_eth_block"`
 	EthBlockNumber        uint64    `json:"eth_block_number"`
 	Graffiti              []byte    `json:"graffiti"`
 	ElExtraData           []byte    `json:"el_extra_data"`
+	GasUsed               uint64    `json:"gas_used"`
+	GasLimit              uint64    `json:"gas_limit"`
+	BlockSize             uint64    `json:"block_size"`
 	BlockRoot             []byte    `json:"block_root"`
 	ParentRoot            []byte    `json:"parent_root"`
+	RecvDelay             int32     `json:"recv_delay"`
+	IsMevBlock            bool      `json:"is_mev_block"`
+	MevBlockRelays        string    `json:"mev_block_relays"`
 }

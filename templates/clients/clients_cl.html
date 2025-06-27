@@ -1,4 +1,6 @@
 {{ define "page" }}
+
+{{ $root := . }}
   <div class="container mt-2">
     <div class="d-md-flex py-2 justify-content-md-between">
       <h1 class="h4 mb-1 mb-md-0"><i class="fas fa-server mx-2"></i>Consensus clients</h1>
@@ -9,15 +11,16 @@
         </ol>
       </nav>
     </div>
+
     <div class="card mt-2">
       <div class="accordion" id="network-accordion">
         <div class="accordion-item">
           <h2 class="accordion-header">
-            <button class="accordion-button btn-secondary" style="box-shadow: none;" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+            <button id="peerGraphToggler" class="accordion-button btn-secondary collapsed" style="box-shadow: none;" type="button" data-bs-toggle="collapse" data-bs-target="#peerGraph" aria-expanded="false" aria-controls="peerGraph">
               <i class="fa-solid fa-circle-nodes" style="margin-right:5px"></i> Client graph
             </button>
           </h2>
-          <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#network-accordion">
+          <div id="peerGraph" class="accordion-collapse collapse" data-bs-parent="#network-accordion">
             <div class="accordion-body peer-nodemap-wrapper">
               <div class="card-body px-0 peer-nodemap" id="nodemap">
                 <div id="nodemap-loading" class="spinner-border" role="status">
@@ -25,12 +28,12 @@
                 </div>
               </div>
               <div class="card-body px-0 peer-nodemap-menu">
-                <div class="btn-group btn-group-sm" role="group" aria-label="Network layouts" style="position: absolute; bottom: 5px; right: 10px; z-index: 10000;">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Network layouts" style="position: absolute; bottom: 5px; right: 10px;">
                   <button type="button" class="btn btn-secondary" disabled>Layouts</button>
-                  <button type="button" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="CoSE" class="btn btn-secondary" onclick='$_network.fitAnimated(cy,$_network.layouts.fcose(data.nodes.length))'><i class="fa-solid fa-share-alt"></i></button>
-                  <button type="button" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Circle" class="btn btn-secondary" onclick='$_network.fitAnimated(cy,$_network.layouts.circle())'><i class="fa-solid fa-circle"></i></button>
-                  <button type="button" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Grid" class="btn btn-secondary" onclick='$_network.fitAnimated(cy,$_network.layouts.grid())'><i class="fa-solid fa-th"></i></button>
-                  <button type="button" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Concentric" class="btn btn-secondary" onclick='$_network.fitAnimated(cy,$_network.layouts.concentric(data.nodes.length))'><i class="fa-solid fa-sun"></i></button>
+                  <button type="button" data-toggle="tooltip" data-placement="top" title="CoSE" class="btn btn-secondary" onclick='$_network.fitAnimated(peerGraph,$_network.layouts.fcose(peerGraphData.nodes.length))'><i class="fa-solid fa-share-alt"></i></button>
+                  <button type="button" data-toggle="tooltip" data-placement="top" title="Circle" class="btn btn-secondary" onclick='$_network.fitAnimated(peerGraph,$_network.layouts.circle())'><i class="fa-solid fa-circle"></i></button>
+                  <button type="button" data-toggle="tooltip" data-placement="top" title="Grid" class="btn btn-secondary" onclick='$_network.fitAnimated(peerGraph,$_network.layouts.grid())'><i class="fa-solid fa-th"></i></button>
+                  <button type="button" data-toggle="tooltip" data-placement="top" title="Concentric" class="btn btn-secondary" onclick='$_network.fitAnimated(peerGraph,$_network.layouts.concentric(peerGraphData.nodes.length))'><i class="fa-solid fa-sun"></i></button>
                 </div>
               </div>
             </div>
@@ -38,11 +41,192 @@
         </div>
       </div>
     </div>
+
+    {{ if $root.ShowPeerDASInfos }}
+    <div class="card mt-2">
+      <div class="accordion" id="peerdas-columns-accordion">
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button btn-secondary collapsed" style="box-shadow: none;" type="button" data-bs-toggle="collapse" data-bs-target="#collapseColumnInfos" aria-expanded="false" aria-controls="collapseColumnInfos">
+              <i class="fa-solid fa-table-columns" style="margin-right:5px"></i> PeerDAS column custody
+              <span class="badge badge-pill badge-secondary">Total peers: {{ len $root.Nodes }}</span>
+            </button>
+          </h2>
+          <div id="collapseColumnInfos" class="accordion-collapse collapse" data-bs-parent="#peerdas-columns-accordion">
+            <div class="accordion-body">
+              <div>
+                {{ if $root.PeerDASInfos.Warnings.HasWarnings }}
+                <button style="float: right" type="button" class="btn btn-warning btn-sm font-weight-bold" data-toggle="modal" data-target="#peerDasWarningsModal" onclick="$('#peerDasWarningsModal').modal('show')">
+                  ⚠️ Show warnings
+                </button>
+                {{ end}}
+                <p>
+                  Spec configuration:
+                  <code>NUMBER_OF_COLUMNS={{ $root.PeerDASInfos.NumberOfColumns}}</code>,
+                  <code>DATA_COLUMN_SIDECAR_SUBNET_COUNT={{ $root.PeerDASInfos.DataColumnSidecarSubnetCount}}</code>
+                  <code>CUSTODY_REQUIREMENT={{ $root.PeerDASInfos.CustodyRequirement}}</code>
+                  Node count: <code>{{ len $root.Nodes }}</code>
+                  <div class="form-check form-switch" style="display: inline-block">
+                    <input class="form-check-input" type="checkbox" role="switch" id="showExternalPeersDAS" onChange="filterDASTablePeers();" checked>
+                    <label class="form-check-label" for="showExternalPeersDAS">External peers</label>
+                  </div>
+                  <div class="form-check form-switch" style="display: inline-block">
+                    <input class="form-check-input" type="checkbox" role="switch" id="showInternalPeersDAS" onChange="filterDASTablePeers();" checked>
+                    <label class="form-check-label" for="showInternalPeersDAS">Internal peers</label>
+                  </div>
+                  <div class="form-check form-switch" style="display: inline-block">
+                    <input class="form-check-input" type="checkbox" role="switch" id="showSupernodePeersDAS" onChange="filterDASTablePeers();" checked>
+                    <label class="form-check-label" for="showSupernodePeersDAS">Supernode peers</label>
+                  </div>
+                  <div class="input-group" style="margin-top:10px;">
+                    <input class="form-control" list="datalistOptions" id="searchDASTablePeers" placeholder="Type to search...">
+                    <button class="btn btn-outline-secondary" type="button" id="clearSearchButton">Clear</button>
+                  </div>
+                  <datalist id="datalistOptions">
+                    {{ range $k, $p := $root.Nodes }}
+                      <option value="{{ $p.PeerID }}">
+                      {{ if ne $p.Alias $p.PeerID }}
+                      <option value="{{ $p.Alias }}">
+                      {{ end }}
+                    {{ end }}
+                  </datalist>
+                </p>
+              </div>
+
+              <!--- Peer DAS Warnings modal -->
+             <div class="modal fade" id="peerDasWarningsModal" tabindex="-1" role="dialog" aria-labelledby="peerDasWarningsModal" aria-hidden="true">
+              <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="peerDasWarningsModal">👀 PeerDAS: Some problems were detected</h5>
+                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close" onclick="$('#peerDasWarningsModal').modal('hide')"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div>
+                      {{ if $root.PeerDASInfos.Warnings.MissingSpecValues }}
+                        <p><b><i class="fa-solid fa-triangle-exclamation text-warning"></i> Missing spec config:</b></p>
+                        <p>Some spec configuration values are missing in the network configuration. Settings have been set to use defaults.</p>
+                        <hr/>
+                      {{ end }}
+                      {{ if gt (len $root.PeerDASInfos.Warnings.EmptyColumns) 0 }}
+                        <p><b><i class="fa-solid fa-triangle-exclamation text-warning"></i> There are {{ len $root.PeerDASInfos.Warnings.EmptyColumns }} empty columns:</b></p>
+                        <p>The following columns are empty and have no peers assigned to them: <code>{{ $root.PeerDASInfos.Warnings.EmptyColumns }}</code></p>
+                        <hr/>
+                      {{ end }}
+                      {{ if gt (len $root.PeerDASInfos.Warnings.MissingENRsPeers) 0 }}
+                      <p><b><i class="fa-solid fa-triangle-exclamation text-warning"></i> Missing ENR on {{ len $root.PeerDASInfos.Warnings.MissingENRsPeers }} nodes:</b></p>
+                      <p>Calculating the right columns for these peers might not be be possible due to the missing ENR.
+                        The default custody requirement of <code>{{ $root.PeerDASInfos.CustodyRequirement}}</code> will be used for these nodes.
+                      </p>
+                      <ul>
+                        {{ range $i, $p := $root.PeerDASInfos.Warnings.MissingENRsPeers }}
+                          <li>
+                            <code class="peerdetails-modal-peer" onclick="showPeerDetailsModal('{{ $p }}')">{{ $p }}</code>
+                          </li>
+                        {{ end }}
+                      </ul>
+                      <hr/>
+                      {{ end }}
+                      {{ if gt (len $root.PeerDASInfos.Warnings.MissingCGCFromENRPeers) 0 }}
+                      <p><b><i class="fa-solid fa-triangle-exclamation text-warning"></i> Missing <code>cgc</code> field in ENR on {{ len $root.PeerDASInfos.Warnings.MissingCGCFromENRPeers}} nodes:</b></p>
+                      <p>
+                        Calculating the right columns for these peers might not be be possible due to the missing `cgc` field.
+                        The default custody requirement of <code>{{ $root.PeerDASInfos.CustodyRequirement}}</code> will be used for these nodes.
+                      </p>
+                      <ul>
+                        {{ range $i, $p := $root.PeerDASInfos.Warnings.MissingCGCFromENRPeers }}
+                          <li>
+                            <code class="peerdetails-modal-peer" onclick="showPeerDetailsModal('{{ $p }}')">{{ $p }}</code>
+                            {{ $peer := index $root.Nodes $p}}
+                            {{ if ne $peer.Alias $peer.PeerID }}
+                            ( <code>{{ $peer.Alias }}</code> )
+                            {{ end }}
+                          </li>
+                        {{ end }}
+                      </ul>
+                      <hr/>
+                      {{ end }}
+                     </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="$('#peerDasWarningsModal').modal('hide')">Close</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="peerdas-table-container">
+              <!-- PeerDAS table will be rendered here when accordion is opened -->
+            </div>
+
+            <!-- Hidden template for PeerDAS table -->
+            <div id="peerdas-table-template" style="display: none;">
+              {{ range $i := until $root.PeerDASInfos.TotalRows }}
+              <div class="table-responsive">
+                <table class="bg-dark text-white-50" style="margin: 0 auto; text-align: center; border: 1px solid">
+                  <thead>
+                    <tr style="border-bottom: 1px dashed;">
+                      {{ range $j := until 32 }}
+                        {{ $idx := add ($j) (int (mul (float64 $i) (float64 32))) }}
+                        {{ $peersPerColumn := index $root.PeerDASInfos.ColumnDistribution (int64 $idx) }}
+                        {{ $peerCount := len $peersPerColumn }}
+                        <th style="border-right: 1px solid; font-size: 0.8rem;"
+                          class="
+                          {{ if eq $peerCount 0 }}
+                            bg-danger
+                            text-light
+                          {{ else if lt $peerCount 2 }}
+                            bg-warning
+                            text-dark
+                          {{ end }}">
+                          <span class="text-light">{{ $idx }}</span>
+                          <div class="dastablepeercount">({{ $peerCount }})</div>
+                        </th>
+                      {{ end }}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      {{ range $j := until 32 }}
+                        {{ $idx := add ($j) (int (mul (float64 $i) (float64 32))) }}
+                        {{ $peersPerColumn := index $root.PeerDASInfos.ColumnDistribution (int64 $idx) }}
+                        {{ $peerCount := len $peersPerColumn }}
+                        <td style="border-right: 1px solid; vertical-align: top; min-width: 39px;">
+                          <div style="display: flex; flex-flow: wrap; margin: 0 auto;">
+                          {{ with $peers := $peersPerColumn }}
+                            {{ range $i, $p := $peers}}
+                              {{ $peerData := index $root.Nodes $p }}
+                              <svg class="peer-table-icon dastablenode node-{{ $p }} {{ $peerData.Type}} {{ if $peerData.PeerDAS.IsSuperNode }}supernode{{end}}"
+                                   data-jdenticon-value="{{ $p }}"
+                                   data-peerid="{{ $p }}" data-alias="{{ $peerData.Alias }}"
+                                   data-toggle="tooltip"
+                                   data-placement="top"
+                                   title="{{ $peerData.Alias }}"
+                                   data-animation=false>
+                              </svg>
+                            {{ end }}
+                          {{ end }}
+                          </div>
+                        </td>
+                      {{ end }}
+                    </tr>
+                </table>
+              </div>
+              {{ end }}
+            </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {{ end }}
+
     <div class="card mt-2">
       <div class="card-body px-0 py-3">
         <div class="table-responsive px-0 py-1">
           <div style="text-align: right; margin-right: 15px;">
             Peer infos:
+            <i class="fa fa-refresh text-muted p-1 mx-1" role="button" data-bs-toggle="tooltip" data-bs-placement="top" title="Refresh peer information" onclick="refreshPeerInfos()" style="cursor: pointer;"></i>
             <div class="btn-group btn-group-sm" role="group" aria-label="Peer info controls">
               <button type="button" class="btn btn-outline-secondary" onclick='$(".collapse.peerInfo").collapse("hide");'>Hide all</button>
               <button type="button" class="btn btn-outline-secondary" onclick='$(".collapse.peerInfo").collapse("show");'>Show all</button>
@@ -61,185 +245,348 @@
               </tr>
             </thead>
               <tbody>
-                {{ $root := . }}
                 {{ range $i, $client := .Clients }}
                   <tr>
                     <td>{{ $client.Index }}</td>
                     <td>
                       <svg class="client-node-icon" data-jdenticon-value="{{ $client.PeerID }}"></svg>
-                      <span
-                        id="clientRow-{{ $client.Name }}"
-                        style="cursor:pointer;"
-                        onclick="$_network.isolateNode(cy, '{{ $client.PeerID}}');
-                                  $('.collapse.peerInfo').collapse('hide');
-                                  $('#peerInfo-{{ $client.PeerID }}').collapse('show');
-                        ">
+                      <span id="clientRow-{{ $client.Name }}" style="cursor:pointer;" class="client-row" data-peerid="{{ $client.PeerID}}">
                         <a href="#name={{ $client.Name }}">{{ $client.Name }}</a>
                       </span>
                     </td>
                     <td style="font-size: 0.8rem; vertical-align: middle;">
-                      <span class="client-node-peer-count text-success" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Inbound Peers">
+                      <span class="client-node-peer-count text-success" data-toggle="tooltip" data-placement="top" title="Inbound Peers">
                         {{ $client.PeersInboundCounter }}
                         <i class="fa-solid fa-arrow-down"></i>
                       </span>
-                      <span class="client-node-peer-count text-danger" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Outbound Peers">
+                      <span class="client-node-peer-count text-danger" data-toggle="tooltip" data-placement="top" title="Outbound Peers">
                         {{ $client.PeersOutboundCounter}}
                         <i class="fa-solid fa-arrow-up"></i>
                       </span>
-                      <span class="client-node-peer-count" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Total Peers">
-                        ({{ len $client.Peers }})
+                      <span class="client-node-peer-count" data-toggle="tooltip" data-placement="top" title="Total Peers">
+                        ({{ $client.PeerCount }})
                       </span>
                     </td>
                     <td><a href="/slot/{{ $client.HeadSlot }}">{{ formatAddCommas $client.HeadSlot }}</a></td>
-                    <td>
+                    <td class="text-monospace">
                       <a href="/slot/0x{{ printf "%x" $client.HeadRoot }}" class="text-truncate d-inline-block" style="max-width: 200px">0x{{ printf "%x" $client.HeadRoot }}</a>
-                      <i class="fa fa-copy text-muted p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="0x{{ printf "%x" $client.HeadRoot }}"></i>
+                      <i class="fa fa-copy text-muted p-1" role="button" data-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="0x{{ printf "%x" $client.HeadRoot }}"></i>
                     </td>
                     <td>
                       {{ if eq $client.Status "online" }}
                         <span class="badge rounded-pill text-bg-success">Ready</span>
                       {{ else if eq $client.Status "synchronizing" }}
-                        <span class="badge rounded-pill text-bg-warning" data-bs-toggle="tooltip" data-bs-placement="top" title="Updated: {{ formatRecentTimeShort $client.LastRefresh }}">Synchronizing</span>
+                        <span class="badge rounded-pill text-bg-warning" data-toggle="tooltip" data-placement="top" title="Updated: {{ formatRecentTimeShort $client.LastRefresh }}">Synchronizing</span>
                       {{ else if eq $client.Status "optimistic" }}
-                        <span class="badge rounded-pill text-bg-info" data-bs-toggle="tooltip" data-bs-placement="top" title="Updated: {{ formatRecentTimeShort $client.LastRefresh }}">Optimistic</span>
+                        <span class="badge rounded-pill text-bg-info" data-toggle="tooltip" data-placement="top" title="Updated: {{ formatRecentTimeShort $client.LastRefresh }}">Optimistic</span>
                       {{ else if eq $client.Status "offline" }}
-                        <span class="badge rounded-pill text-bg-secondary" data-bs-toggle="tooltip" data-bs-placement="top" title="Updated: {{ formatRecentTimeShort $client.LastRefresh }}, Error: {{ $client.LastError }}">Disconnected</span>
+                        <span class="badge rounded-pill text-bg-secondary" data-toggle="tooltip" data-placement="top" title="Updated: {{ formatRecentTimeShort $client.LastRefresh }}, Error: {{ $client.LastError }}">Disconnected</span>
                       {{ else }}
                         <span class="badge rounded-pill text-bg-dark">{{ $client.Status }}</span>
                       {{ end }}
                     </td>
                     <td>
                       <span class="text-truncate d-inline-block" style="max-width: 300px">{{ $client.Version }}</span>
-                      <i class="fa fa-copy text-muted p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $client.Version }}"></i>
+                      <i class="fa fa-copy text-muted p-1" role="button" data-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $client.Version }}"></i>
                     </td>
                   </tr>
                   <tr class="collapse peerInfo" style="transition:0s" id="peerInfo-{{ $client.PeerID }}">
-                    <td colspan="7" style="padding: 10px 0;">
-                      <div class="client-row-divider">Node identity</div>
-                      <div class="client-node-peerinfo">
-                        <table class="table table-borderless table-sm client-table-info ">
-                          <tbody>
-                            <tr>
-                              <td>Name</td>
-                              <td>
-                                <code>{{ $client.Name }}</code>
-                                <i class="fa fa-copy text-muted p-1" role="button" data-bs-placement="right" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $client.Name }}"></i>
-                              </td>
-                            </tr>
-                            <tr>
-                              <td>Peer ID</td>
-                              <td>
-                                <code>{{ $client.PeerID }}</code>
-                                <i class="fa fa-copy text-muted p-1" role="button" data-bs-placement="right" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $client.PeerID }}"></i>
-                              </td>
-                            </tr>
-                            {{ if $root.ShowSensitivePeerInfos }}
-                            <tr>
-                              <td>Node ID</td>
-                              <td>
-                                <code>{{ $client.NodeID }}</code>
-                                <i class="fa fa-copy text-muted p-1" role="button" data-bs-placement="right" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $client.NodeID }}"></i>
-                              </td>
-                            </tr>
-                            <tr style="vertical-align: top;">
-                              <td>ENR</td>
-                              <td>
-                                <div style="word-break: break-all; text-wrap: pretty;">
-                                  <code>{{ $client.ENR }}</code>
-                                  <i class="fa fa-copy text-muted p-1" role="button" data-bs-placement="right" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $client.ENR }}"></i>
-                                </div>
-                              </td>
-                            </tr>
-                            {{ end }}
-                          </tbody>
-                        </table>
-                        {{ if $root.ShowSensitivePeerInfos }}
-                        <div class="client-row-divider">ENR fields</div>
-                          <table class="table table-borderless table-sm client-table-info" style="margin-top:10px">
-                            <tbody>
-                              {{ range $k, $v := $client.ENRKeyValues }}
-                                <tr>
-                                  <td>{{ $k }}</td>
-                                  <td>
-                                    <code>{{ $v }}</code>
-                                    <i class="fa fa-copy text-muted p-1" role="button" data-bs-placement="right" data-bs-toggle="tooltip" title="Copy {{ $k }} to clipboard" data-clipboard-text="{{ $v }}" ></i>
-                                  </td>
-                                </tr>
-                              {{ end }}
-                            </tbody>
-                          </table>
-                        </div>
-                        {{ end }}
-                      <div class="client-row-divider">Peers</div>
-                      <div>
-                        <div class="peer-table-column">
-                          {{ range $j, $peer := $client.Peers }}
-                            <div style="padding-left: 20px; padding-top:3px">
-                              {{ if eq $peer.Direction "inbound" }}
-                              <i class="fa-solid fa-down-long text-success" data-bs-toggle="tooltip" data-bs-placement="left" data-bs-title="Inbound"></i>
-                              {{ else }}
-                              <i class="fa-solid fa-up-long text-danger" data-bs-toggle="tooltip" data-bs-placement="left" data-bs-title="Outbound"></i>
-                              {{ end}}
-                              <svg class="peer-table-icon {{ $peer.State }}" data-jdenticon-value="{{ $peer.ID }}"></svg>
-                              <code>
-                                {{ $peer.ID }}
-                              </code>
-                              <i class="fa fa-copy text-muted p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $peer.ID }}"></i>
-                              {{ if eq $peer.Type "internal" }}
-                              <span class="badge text-bg-secondary">{{ $peer.Alias }}</span>
-                              {{ end }}
-                            </div>
-                            {{ if $root.ShowSensitivePeerInfos }}
-                              <div class="client-node-peer-details">
-                                <table class="table table-borderless table-sm client-table-info" style="padding-left:0; margin-top:10px;margin-bottom: 10px; margin-left: 10px;">
-                                  <tbody>
-                                    <tr>
-                                      <td>P2P Addr</td>
-                                      <td>
-                                        <code>{{ $peer.LastSeenP2PAddress }}</code>
-                                        <i class="fa fa-copy text-muted p-1" role="button" data-bs-placement="right" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $peer.LastSeenP2PAddress }}"></i>
-                                      </td>
-                                    </tr>
-                                    <tr>
-                                      <td>ENR</td>
-                                      <td>
-                                        <div style="word-break: break-all; text-wrap: pretty;">
-                                          <code>{{ if eq $peer.ENR "" }}Unknown{{ else }}{{ $peer.ENR }}{{ end }}</code>
-                                          <i class="fa fa-copy text-muted p-1" role="button" data-bs-placement="right" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $peer.ENR }}"></i>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                    {{ if ne $peer.ENR "" }}
-                                      <tr>
-                                        <td>Node ID</td>
-                                        <td>
-                                          <code>{{ $peer.NodeID }}</code>
-                                          <i class="fa fa-copy text-muted p-1" role="button" data-bs-placement="right" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ $peer.NodeID }}"></i>
-                                        </td>
-                                      </tr>
-                                      {{ range $k, $v := $peer.ENRKeyValues }}
-                                      <tr>
-                                        <td>{{ $k }}</td>
-                                        <td>
-                                          <code>{{ $v }}</code>
-                                          <i class="fa fa-copy text-muted p-1" role="button" data-bs-placement="right" data-bs-toggle="tooltip" title="Copy {{ $k }} to clipboard" data-clipboard-text="{{ $v }}"></i>
-                                        </td>
-                                      </tr>
-                                      {{ end }}
-                                    {{ end }}
-                                  </tbody>
-                                </table>
-                              </div>
-                            {{ end}}
-                          {{ end }}
-                        </div>
+                    <td colspan="7" style="padding: 10px 0;" class="client-node-peerinfo-container" data-peerid="{{ $client.PeerID }}">
+
+
                     </td>
                   </tr>
                 {{ end }}
               </tbody>
           </table>
         </div>
+
+        <!-- Peer details template -->
+        <div class="peer-details-content d-none">
+          <div class="client-row-divider">Node identity</div>
+          <div class="client-node-peerinfo">
+            <table class="table table-borderless table-sm client-table-info ">
+              <tbody>
+                <tr>
+                  <td>Name</td>
+                  <td>
+                    <code data-bind="text: alias"></code>
+                    <i class="fa fa-copy text-muted p-1" role="button" data-placement="right" data-toggle="tooltip" title="Copy to clipboard" data-bind="attr: {'data-clipboard-text': alias}"></i>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Peer ID</td>
+                  <td>
+                    <code data-bind="text: peer_id"></code>
+                    <i class="fa fa-copy text-muted p-1" role="button" data-placement="right" data-toggle="tooltip" title="Copy to clipboard" data-bind="attr: {'data-clipboard-text': peer_id}"></i>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Node ID</td>
+                  <td>
+                    <code data-bind="text: node_id"></code>
+                    <i class="fa fa-copy text-muted p-1" role="button" data-placement="right" data-toggle="tooltip" title="Copy to clipboard" data-bind="attr: {'data-clipboard-text': node_id}"></i>
+                  </td>
+                </tr>
+                {{ html "<!-- ko if: showSensitivePeerInfos -->" }}
+                <tr style="vertical-align: top;">
+                  <td>ENR</td>
+                  <td>
+                    <code class="enr-text-container" data-bind="text: enr"></code>
+                    <i class="fa fa-copy text-muted p-1" role="button" data-placement="right" data-toggle="tooltip" title="Copy to clipboard" data-bind="attr: {'data-clipboard-text': enr}"></i>
+                  </td>
+                </tr>
+                {{ html "<!-- /ko -->" }}
+              </tbody>
+            </table>
+            {{ html "<!-- ko if: showSensitivePeerInfos -->" }}
+            <div class="client-row-divider">ENR fields</div>
+            <table class="table table-borderless table-sm client-table-info" style="margin-top:10px">
+              <tbody>
+                {{ html "<!-- ko foreach: enr_kv -->" }}
+                <tr>
+                  <td data-bind="text: key"></td>
+                  <td>
+                    {{ html "<!-- ko if: key === 'cgc' -->" }}
+                    <code data-bind="text: value, attr: {'data-bs-toggle': 'tooltip', 'data-bs-placement': 'right', 'data-bs-title': 'Decimal: ' + window.explorer.hexToDecimal(value)}"></code>
+                    {{ html "<!-- /ko -->" }}
+                    {{ html "<!-- ko if: key !== 'cgc' -->" }}
+                    <code data-bind="text: value"></code>
+                    {{ html "<!-- /ko -->" }}
+                    <i class="fa fa-copy text-muted p-1" role="button" data-placement="right" data-toggle="tooltip" data-bind="attr: {'data-clipboard-text': $data.value, title: 'Copy ' + $data.key + ' to clipboard'}" ></i>
+                  </td>
+                </tr>
+                {{ html "<!-- /ko -->" }}
+              </tbody>
+            </table>
+            {{ html "<!-- /ko -->" }}
+
+            {{ html "<!-- ko if: showPeerDASInfos -->" }}
+            <div class="client-row-divider">Peer DAS</div>
+            <table class="table table-borderless table-sm client-table-info" style="margin-top:10px">
+              <tbody>
+                  <tr>
+                    <td data-bind="text: 'Custody columns/subnets (' + peer_das().columns.length + ')'"></td>
+                    <td>
+                      <code class="enr-text-container" data-bind="text: peer_das().columns.join(', ')"></code>
+                      <i class="fa fa-copy text-muted p-1" role="button" data-placement="right" data-toggle="tooltip" data-bind="attr: {'data-clipboard-text': peer_das().columns.join(', ')}" title="Copy custody columns to clipboard"></i>
+                    </td>
+                  </tr>
+              </tbody>
+            </table>
+            {{ html "<!-- /ko -->" }}
+          </div>
+          <div class="client-row-divider" style="position: relative;">
+            Peers
+            <button type="button" class="btn btn-outline-secondary btn-sm peer-collapse-btn" data-bs-toggle="collapse" data-bind="attr: {'data-bs-target': '#peer-details-list-' + peer_id(), 'aria-controls': 'peer-details-list-' + peer_id()}" aria-expanded="false" style="position: absolute; right: 0; top: 0;">
+              <i class="fa fa-chevron-down"></i> Show Connected Peers
+            </button>
+          </div>
+          <div class="collapse peer-details-collapse" data-bind="attr: {id: 'peer-details-list-' + peer_id()}">
+            <div class="peer-table-column">
+              {{ html "<!-- ko foreach: peers -->" }}
+
+                <div style="padding-left: 20px; padding-top:3px" data-bind="let: {$node: $root.getNode(peer_id)}">
+                  <i class="fa-solid fa-down-long text-success" data-toggle="tooltip" data-placement="left" title="Inbound" data-bind="visible: direction == 'inbound'"></i>
+                  <i class="fa-solid fa-up-long text-danger" data-toggle="tooltip" data-placement="left" title="Outbound" data-bind="visible: direction == 'outbound'"></i>
+                  <svg data-bind="attr: {'data-jdenticon-value': peer_id}, class: 'peer-table-icon '+state"></svg>
+                  <code data-bind="text: peer_id"></code>
+                  <i class="fa fa-copy text-muted p-1" role="button" data-toggle="tooltip" title="Copy to clipboard" data-bind="attr: {'data-clipboard-text': peer_id}"></i>
+                  <span class="badge text-bg-secondary" data-bind="if: $node.type == 'internal'">
+                    <span data-bind="text: $node.alias"></span>
+                  </span>
+                </div>
+                {{ html "<!-- ko if: $root.showSensitivePeerInfos -->" }}
+                  <div class="client-node-peer-details" data-bind="let: {$node: $root.getNode(peer_id)}">
+                    {{ html "<!-- ko if: $node.enr != enr -->" }}
+                      <div style="padding:10px; margin: 0; margin-left:10px; margin-right: 25px; word-break: break-all; text-wrap: pretty;" class="alert alert-warning" role="alert">
+                        <p>
+                          <i class="fa-solid fa-circle-exclamation" style="margin-right: 10px;"></i>The ENR information was obtained from another node.
+                        </p>
+                        <p>
+                          The node <code data-bind="text: $root.getNodeName($parent.peer_id)"></code> did not have the most up-to-date ENR for this peer.
+                          {{ html "<!-- ko if: enr == '' -->" }}
+                            The reported ENR was empty (nil).
+                          {{ html "<!-- /ko -->" }}
+                        </p>
+                        {{ html "<!-- ko if: enr != '' -->" }}
+                          <p>Some other node reported a higher sequence number than this one.
+                            <code data-bind="text: 'seq=' + $root.getEnrValue(enr_kv, 'seq')"></code> vs <code data-bind="text: 'seq=' + $root.getEnrValue($node.enr_kv, 'seq')"></code>
+                          </p>
+                          <p>ENR: <code data-bind="text: enr"></code></p>
+                          <p>Decoded ENR: <code data-bind="text: $root.getEnrJson(enr_kv)"></code></p>
+                        {{ html "<!-- /ko -->" }}
+
+
+                      </div>
+                    {{ html "<!-- /ko -->" }}
+
+                    <table class="table table-borderless table-sm client-table-info" style="padding-left:0; margin-top:10px;margin-bottom: 10px; margin-left: 10px;">
+                      <tbody>
+                        <tr>
+                          <td>Node ID</td>
+                          <td>
+                            <code data-bind="text: $node.node_id"></code>
+                            <i class="fa fa-copy text-muted p-1" role="button" data-placement="right" data-toggle="tooltip" title="Copy to clipboard" data-bind="attr: {'data-clipboard-text': $node.node_id}"></i>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>P2P Addr</td>
+                          <td>
+                            <code data-bind="text: last_seen_p2p_address"></code>
+                            <i class="fa fa-copy text-muted p-1" role="button" data-placement="right" data-toggle="tooltip" title="Copy to clipboard" data-bind="attr: {'data-clipboard-text': last_seen_p2p_address}"></i>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>ENR</td>
+                          <td>
+                            <code class="enr-text-container" data-bind="text: $node.enr"></code>
+                            <i class="fa fa-copy text-muted p-1" role="button" data-placement="right" data-toggle="tooltip" title="Copy to clipboard" data-bind="attr: {'data-clipboard-text': enr || $node.enr}"></i>
+                          </td>
+                        </tr>
+                        {{ html "<!-- ko if: $node.enr != '' -->" }}
+                        {{ html "<!-- ko foreach: $node.enr_kv -->" }}
+                          <tr>
+                            <td data-bind="text: key"></td>
+                            <td>
+                              <code data-bind="text: value"></code>
+                              <i class="fa fa-copy text-muted p-1" role="button" data-placement="right" data-toggle="tooltip" data-bind="attr: {'data-clipboard-text': value, title: 'Copy ' + key + ' to clipboard'}"></i>
+                            </td>
+                          </tr>
+                        {{ html "<!-- /ko -->" }}
+                        {{ html "<!-- /ko -->" }}
+                      </tbody>
+                    </table>
+                    {{ html "<!-- ko if: $root.showPeerDASInfos -->" }}
+                      <div class="client-row-divider">Peer DAS</div>
+                      <table class="table table-borderless table-sm client-table-info" style="padding-left:0; margin-top:10px;margin-bottom: 10px; margin-left: 10px;">
+                        <tbody>
+                            <tr>
+                              <td data-bind="text: 'Custody columns/subnets (' + $node.peer_das.columns.length + ')'"></td>
+                              <td>
+                                <code class="enr-text-container" data-bind="text: $node.peer_das.columns.join(', ')"></code>
+                                <i class="fa fa-copy text-muted p-1" role="button" data-placement="right" data-toggle="tooltip" title="Copy to clipboard" data-bind="attr: {'data-clipboard-text': $node.peer_das.columns.join(', ')}" ></i>
+                              </td>
+                            </tr>
+                        </tbody>
+                      </table>
+                    {{ html "<!-- /ko -->" }}
+                  </div>
+                {{ html "<!-- /ko -->" }}
+              {{ html "<!-- /ko -->" }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Peer details modal -->
+        <div class="modal modal-xl" id="peerDetailsModal" tabindex="-1" role="dialog" aria-labelledby="peerDetailsModalTitle" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered modal-xl" role="document">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" style="overflow-wrap: anywhere;">
+                  <svg id="peerDetailsModalTitleImage" class="peer-table-icon" style="width:50px;height:50px;" data-jdenticon-value="user127"></svg>
+                  <span id="peerDetailsModalTitle"></span>
+                </h5>
+                <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"  onclick="hidePeerDetailsModal()"></button>
+              </div>
+              <div class="modal-body">
+                <div id="peerDetailsModalBody">
+                  <table class="table table-borderless table-sm">
+                    <tr>
+                      <td style="min-width:90px;">Peer ID</td>
+                      <td><code data-bind="text: peer_id"></code></td>
+                    </tr>
+                    <tr>
+                      <td>Node ID</td>
+                      <td><code data-bind="text: node_id"></code></td>
+                    </tr>
+                    {{ html "<!-- ko if: $root.showSensitivePeerInfos -->" }}
+                      <tr>
+                        <td>ENR</td>
+                        <td><code class="enr-text-container" data-bind="text: !$root.showSensitivePeerInfos ? '***' : enr ? enr : 'Unknown'"></code></td>
+                      </tr>
+                      {{ html "<!-- ko if: enr != '' -->" }}
+                        <tr>
+                          <td colspan="2" style="font-weight: 700;padding-top: 5px;padding-bottom: 5px; text-align: center;border-top:1px dashed; border-bottom:1px dashed">ENR Fields</td>
+                        </tr>
+                        {{ html "<!-- ko foreach: enr_kv -->" }}
+                          <tr>
+                            <td style="padding-right:15px; vertical-align:top" data-bind="text: key"></td>
+                            <td><code class="enr-text-container" data-bind="text: value"></code></td>
+                          </tr>
+                        {{ html "<!-- /ko -->" }}
+                      {{ html "<!-- /ko -->" }}
+                    {{ html "<!-- /ko -->" }}
+                    {{ html "<!-- ko if: $root.showPeerDASInfos -->" }}
+                      <tr>
+                        <td colspan="2" style="font-weight: 700;padding-top: 5px;padding-bottom: 5px; text-align: center;border-top:1px dashed; border-bottom:1px dashed">Peer DAS</td>
+                      </tr>
+                      <tr>
+                        <td>Supernode</td>
+                        <td><code data-bind="text: peer_das().is_super_node"></code></td>
+                      </tr>
+                      <tr>
+                        <td>CGC</td>
+                        <td><code data-bind="text: peer_das().cgc"></code></td>
+                      </tr>
+                      <tr>
+                        <td data-bind="text: 'Columns/subnets (' + peer_das().columns.length + ')'"></td>
+                        <td><code class="enr-text-container" data-bind="text: peer_das().columns.join(', ')"></code></td>
+                      </tr>
+                    {{ html "<!-- /ko -->" }}
+                    <tr>
+                      <td colspan="2" style="font-weight: 700;padding-top: 5px;padding-bottom: 5px; text-align: center;border-top:1px dashed; border-bottom:1px dashed">Peers</td>
+                    </tr>
+
+                    {{ html "<!-- ko if: peers_in != null -->" }}
+                      {{ html "<!-- ko foreach: peers_in -->" }}
+                        <tr>
+                          <td colspan="2">
+                            <i class="fa-solid fa-down-long text-success" data-toggle="tooltip" data-placement="left" title="Inbound"></i>
+                            <svg class="peer-table-icon peer-details-jdenticon" data-bind="attr: {'data-jdenticon-value': $data}"></svg>
+                            <span class="peerdetails-modal-peer" onclick="showPeerDetailsModal($(this).data('peerid'))" data-bind="attr: {'data-peerid': $data}, let: {peer: $root.getNode($data)}">
+                              <code data-bind="text: $data"></code>
+                              {{ html "<!-- ko if: peer.alias != $data -->" }}
+                                <span class="badge text-bg-secondary">
+                                  <span data-bind="text: peer.alias"></span>
+                                </span>
+                              {{ html "<!-- /ko -->" }}
+                            </span>
+                          </td>
+                        </tr>
+                      {{ html "<!-- /ko -->" }}
+                    {{ html "<!-- /ko -->" }}
+
+                    {{ html "<!-- ko if: peers_out != null -->" }}
+                      {{ html "<!-- ko foreach: peers_out -->" }}
+                        <tr>
+                          <td colspan="2">
+                            <i class="fa-solid fa-up-long text-danger" data-toggle="tooltip" data-placement="left" title="Outbound"></i>
+                            <svg class="peer-table-icon peer-details-jdenticon" data-bind="attr: {'data-jdenticon-value': $data}"></svg>
+                            <span class="peerdetails-modal-peer" onclick="showPeerDetailsModal($(this).data('peerid'))" data-bind="attr: {'data-peerid': $data}, let: {peer: $root.getNode($data)}">
+                              <code data-bind="text: $data"></code>
+                              {{ html "<!-- ko if: peer.alias != $data -->" }}
+                                <span class="badge text-bg-secondary">
+                                  <span data-bind="text: peer.alias"></span>
+                                </span>
+                              {{ html "<!-- /ko -->" }}
+                            </span>
+                          </td>
+                        </tr>
+                      {{ html "<!-- /ko -->" }}
+                    {{ html "<!-- /ko -->" }}
+                  </table>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="hidePeerDetailsModal()">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
+
       <div id="footer-placeholder" style="height:30px;"></div>
     </div>
   </div>
@@ -254,6 +601,11 @@
           clientRow.click()
         }
       }
+      
+      // Check refresh cooldown status on page load
+      if (typeof window.explorer !== 'undefined' && window.explorer.checkRefreshCooldown) {
+        window.explorer.checkRefreshCooldown();
+      }
     });
   </script>
 
@@ -261,16 +613,316 @@
 
 {{ define "js" }}
 <script src="/js/vendor/jdenticon-3.3.0.min.js"></script>
+<script src="/js/knockout.min.js"></script>
 <script src="/js/vendor/cytoscape.min.js"></script>
 <script src="/js/vendor/cytoscape-layout-base.js"></script>
 <script src="/js/vendor/cytoscape-cose-base.js"></script>
 <script src="/js/vendor/cytoscape-fcose.js"></script>
-<script src="https://cytoscape.org/cytoscape.js-cxtmenu/cytoscape-cxtmenu.js"></script>
 <script src="/js/cytoscape-network-aux.js"></script>
 <script type="text/javascript">
-  var container = document.getElementById("nodemap");
-  var data = {{ .PeerMap }};
-  var cy = $_network.create(container, data);
+  var peerGraphData = {{ .PeerMap }};
+  var peerGraph, peerGraphRendered = false;
+
+  var nodes = {{ .Nodes }};
+
+  function renderPeerGraph() {
+    var container = document.getElementById("nodemap");
+    peerGraph = $_network.create(container, peerGraphData);
+  }
+
+  // Always keep graph collapsed by default - render only when opened
+  $('#peerGraph').on('shown.bs.collapse', function () {
+    if(peerGraphRendered) return;
+    renderPeerGraph();
+    peerGraphRendered = true;
+  });
+
+
+  var lastClickedNode = null;
+
+  // PeerDASTable Filter
+  function filterDASTablePeers() {
+    // Get the status of each checkbox
+    var showExternal = $('#showExternalPeersDAS').is(':checked');
+    var showInternal = $('#showInternalPeersDAS').is(':checked');
+    var showSupernode = $('#showSupernodePeersDAS').is(':checked');
+
+    console.log(showExternal, showInternal, showSupernode);
+
+    // For each node, show or hide based on the filter status
+    $('.dastablenode').each(function() {
+      var isExternal = $(this).hasClass('external');
+      var isInternal = $(this).hasClass('internal');
+      var isSupernode = $(this).hasClass('supernode');
+
+
+      console.log(isExternal, isInternal, isSupernode);
+
+      // Show supernodes if the checkbox is checked
+      if (isSupernode && showSupernode) {
+        $(this).show();
+        return;
+      } else if (isSupernode && !showSupernode) {
+        $(this).hide();
+        return;
+      }
+
+      // Show the node if it matches any of the active types
+      if ((showExternal && isExternal) ||
+          (showInternal && isInternal)) {
+        $(this).show();
+      } else {
+        $(this).hide();
+      }
+
+    });
+
+  }
+
+  // PeerDAS search and clear handlers (always active)
+  $('#searchDASTablePeers').on('input', function() {
+    var searchText = $(this).val();
+    if(searchText) searchText = searchText.trim().toLowerCase();
+
+    if (searchText) {
+      $('.dastablenode').each(function() {
+        const peerId = $(this).data('peerid').toString().toLowerCase();
+        const alias = $(this).data('alias').toString().toLowerCase();
+        if (peerId.includes(searchText) || alias.includes(searchText)) {
+          $(this).addClass('highlight').removeClass('blur');
+        } else {
+          $(this).addClass('blur').removeClass('highlight');
+        }
+      });
+    } else {
+      $('.dastablenode').removeClass('blur highlight');
+    }
+  });
+
+  $('#clearSearchButton').click(function(){
+    $('#searchDASTablePeers').val('');
+    $('.dastablenode').removeClass('blur highlight');
+  });
+
+  // Event listener to remove highlight when clicking outside (always active)
+  $(document).on('click', function(event) {
+    var searchText = $('#searchDASTablePeers').val();
+    if(searchText) searchText = searchText.trim().toLowerCase();
+
+    if (!searchText && !$(event.target).closest('.dastablenode').length) {
+      $('.dastablenode').removeClass('highlight blur');
+      lastClickedNode = null;
+    }
+  });
+
+  $('.client-row').on('click', function() {
+    var peerId = $(this).data('peerid');
+    if(peerGraph) {
+      $_network.isolateNode(peerGraph, peerId);
+    }
+    $('.collapse.peerInfo').collapse('hide');
+    $('#peerInfo-' + peerId).collapse('show');
+  });
+
+  (function() {
+    // shared base model for knockout bindings
+    var baseModel = {
+      showSensitivePeerInfos: {{ .ShowSensitivePeerInfos }},
+      showPeerDASInfos: {{ .ShowPeerDASInfos }},
+      getNode: function(peerId) { return nodes[peerId] },
+      getNodeName: function(peerId) { return nodes[peerId] ? nodes[peerId].alias : "" },
+      getEnrValue: function(enr_kv, key) {
+        for(var i = 0; i < enr_kv.length; i++) {
+          if(enr_kv[i].key == key)
+            return enr_kv[i].value;
+        }
+        return "";
+      },
+      getEnrJson: function(enr_kv) {
+        var obj = {};
+        for(var i = 0; i < enr_kv.length; i++) {
+          obj[enr_kv[i].key] = enr_kv[i].value;
+        }
+        return JSON.stringify(obj);
+      }
+    };
+
+    // Peer details view model
+    (function() {
+      function createModel(data) {
+        var viewModel = Object.create(baseModel);
+        var val;
+        for(var prop in data) {
+          val = data[prop];
+          if(Array.isArray(val))
+            viewModel[prop] = ko.observableArray(val);
+          else
+            viewModel[prop] = ko.observable(val);
+        }
+        return viewModel;
+      }
+
+      $('.peerInfo').on('shown.bs.collapse', function () {
+        var detailsContainer = $(this).find('.client-node-peerinfo-container');
+        if(detailsContainer.data('loaded')) return;
+
+        var peerId = detailsContainer.data('peerid');
+        detailsContainer.data('loaded', true);
+        var template = $(".peer-details-content").html();
+        detailsContainer.html(template);
+
+        var viewModel = createModel(nodes[peerId]);
+        ko.applyBindings(viewModel, detailsContainer.get(0));
+        window.explorer.initControls();
+        jdenticon.update(".peer-table-icon",null);
+        
+        // Initialize peer collapse handlers for this instance
+        initPeerCollapseHandlers(detailsContainer);
+      });
+
+    })();
+
+    // Peer details modal view model
+    (function() {
+      var currentModel = null;
+
+      function createModel(data) {
+        var viewModel = Object.create(baseModel);
+        var val;
+        for(var prop in data) {
+          val = data[prop];
+          if(Array.isArray(val))
+            viewModel[prop] = ko.observableArray(val);
+          else
+            viewModel[prop] = ko.observable(val);
+        }
+        return viewModel;
+      }
+
+      function updateModel(data) {
+        if(!currentModel) {
+          currentModel = createModel(data);
+          var detailsContainer = $("#peerDetailsModalBody");
+          ko.applyBindings(currentModel, detailsContainer.get(0));
+          window.explorer.initControls();
+        } else {
+          for(var prop in data) {
+            if(typeof currentModel[prop] == "function") {
+              if(currentModel[prop] instanceof ko.observableArray)
+                currentModel[prop](data[prop]||[]);
+              else
+                currentModel[prop](data[prop]);
+            } else
+              currentModel[prop] = data[prop];
+          }
+        }
+      }
+
+      window.showPeerDetailsModal = function(peerId) {
+        if(!peerId) {
+          peerId = $(this).data('peerid');
+        }
+
+        updateModel(nodes[peerId]);
+        jdenticon.update("#peerDetailsModalTitleImage", peerId);
+        jdenticon.update(".peer-details-jdenticon",null)
+
+        $("#peerDetailsModal").modal('show');
+      };
+
+      window.hidePeerDetailsModal = function() {
+        $("#peerDetailsModal").modal('hide');
+      };
+
+    })();
+  })();
+
+  // Function to initialize peer collapse handlers for a specific container
+  function initPeerCollapseHandlers(container) {
+    container.find('.peer-details-collapse').on('show.bs.collapse', function () {
+      $(this).siblings('.client-row-divider').find('.peer-collapse-btn').html('<i class="fa fa-chevron-up"></i> Hide Connected Peers');
+    });
+
+    container.find('.peer-details-collapse').on('hide.bs.collapse', function () {
+      $(this).siblings('.client-row-divider').find('.peer-collapse-btn').html('<i class="fa fa-chevron-down"></i> Show Connected Peers');
+    });
+  }
+
+  // PeerDAS accordion handler - render table only when opened
+  var peerDASTableRendered = false;
+  $('#collapseColumnInfos').on('shown.bs.collapse', function () {
+    if (!peerDASTableRendered) {
+      var template = $('#peerdas-table-template').html();
+      $('#peerdas-table-container').html(template);
+      
+      // Initialize jdenticon for the newly added SVG elements
+      jdenticon.update(".peer-table-icon", null);
+      
+      // Re-initialize all PeerDAS table interactions
+      initializePeerDASTableInteractions();
+      
+      peerDASTableRendered = true;
+    }
+  });
+
+  // Initialize PeerDAS table interactions (moved from inline)
+  function initializePeerDASTableInteractions() {
+    // PeerDASTable Hover
+    let hoverTimeout;
+    $('.dastablenode').hover(
+      function() {
+        hoverTimeout = setTimeout(() => {
+          var searchText = $('#searchDASTablePeers').val();
+          if(searchText) searchText = searchText.trim().toLowerCase();
+
+          if (!searchText && lastClickedNode == null) {
+            const $target = $(this);
+            const selector = $target.attr('class').split(/\s+/).map(cls => cls!=""?'.' + cls:"").join('');
+            $(selector).addClass('highlight');
+            $('.dastablenode').addClass('blur');
+          }
+        }, 500);
+      },
+      function() {
+        clearTimeout(hoverTimeout);
+        var searchText = $('#searchDASTablePeers').val();
+        if(searchText) searchText = searchText.trim().toLowerCase();
+
+        if (!searchText && lastClickedNode == null) {
+          const $target = $(this);
+          const selector = $target.attr('class').split(/\s+/).map(cls => cls!=""?'.' + cls:"").join('');
+          $(selector).removeClass('highlight');
+          $('.dastablenode').removeClass('blur');
+        }
+      }
+    );
+
+    // PeerDASTable Click
+    $('.dastablenode').on('click', function() {
+      const $target = $(this);
+      const selector = $target.attr('class').split(/\s+/).map(cls => '.' + cls).join('');
+      const peerID = $target.data('peerid').toString();
+
+      showPeerDetailsModal(peerID);
+
+      // Remove highlight/blur from the last clicked node
+      if (lastClickedNode != null) {
+        $(lastClickedNode).removeClass('highlight');
+        $('.dastablenode').removeClass('blur');
+      }
+
+      // Highlight clicked node and blur others
+      $(selector).addClass('highlight');
+      $('.dastablenode').not(selector).addClass('blur');
+
+      // Store the clicked node
+      lastClickedNode = selector;
+
+      // Add node to searchtext
+      $('#searchDASTablePeers').val(nodes[peerID].alias).trigger("input");
+    });
+  }
+
 </script>
 {{ end }}
 {{ define "css" }}

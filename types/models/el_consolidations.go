@@ -9,6 +9,7 @@ type ElConsolidationsPageData struct {
 	FilterMinSlot          uint64 `json:"filter_mins"`
 	FilterMaxSlot          uint64 `json:"filter_maxs"`
 	FilterAddress          string `json:"filter_address"`
+	FilterPublicKey        string `json:"filter_pubkey"`
 	FilterMinSrcIndex      uint64 `json:"filter_minsi"`
 	FilterMaxSrcIndex      uint64 `json:"filter_maxsi"`
 	FilterSrcValidatorName string `json:"filter_svname"`
@@ -37,10 +38,14 @@ type ElConsolidationsPageData struct {
 }
 
 type ElConsolidationsPageDataConsolidation struct {
+	IsIncluded           bool      `json:"is_included"`
 	SlotNumber           uint64    `json:"slot"`
 	SlotRoot             []byte    `json:"slot_root"`
 	Time                 time.Time `json:"time"`
-	Orphaned             bool      `json:"orphaned"`
+	Status               uint64    `json:"status"`
+	Result               uint8     `json:"result"`
+	ResultMessage        string    `json:"result_message"`
+	TxStatus             uint64    `json:"tx_status"`
 	SourceAddr           []byte    `json:"src_addr"`
 	SourceValidatorValid bool      `json:"src_vvalid"`
 	SourceValidatorIndex uint64    `json:"src_vindex"`
@@ -52,4 +57,15 @@ type ElConsolidationsPageDataConsolidation struct {
 	TargetPublicKey      []byte    `json:"tgt_pubkey"`
 	LinkedTransaction    bool      `json:"linked_tx"`
 	TransactionHash      []byte    `json:"tx_hash"`
+
+	TransactionDetails *ElConsolidationsPageDataConsolidationTxDetails `json:"tx_details"`
+}
+
+type ElConsolidationsPageDataConsolidationTxDetails struct {
+	BlockNumber uint64 `json:"block"`
+	BlockHash   string `json:"block_hash"`
+	BlockTime   uint64 `json:"block_time"`
+	TxOrigin    string `json:"tx_origin"`
+	TxTarget    string `json:"tx_target"`
+	TxHash      string `json:"tx_hash"`
 }

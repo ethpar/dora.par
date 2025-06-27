@@ -3,7 +3,6 @@ package consensus
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"strings"
 	"sync"
 	"time"
@@ -74,7 +73,10 @@ func (cs *ChainState) setClientSpecs(specValues map[string]interface{}) (error, 
 	var warning error
 
 	if cs.specs != nil {
-		mismatches := cs.specs.CheckMismatch(specs)
+		mismatches, err := cs.specs.CheckMismatch(specs)
+		if err != nil {
+			return nil, err
+		}
 		if len(mismatches) > 0 {
 			return nil, fmt.Errorf("spec mismatch: %v", strings.Join(mismatches, ", "))
 		}
@@ -85,7 +87,10 @@ func (cs *ChainState) setClientSpecs(specValues map[string]interface{}) (error, 
 			return nil, err
 		}
 
-		mismatches = cs.specs.CheckMismatch(newSpecs)
+		mismatches, err = cs.specs.CheckMismatch(newSpecs)
+		if err != nil {
+			return nil, err
+		}
 		if len(mismatches) > 0 {
 			warning = fmt.Errorf("spec missing: %v", strings.Join(mismatches, ", "))
 		}
@@ -176,37 +181,11 @@ func (cs *ChainState) GetFinalizedSlot() phase0.Slot {
 }
 
 func (cs *ChainState) CurrentSlot() phase0.Slot {
-	if cs.wallclock == nil {
-		return 0
-	}
-
-	slot, _, err := cs.wallclock.Now()
-	if err != nil {
-		return 0
-	}
-
-	if slot.Number() > uint64(math.MaxInt64) {
-		return 0
-	}
-
-	return phase0.Slot(slot.Number())
+	return cs.TimeToSlot(time.Now())
 }
 
 func (cs *ChainState) CurrentEpoch() phase0.Epoch {
-	if cs.wallclock == nil {
-		return 0
-	}
-
-	_, epoch, err := cs.wallclock.Now()
-	if err != nil {
-		return 0
-	}
-
-	if epoch.Number() > uint64(math.MaxInt64) {
-		return 0
-	}
-
-	return phase0.Epoch(epoch.Number())
+	return cs.EpochOfSlot(cs.CurrentSlot())
 }
 
 func (cs *ChainState) EpochOfSlot(slot phase0.Slot) phase0.Epoch {
@@ -285,4 +264,30 @@ func (cs *ChainState) GetValidatorChurnLimit(validatorCount uint64) uint64 {
 	}
 
 	return adaptable
+}
+
+func (cs *ChainState) GetBalanceChurnLimit(totalActiveBalance uint64) uint64 {
+	if cs.specs == nil {
+		return 0
+	}
+
+	balanceChurnLimit := totalActiveBalance / cs.specs.ChurnLimitQuotient
+	if balanceChurnLimit < cs.specs.MinPerEpochChurnLimitElectra {
+		balanceChurnLimit = cs.specs.MinPerEpochChurnLimitElectra
+	}
+
+	return balanceChurnLimit - (balanceChurnLimit % cs.specs.EffectiveBalanceIncrement)
+}
+
+func (cs *ChainState) GetActivationExitChurnLimit(totalActiveBalance uint64) uint64 {
+	if cs.specs == nil {
+		return 0
+	}
+
+	balanceChurnLimit := cs.GetBalanceChurnLimit(totalActiveBalance)
+	if balanceChurnLimit > cs.specs.MaxPerEpochActivationExitChurnLimit {
+		return cs.specs.MaxPerEpochActivationExitChurnLimit
+	}
+
+	return balanceChurnLimit
 }

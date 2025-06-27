@@ -15,11 +15,11 @@ func InsertWithdrawalRequests(elRequests []*dbtypes.WithdrawalRequest, tx *sqlx.
 			dbtypes.DBEnginePgsql:  "INSERT INTO withdrawal_requests ",
 			dbtypes.DBEngineSqlite: "INSERT OR REPLACE INTO withdrawal_requests ",
 		}),
-		"(slot_number, slot_root, slot_index, orphaned, fork_id, source_address, validator_index, validator_pubkey, amount, tx_hash)",
+		"(slot_number, slot_root, slot_index, orphaned, fork_id, source_address, validator_index, validator_pubkey, amount, tx_hash, block_number, result)",
 		" VALUES ",
 	)
 	argIdx := 0
-	fieldCount := 10
+	fieldCount := 12
 
 	args := make([]any, len(elRequests)*fieldCount)
 	for i, elRequest := range elRequests {
@@ -46,10 +46,12 @@ func InsertWithdrawalRequests(elRequests []*dbtypes.WithdrawalRequest, tx *sqlx.
 		args[argIdx+7] = elRequest.ValidatorPubkey
 		args[argIdx+8] = elRequest.Amount
 		args[argIdx+9] = elRequest.TxHash
+		args[argIdx+10] = elRequest.BlockNumber
+		args[argIdx+11] = elRequest.Result
 		argIdx += fieldCount
 	}
 	fmt.Fprint(&sql, EngineQuery(map[dbtypes.DBEngineType]string{
-		dbtypes.DBEnginePgsql:  " ON CONFLICT (slot_root, slot_index) DO UPDATE SET orphaned = excluded.orphaned, tx_hash = excluded.tx_hash",
+		dbtypes.DBEnginePgsql:  " ON CONFLICT (slot_root, slot_index) DO UPDATE SET orphaned = excluded.orphaned, tx_hash = excluded.tx_hash, result = excluded.result",
 		dbtypes.DBEngineSqlite: "",
 	}))
 
@@ -60,13 +62,13 @@ func InsertWithdrawalRequests(elRequests []*dbtypes.WithdrawalRequest, tx *sqlx.
 	return nil
 }
 
-func GetWithdrawalRequestsFiltered(offset uint64, limit uint32, finalizedBlock uint64, filter *dbtypes.WithdrawalRequestFilter) ([]*dbtypes.WithdrawalRequest, uint64, error) {
+func GetWithdrawalRequestsFiltered(offset uint64, limit uint32, canonicalForkIds []uint64, filter *dbtypes.WithdrawalRequestFilter) ([]*dbtypes.WithdrawalRequest, uint64, error) {
 	var sql strings.Builder
 	args := []interface{}{}
 	fmt.Fprint(&sql, `
 	WITH cte AS (
 		SELECT
-			slot_number, slot_index, slot_root, orphaned, fork_id, source_address, validator_index, validator_pubkey, amount
+			slot_number, slot_index, slot_root, orphaned, fork_id, source_address, validator_index, validator_pubkey, CAST(amount AS BIGINT), tx_hash, block_number, result
 		FROM withdrawal_requests
 	`)
 
@@ -85,6 +87,11 @@ func GetWithdrawalRequestsFiltered(offset uint64, limit uint32, finalizedBlock u
 	if filter.MaxSlot > 0 {
 		args = append(args, filter.MaxSlot)
 		fmt.Fprintf(&sql, " %v slot_number <= $%v", filterOp, len(args))
+		filterOp = "AND"
+	}
+	if len(filter.PublicKey) > 0 {
+		args = append(args, filter.PublicKey)
+		fmt.Fprintf(&sql, " %v validator_pubkey = $%v ", filterOp, len(args))
 		filterOp = "AND"
 	}
 	if len(filter.SourceAddress) > 0 {
@@ -112,24 +119,32 @@ func GetWithdrawalRequestsFiltered(offset uint64, limit uint32, finalizedBlock u
 		filterOp = "AND"
 	}
 	if filter.MinAmount != nil {
-		args = append(args, *filter.MinAmount)
+		args = append(args, ConvertUint64ToInt64(*filter.MinAmount))
 		fmt.Fprintf(&sql, " %v amount >= $%v", filterOp, len(args))
 		filterOp = "AND"
 	}
 	if filter.MaxAmount != nil {
-		args = append(args, *filter.MaxAmount)
+		args = append(args, ConvertUint64ToInt64(*filter.MaxAmount))
 		fmt.Fprintf(&sql, " %v amount <= $%v", filterOp, len(args))
 		filterOp = "AND"
 	}
 
-	if filter.WithOrphaned == 0 {
-		args = append(args, finalizedBlock)
-		fmt.Fprintf(&sql, " %v (slot_number > $%v OR orphaned = false)", filterOp, len(args))
-		filterOp = "AND"
-	} else if filter.WithOrphaned == 2 {
-		args = append(args, finalizedBlock)
-		fmt.Fprintf(&sql, " %v (slot_number > $%v OR orphaned = true)", filterOp, len(args))
-		filterOp = "AND"
+	if filter.WithOrphaned != 1 {
+		forkIdStr := make([]string, len(canonicalForkIds))
+		for i, forkId := range canonicalForkIds {
+			forkIdStr[i] = fmt.Sprintf("%v", forkId)
+		}
+		if len(forkIdStr) == 0 {
+			forkIdStr = append(forkIdStr, "0")
+		}
+
+		if filter.WithOrphaned == 0 {
+			fmt.Fprintf(&sql, " %v fork_id IN (%v)", filterOp, strings.Join(forkIdStr, ","))
+			filterOp = "AND"
+		} else if filter.WithOrphaned == 2 {
+			fmt.Fprintf(&sql, " %v fork_id NOT IN (%v)", filterOp, strings.Join(forkIdStr, ","))
+			filterOp = "AND"
+		}
 	}
 
 	args = append(args, limit)
@@ -143,7 +158,10 @@ func GetWithdrawalRequestsFiltered(offset uint64, limit uint32, finalizedBlock u
 		null AS source_address,
 		0 AS validator_index,
 		null AS validator_pubkey,
-		0 AS amount
+		CAST(0 AS BIGINT) AS amount,
+		null AS tx_hash,
+		0 AS block_number,
+		0 AS result
 	FROM cte
 	UNION ALL SELECT * FROM (
 	SELECT * FROM cte
@@ -165,4 +183,29 @@ func GetWithdrawalRequestsFiltered(offset uint64, limit uint32, finalizedBlock u
 	}
 
 	return withdrawalRequests[1:], withdrawalRequests[0].SlotNumber, nil
+}
+
+func GetWithdrawalRequestsByElBlockRange(firstSlot uint64, lastSlot uint64) []*dbtypes.WithdrawalRequest {
+	withdrawalRequests := []*dbtypes.WithdrawalRequest{}
+
+	err := ReaderDb.Select(&withdrawalRequests, `
+		SELECT withdrawal_requests.*
+		FROM withdrawal_requests
+		WHERE block_number >= $1 AND block_number <= $2
+		ORDER BY block_number ASC, slot_index ASC
+	`, firstSlot, lastSlot)
+	if err != nil {
+		logger.Errorf("Error while fetching withdrawal requests: %v", err)
+		return nil
+	}
+
+	return withdrawalRequests
+}
+
+func UpdateWithdrawalRequestTxHash(slotRoot []byte, slotIndex uint64, txHash []byte, tx *sqlx.Tx) error {
+	_, err := tx.Exec(`UPDATE withdrawal_requests SET tx_hash = $1 WHERE slot_root = $2 AND slot_index = $3`, txHash, slotRoot, slotIndex)
+	if err != nil {
+		return err
+	}
+	return nil
 }

@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 
-	v1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
@@ -28,45 +26,14 @@ func (indexer *Indexer) GetCanonicalHead(overrideForkId *ForkKey) *Block {
 
 	if overrideForkId != nil && indexer.canonicalHead != nil && indexer.canonicalHead.forkId != *overrideForkId {
 		chainHeads := indexer.cachedChainHeads
-		chainHeadCandidates := []*ChainHead{}
 
 		for _, chainHead := range chainHeads {
 			parentForkIds := indexer.forkCache.getParentForkIds(chainHead.HeadBlock.forkId)
-			isInParentIds := false
-			for _, parentForkId := range parentForkIds {
-				if parentForkId == *overrideForkId {
-					isInParentIds = true
-					break
-				}
-			}
-			if !isInParentIds {
+			if !slices.Contains(parentForkIds, *overrideForkId) {
 				continue
 			}
 
-			chainHeadCandidates = append(chainHeadCandidates, chainHead)
-		}
-
-		if len(chainHeadCandidates) > 0 {
-			sort.Slice(chainHeadCandidates, func(i, j int) bool {
-				percentagesI := float64(0)
-				percentagesJ := float64(0)
-				for k := range chainHeadCandidates[i].PerEpochVotingPercent {
-					factor := float64(1)
-					if k == len(chainHeadCandidates[i].PerEpochVotingPercent)-1 {
-						factor = 0.5
-					}
-					percentagesI += chainHeadCandidates[i].PerEpochVotingPercent[k] * factor
-					percentagesJ += chainHeadCandidates[j].PerEpochVotingPercent[k] * factor
-				}
-
-				if percentagesI != percentagesJ {
-					return percentagesI > percentagesJ
-				}
-
-				return chainHeadCandidates[i].HeadBlock.Slot > chainHeadCandidates[j].HeadBlock.Slot
-			})
-
-			return chainHeadCandidates[0].HeadBlock
+			return chainHead.HeadBlock
 		}
 	}
 
@@ -79,31 +46,26 @@ func (indexer *Indexer) GetChainHeads() []*ChainHead {
 
 	heads := make([]*ChainHead, len(indexer.cachedChainHeads))
 	copy(heads, indexer.cachedChainHeads)
-	sort.Slice(heads, func(i, j int) bool {
-		percentagesI := float64(0)
-		percentagesJ := float64(0)
-		for k := range heads[i].PerEpochVotingPercent {
-			factor := float64(1)
-			if k == len(heads[i].PerEpochVotingPercent)-1 {
-				factor = 0.5
-			}
-			percentagesI += heads[i].PerEpochVotingPercent[k] * factor
-			percentagesJ += heads[j].PerEpochVotingPercent[k] * factor
-		}
-
-		if percentagesI != percentagesJ {
-			return percentagesI > percentagesJ
-		}
-
-		return heads[i].HeadBlock.Slot > heads[j].HeadBlock.Slot
-	})
 
 	return heads
 }
 
 func (indexer *Indexer) IsCanonicalBlock(block *Block, overrideForkId *ForkKey) bool {
 	canonicalHead := indexer.GetCanonicalHead(overrideForkId)
-	return canonicalHead != nil && indexer.blockCache.isCanonicalBlock(block.Root, canonicalHead.Root)
+	return indexer.IsCanonicalBlockByHead(block, canonicalHead)
+}
+
+func (indexer *Indexer) IsCanonicalBlockByHead(block *Block, headBlock *Block) bool {
+	if headBlock == nil || block == nil {
+		return false
+	}
+
+	if block.forkChecked && headBlock.forkChecked {
+		parentForkIds := indexer.forkCache.getParentForkIds(headBlock.forkId)
+		return slices.Contains(parentForkIds, block.forkId)
+	}
+
+	return indexer.blockCache.isCanonicalBlock(block.Root, headBlock.Root)
 }
 
 // computeCanonicalChain computes the canonical chain and updates the indexer's state.
@@ -156,6 +118,18 @@ func (indexer *Indexer) computeCanonicalChain() bool {
 			continue
 		}
 
+		isBadRoot := false
+		for _, badRoot := range indexer.badChainRoots {
+			if indexer.blockCache.isCanonicalBlock(badRoot, fork.Block.Root) {
+				isBadRoot = true
+				break
+			}
+		}
+
+		if isBadRoot {
+			continue
+		}
+
 		forkVotes, epochParticipation := indexer.aggregateForkVotes(fork.ForkId, aggregateEpochs)
 		headForkVotes[fork.ForkId] = forkVotes
 		chainHeads = append(chainHeads, &ChainHead{
@@ -190,11 +164,28 @@ func (indexer *Indexer) computeCanonicalChain() bool {
 
 	if headBlock == nil {
 		// just get latest block
-		latestBlocks := indexer.blockCache.getLatestBlocks(1, nil)
-		if len(latestBlocks) > 0 {
-			headBlock = latestBlocks[0]
+		latestBlocks := indexer.blockCache.getLatestBlocks(10, nil)
+		checkedForks := make(map[ForkKey]bool)
+		for _, block := range latestBlocks {
+			if checkedForks[block.forkId] {
+				continue
+			}
 
-			forkVotes, epochParticipation := indexer.aggregateForkVotes(headBlock.forkId, aggregateEpochs)
+			checkedForks[block.forkId] = true
+
+			isBadRoot := false
+			for _, badRoot := range indexer.badChainRoots {
+				if indexer.blockCache.isCanonicalBlock(badRoot, block.Root) {
+					isBadRoot = true
+					break
+				}
+			}
+
+			if isBadRoot {
+				continue
+			}
+
+			forkVotes, epochParticipation := indexer.aggregateForkVotes(block.forkId, aggregateEpochs)
 			participationStr := make([]string, len(epochParticipation))
 			for i, p := range epochParticipation {
 				participationStr[i] = fmt.Sprintf("%.2f%%", p)
@@ -202,20 +193,45 @@ func (indexer *Indexer) computeCanonicalChain() bool {
 
 			indexer.logger.Infof(
 				"fallback fork %v votes in last %v epochs: %v ETP (%v), head: %v (%v)",
-				headBlock.forkId,
+				block.forkId,
 				aggregateEpochs,
 				forkVotes/EtherGweiFactor,
 				strings.Join(participationStr, ", "),
-				headBlock.Slot,
-				headBlock.Root.String(),
+				block.Slot,
+				block.Root.String(),
 			)
 
 			chainHeads = []*ChainHead{{
-				HeadBlock:             headBlock,
+				HeadBlock:             block,
 				AggregatedHeadVotes:   forkVotes,
 				PerEpochVotingPercent: epochParticipation,
 			}}
 		}
+	}
+
+	slices.SortFunc(chainHeads, func(headA, headB *ChainHead) int {
+		percentagesA := float64(0)
+		percentagesB := float64(0)
+		for k := range headA.PerEpochVotingPercent {
+			factor := float64(1)
+			if k == len(headA.PerEpochVotingPercent)-1 {
+				factor = 0.5
+			}
+			percentagesA += headA.PerEpochVotingPercent[k] * factor
+			if len(headB.PerEpochVotingPercent) > k {
+				percentagesB += headB.PerEpochVotingPercent[k] * factor
+			}
+		}
+
+		if percentagesA != percentagesB {
+			return int((percentagesB - percentagesA) * 100)
+		}
+
+		return int(headB.HeadBlock.Slot - headA.HeadBlock.Slot)
+	})
+
+	if headBlock == nil && len(chainHeads) > 0 {
+		headBlock = chainHeads[0].HeadBlock
 	}
 
 	return true
@@ -346,61 +362,4 @@ func (indexer *Indexer) aggregateForkVotes(forkId ForkKey, epochLimit uint64) (t
 	}
 
 	return
-}
-
-// GetCanonicalValidatorSet returns the latest canonical validator set.
-// If an overrideForkId is provided, the latest validator set for the fork is returned.
-func (indexer *Indexer) GetCanonicalValidatorSet(overrideForkId *ForkKey) []*v1.Validator {
-	chainState := indexer.consensusPool.GetChainState()
-
-	canonicalHead := indexer.GetCanonicalHead(overrideForkId)
-	if canonicalHead == nil {
-		return []*v1.Validator{}
-	}
-
-	headEpoch := chainState.EpochOfSlot(canonicalHead.Slot)
-	validatorSet := []*v1.Validator{}
-
-	var epochStats *EpochStats
-
-	for {
-		epoch := chainState.EpochOfSlot(canonicalHead.Slot)
-		if headEpoch-epoch > 2 {
-			return validatorSet
-		}
-
-		dependentBlock := indexer.blockCache.getDependentBlock(chainState, canonicalHead, nil)
-		if dependentBlock == nil {
-			return validatorSet
-		}
-		canonicalHead = dependentBlock
-
-		epochStats = indexer.epochCache.getEpochStats(epoch, dependentBlock.Root)
-		if epochStats == nil || epochStats.dependentState == nil || epochStats.dependentState.loadingStatus != 2 {
-			continue // retry previous state
-		}
-
-		break
-	}
-
-	epochStatsKey := getEpochStatsKey(epochStats.epoch, epochStats.dependentRoot)
-	if cachedValSet, found := indexer.validatorSetCache.Get(epochStatsKey); found {
-		return cachedValSet
-	}
-
-	validatorSet = make([]*v1.Validator, len(epochStats.dependentState.validatorList))
-	for index, validator := range epochStats.dependentState.validatorList {
-		state := v1.ValidatorToState(validator, &epochStats.dependentState.validatorBalances[index], epochStats.epoch, FarFutureEpoch)
-
-		validatorSet[index] = &v1.Validator{
-			Index:     phase0.ValidatorIndex(index),
-			Balance:   epochStats.dependentState.validatorBalances[index],
-			Status:    state,
-			Validator: validator,
-		}
-	}
-
-	indexer.validatorSetCache.Add(epochStatsKey, validatorSet)
-
-	return validatorSet
 }

@@ -31,7 +31,13 @@ frontend:
   ethExplorerLink: "https://explorer.ephemery.dev/"
   validatorNamesYaml: "validator_names.yaml"
   #validatorNamesInventory: "https://config.4844-devnet-7.ethpandaops.io/api/v1/nodes/validator-ranges"
-  
+  disablePageCache: false
+  showSensitivePeerInfos: true
+  showPeerDASInfos: true
+  showSubmitDeposit: true
+  showSubmitElRequests: true
+
+
 beaconapi:
   # beacon node rpc endpoints
   endpoints:
@@ -56,11 +62,16 @@ executionapi:
     - name: "pk01"
       url: "http://10.16.71.108:8545"
   
-  depositLogBatchSize: 1000
+  logBatchSize: 1000
+  depositDeployBlock: 0 # el block number from where to crawl the deposit contract (should be <=, but close to the deposit contract deployment block)
+  electraDeployBlock: 0 # el block number from where to crawl the electra system contracts (should be <=, but close to electra fork activation block)
 
 indexer:
   # max number of epochs to keep in memory
   inMemoryEpochs: 3
+
+  # number of epochs to keep validator activity history for (high memory usage for large validator sets)
+  activityHistoryLength: 6
 
   # disable synchronizing historic data
   disableSynchronizer: false
@@ -107,6 +118,25 @@ database:
     user: "pk910"
     password: "SBekcBFpRW9rZrVL" # internal dev DB, no worries about password leaking ;)
     name: "pk910"
+
+# separate block db for storing block bodies (no archive beacon node required)
+blockDb:
+  engine: "none" # pebble / s3 / none (disable block db)
+
+  # pebble settings (only used if engine is set to pebble)
+  pebble:
+    path: "./tmp-blockdb.peb"
+    cacheSize: 100 # 100MB
+
+  # s3 settings (only used if engine is set to s3)
+  s3:
+    bucket: "s3-bucket-name"
+    endpoint: "bucketid.r2.cloudflarestorage.com"
+    secure: true
+    region: ""
+    accessKey: "access-key"
+    secretKey: "secret-key"
+    path: "ephemery" # path prefix
 
 #graph export
 graph:

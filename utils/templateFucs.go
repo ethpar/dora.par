@@ -2,6 +2,8 @@ package utils
 
 import (
 	"bytes"
+	"encoding/json"
+	"html"
 	"html/template"
 	"math"
 	"math/big"
@@ -23,6 +25,7 @@ func GetTemplateFuncs() template.FuncMap {
 
 	customFuncs := template.FuncMap{
 		"includeHTML": IncludeHTML,
+		"includeJSON": IncludeJSON,
 		"html":        func(x string) template.HTML { return template.HTML(x) },
 		"bigIntCmp":   func(i *big.Int, j int) int { return i.Cmp(big.NewInt(int64(j))) },
 		"mod":         func(i, j int) bool { return i%j == 0 },
@@ -42,29 +45,38 @@ func GetTemplateFuncs() template.FuncMap {
 		"round": func(i float64, n int) float64 {
 			return math.Round(i*math.Pow10(n)) / math.Pow10(n)
 		},
-		"percent":                    func(i float64) float64 { return i * 100 },
-		"contains":                   strings.Contains,
-		"formatAddCommas":            FormatAddCommas,
-		"formatFloat":                FormatFloat,
-		"formatBitlist":              FormatBitlist,
-		"formatBitvectorValidators":  formatBitvectorValidators,
-		"formatParticipation":        FormatParticipation,
-		"formatEthFromGwei":          FormatETHFromGwei,
-		"formatEthFromGweiShort":     FormatETHFromGweiShort,
-		"formatFullEthFromGwei":      FormatFullETHFromGwei,
-		"formatEthAddCommasFromGwei": FormatETHAddCommasFromGwei,
-		"formatAmount":               FormatAmount,
-		"ethBlockLink":               FormatEthBlockLink,
-		"ethBlockHashLink":           FormatEthBlockHashLink,
-		"ethAddressLink":             FormatEthAddressLink,
-		"ethTransactionLink":         FormatEthTransactionLink,
-		"formatEthAddress":           FormatEthAddress,
-		"formatValidator":            FormatValidator,
-		"formatValidatorWithIndex":   FormatValidatorWithIndex,
-		"formatSlashedValidator":     FormatSlashedValidator,
-		"formatWithdawalCredentials": FormatWithdawalCredentials,
-		"formatRecentTimeShort":      FormatRecentTimeShort,
-		"formatGraffiti":             FormatGraffiti,
+		"percent":                      func(i float64) float64 { return i * 100 },
+		"contains":                     strings.Contains,
+		"formatAddCommas":              FormatAddCommas,
+		"formatFloat":                  FormatFloat,
+		"formatBitlist":                FormatBitlist,
+		"formatBitvectorValidators":    formatBitvectorValidators,
+		"formatParticipation":          FormatParticipation,
+		"formatEthFromGwei":            FormatETHFromGwei,
+		"formatEthFromGweiShort":       FormatETHFromGweiShort,
+		"formatFullEthFromGwei":        FormatFullEthFromGwei,
+		"formatEthAddCommasFromGwei":   FormatETHAddCommasFromGwei,
+		"formatBytesAmount":            FormatBytesAmount,
+		"formatAmount":                 FormatAmount,
+		"formatBigAmount":              FormatBigAmount,
+		"formatAmountFormatted":        FormatAmountFormatted,
+		"formatGwei":                   FormatGweiValue,
+		"formatByteAmount":             FormatByteAmount,
+		"percentage":                   CalculatePercentage,
+		"ethBlockLink":                 FormatEthBlockLink,
+		"ethBlockHashLink":             FormatEthBlockHashLink,
+		"ethAddressLink":               FormatEthAddressLink,
+		"ethTransactionLink":           FormatEthTransactionLink,
+		"formatEthAddress":             FormatEthAddress,
+		"formatValidator":              FormatValidator,
+		"formatValidatorWithIndex":     FormatValidatorWithIndex,
+		"formatValidatorNameWithIndex": FormatValidatorNameWithIndex,
+		"formatSlashedValidator":       FormatSlashedValidator,
+		"formatWithdawalCredentials":   FormatWithdawalCredentials,
+		"formatRecentTimeShort":        FormatRecentTimeShort,
+		"formatGraffiti":               FormatGraffiti,
+		"formatRecvDelay":              FormatRecvDelay,
+		"formatPercentageAlert":        formatPercentageAlert,
 	}
 
 	for k, v := range customFuncs {
@@ -92,6 +104,21 @@ func IncludeHTML(path string) template.HTML {
 		return ""
 	}
 	return template.HTML(string(b))
+}
+
+// IncludeJSON adds json to the page
+func IncludeJSON(obj any, escapeHTML bool) template.HTML {
+	b, err := json.Marshal(obj)
+	if err != nil {
+		logger.Printf("includeJSON - error marshalling json: %v", err)
+		return ""
+	}
+
+	s := string(b)
+	if escapeHTML {
+		s = html.EscapeString(s)
+	}
+	return template.HTML(s)
 }
 
 func GraffitiToString(graffiti []byte) string {

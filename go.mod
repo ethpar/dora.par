@@ -176,8 +176,6 @@ require (
 )
 
 replace github.com/ethereum/go-ethereum => github.com/s1na/go-ethereum v0.0.0-20250103133732-7e1b0ba7e83f
-//replace github.com/attestantio/go-eth2-client => github.com/attestantio/go-eth2-client v0.0.0-20240701211822-0a60485fce68
-//replace github.com/ethereum/go-ethereum => github.com/lightclient/go-ethereum v0.0.0-20240907155054-183e7b702a00
 
 //replace github.com/attestantio/go-eth2-client => d:/projects/ethpar/go-eth2-client.par
-//replace github.com/ethereum/go-ethereum => d:/projects/ethpar/go-ethereum.par
+//replace github.com/ethereum/go-ethereum => d:/projects/ethpar/go-ethereum.par1

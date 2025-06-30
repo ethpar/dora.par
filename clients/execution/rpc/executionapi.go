@@ -241,6 +241,23 @@ func (ec *ExecutionClient) GetBlockByStringHash(ctx context.Context, hash string
 	return block, nil
 }
 
+/*
+	func (ec *Client) BlockByStringHash(ctx context.Context, hash string) (*types.Block, error) {
+		return ec.getBlock(ctx, "eth_getBlockByHash", hash, true)
+	}
+
+	func (ec *Client) BlockByStringHashRaw(ctx context.Context, hash string) (*json.RawMessage, error) {
+		return ec.getBlockRaw(ctx, "eth_getBlockByHash", hash, true)
+	}
+
+	func (ec *Client) BlockByNumberAndRank(ctx context.Context, number *big.Int, rank uint64) (*types.Block, error) {
+		return ec.getBlock(ctx, "eth_getBlockByNumberAndRank", toBlockNumArg(number), true, hexutil.Uint64(rank).String())
+	}
+
+	func (ec *Client) BlockByNumberAndRankRaw(ctx context.Context, number *big.Int, rank uint64) (*json.RawMessage, error) {
+		return ec.getBlockRaw(ctx, "eth_getBlockByNumberAndRank", toBlockNumArg(number), true, hexutil.Uint64(rank).String())
+	}
+*/
 func (ec *ExecutionClient) GetBlockByStringHashRaw(ctx context.Context, hash string) (*json.RawMessage, error) {
 	block, err := ec.ethClient.BlockByStringHashRaw(ctx, hash)
 	if err != nil {

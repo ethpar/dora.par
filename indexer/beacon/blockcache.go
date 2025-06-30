@@ -394,7 +394,7 @@ func (cache *blockCache) getCanonicalDistance(blockRoot phase0.Root, head phase0
 		return false, 0
 	}
 
-	block := cache.getBlockByRoot(blockRoot)
+	//block := cache.getBlockByRoot(blockRoot)
 
 	var distance uint64 = 0
 

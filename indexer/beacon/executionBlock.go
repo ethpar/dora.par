@@ -47,35 +47,37 @@ func (block *ExecutionBlock) buildBlock(compress bool) *dbtypes.UnfinalizedExecu
 	}
 }
 
-func getExecutionHashes(block *Block) (hashes []string) {
-	var mapHashes = map[string]string{}
+/*
+	func getExecutionHashes(block *Block) (hashes []string) {
+		var mapHashes = map[string]string{}
 
-	if block.block == nil {
-		return hashes
-	}
-
-	var attestaions, err = block.block.Attestations()
-	if err != nil {
-		return hashes
-	}
-	for _, attestaion := range attestaions {
-		var attestationData, err = attestaion.Data()
-		if err != nil {
-			continue
+		if block.block == nil {
+			return hashes
 		}
 
-		for _, executionHash := range attestationData.ExecutionHashes() {
-			var s = executionHash.String()
-			if s != "0x0000000000000000000000000000000000000000000000000000000000000000" {
-				mapHashes[s] = s
+		var attestaions, err = block.block.Attestations()
+		if err != nil {
+			return hashes
+		}
+		for _, attestaion := range attestaions {
+			var attestationData, err = attestaion.Data()
+			if err != nil {
+				continue
+			}
+
+			for _, executionHash := range attestationData.ExecutionHashes() {
+				var s = executionHash.String()
+				if s != "0x0000000000000000000000000000000000000000000000000000000000000000" {
+					mapHashes[s] = s
+				}
+			}
+			for _, s2 := range mapHashes {
+				hashes = append(hashes, s2)
 			}
 		}
-		for _, s2 := range mapHashes {
-			hashes = append(hashes, s2)
-		}
+		return hashes
 	}
-	return hashes
-}
+*/
 func processExecutionBlocks(c *Client, block *Block, isAsync bool) (err error) {
 	if block.block == nil {
 		c.logger.Warn("processExecutionBlocks: block.block == nil")
@@ -365,7 +367,7 @@ type rpcBlock struct {
 	Transactions []rpcTransaction    `json:"transactions"`
 	UncleHashes  []common.Hash       `json:"uncles"`
 	Withdrawals  []*types.Withdrawal `json:"withdrawals,omitempty"`
-	Requests     []*types.Request    `json:"requests,omitempty"`
+	//Requests     []*types.Request    `json:"requests,omitempty"`
 }
 
 func restoreExecutionBlocksFromDB(indexer *Indexer, block *Block) {
@@ -452,7 +454,7 @@ func DecodeBlockRaw(raw json.RawMessage /*, ctx context.Context*/) (*types.Block
 			Transactions: txs,
 			Uncles:       uncles,
 			Withdrawals:  body.Withdrawals,
-			Requests:     body.Requests,
+			//Requests:     body.Requests,
 		}), nil
 }
 

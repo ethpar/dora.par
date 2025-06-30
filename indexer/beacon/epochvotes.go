@@ -205,7 +205,7 @@ func (indexer *Indexer) aggregateEpochVotesAndActivity(epoch phase0.Epoch, chain
 			}
 			parentRoot := block.GetParentRoot()
 
-			var d = attData.BeaconBlockRoot()
+			var d = attData.BeaconBlockRoot
 			if parentRoot != nil && bytes.Equal(d[:], parentRoot[:]) {
 				if isNextEpoch {
 					votes.NextEpoch.HeadVoteAmount += voteAmount

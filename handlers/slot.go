@@ -419,9 +419,9 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 		}
 
 		var e = []string{}
-		for i2 := range attData.ExecutionHashes() {
+		/*for i2 := range attData.ExecutionHashes() {
 			e = append(e, attData.ExecutionHashes()[i2].String())
-		}
+		}*/
 
 		var d = attData.BeaconBlockRoot
 		attPageData := models.SlotPageAttestation{
@@ -497,7 +497,7 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 				attAssignments = []uint64{}
 			}
 
-			attPageData.CommitteeIndex = []uint64{uint64(attData.Index())}
+			attPageData.CommitteeIndex = []uint64{uint64(attData.Index)}
 		}
 
 		attPageData.Validators = attAssignments

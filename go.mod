@@ -32,6 +32,7 @@ require (
 	github.com/prysmaticlabs/prysm/v5 v5.3.3
 	github.com/rs/zerolog v1.34.0
 	github.com/sirupsen/logrus v1.9.3
+	github.com/stretchr/testify v1.10.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/tdewolff/minify v2.3.6+incompatible
 	github.com/timandy/routine v1.1.5
@@ -86,7 +87,12 @@ require (
 	lukechampine.com/blake3 v1.3.0 // indirect
 )
 
-require github.com/senseyeio/roger v0.0.0-20191009211040-43e330bee47f // indirect
+require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/senseyeio/roger v0.0.0-20191009211040-43e330bee47f
+	github.com/stretchr/objx v0.5.2 // indirect
+)
 
 require (
 	dario.cat/mergo v1.0.1 // indirect
@@ -175,7 +181,10 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-replace github.com/ethereum/go-ethereum => github.com/s1na/go-ethereum v0.0.0-20250103133732-7e1b0ba7e83f
+//replace github.com/ethereum/go-ethereum => github.com/s1na/go-ethereum v0.0.0-20250103133732-7e1b0ba7e83f
+
+replace github.com/ethereum/go-ethereum => github.com/ethpar/go-ethereum.par v0.0.0-20250701102112-92c94765f9f9
+replace github.com/attestantio/go-eth2-client => github.com/ethpar/go-eth2-client.par v0.0.0-20250630164224-122d2d5be490
 
 //replace github.com/attestantio/go-eth2-client => d:/projects/ethpar/go-eth2-client.par
-//replace github.com/ethereum/go-ethereum => d:/projects/ethpar/go-ethereum.par1
+//replace github.com/ethereum/go-ethereum => d:/projects/ethpar/go-ethereum.par

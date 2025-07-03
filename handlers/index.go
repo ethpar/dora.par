@@ -227,7 +227,7 @@ func buildIndexPageData() (*models.IndexPageData, time.Duration) {
 			Active:  uint64(currentEpoch) >= *specs.DenebForkEpoch,
 		})
 	}
-	if specs.AlphaForkEpoch != nil && *specs.DenebForkEpoch < uint64(18446744073709551615) {
+	if specs.AlphaForkEpoch != nil && *specs.AlphaForkEpoch < uint64(18446744073709551615) {
 		pageData.NetworkForks = append(pageData.NetworkForks, &models.IndexPageDataForks{
 			Name:    "Alpha",
 			Epoch:   *specs.AlphaForkEpoch,
@@ -238,19 +238,19 @@ func buildIndexPageData() (*models.IndexPageData, time.Duration) {
 	if specs.ElectraForkEpoch != nil && *specs.ElectraForkEpoch < uint64(18446744073709551615) {
 		pageData.NetworkForks = append(pageData.NetworkForks, &models.IndexPageDataForks{
 			Name:    "Electra",
-			Epoch:   *specs.ElectraForkEpoch,
+			Epoch:   *specs.AlphaForkEpoch,
 			Version: specs.ElectraForkVersion[:],
 			Active:  uint64(currentEpoch) >= *specs.ElectraForkEpoch,
 		})
 	}
-	if specs.Eip7594ForkEpoch != nil && *specs.Eip7594ForkEpoch < uint64(18446744073709551615) {
-		pageData.NetworkForks = append(pageData.NetworkForks, &models.IndexPageDataForks{
-			Name:    "eip7594",
-			Epoch:   *specs.Eip7594ForkEpoch,
-			Version: specs.Eip7594ForkVersion[:],
-			Active:  uint64(currentEpoch) >= *specs.Eip7594ForkEpoch,
-		})
-	}
+	/*		if specs.Eip7594ForkEpoch != nil && *specs.Eip7594ForkEpoch < uint64(18446744073709551615) {
+			pageData.NetworkForks = append(pageData.NetworkForks, &models.IndexPageDataForks{
+				Name:    "eip7594",
+				Epoch:   *specs.Eip7594ForkEpoch,
+				Version: specs.Eip7594ForkVersion[:],
+				Active:  uint64(currentEpoch) >= *specs.Eip7594ForkEpoch,
+			})
+		}*/
 
 	// load recent epochs
 	buildIndexPageRecentEpochsData(pageData, currentEpoch, finalizedEpoch, justifiedEpoch, recentEpochCount)

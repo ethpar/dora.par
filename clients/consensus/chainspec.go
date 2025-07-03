@@ -32,8 +32,8 @@ type ChainSpec struct {
 	CapellaForkEpoch                      *uint64           `yaml:"CAPELLA_FORK_EPOCH"`
 	DenebForkVersion                      phase0.Version    `yaml:"DENEB_FORK_VERSION"`
 	DenebForkEpoch                        *uint64           `yaml:"DENEB_FORK_EPOCH"`
-	AlphaForkVersion             phase0.Version    `yaml:"ALPHA_FORK_VERSION"`
-	AlphaForkEpoch               *uint64           `yaml:"ALPHA_FORK_EPOCH"`
+	AlphaForkVersion                      phase0.Version    `yaml:"ALPHA_FORK_VERSION"`
+	AlphaForkEpoch                        *uint64           `yaml:"ALPHA_FORK_EPOCH"`
 	ElectraForkVersion                    phase0.Version    `yaml:"ELECTRA_FORK_VERSION" check-if-fork:"ElectraForkEpoch"`
 	ElectraForkEpoch                      *uint64           `yaml:"ELECTRA_FORK_EPOCH"   check-if-fork:"ElectraForkEpoch"`
 	Eip7594ForkVersion                    phase0.Version    `yaml:"EIP7594_FORK_VERSION" check-if-fork:"Eip7594ForkEpoch"`

@@ -106,10 +106,10 @@ func (bs *ChainService) GetSlotDetailsByBlockroot(ctx context.Context, blockroot
 		blockBody := blockInfo.GetBlock()
 		if blockHeader != nil && blockBody != nil {
 			result = &CombinedBlockResponse{
-				Root:     blockInfo.Root,
-				Header:   blockInfo.GetHeader(),
-				Block:    blockInfo.GetBlock(),
-				Orphaned: !bs.beaconIndexer.IsCanonicalBlock(blockInfo, nil),
+				Root:            blockInfo.Root,
+				Header:          blockInfo.GetHeader(),
+				Block:           blockInfo.GetBlock(),
+				Orphaned:        !bs.beaconIndexer.IsCanonicalBlock(blockInfo, nil),
 				ExecutionBlocks: blockInfo.ExecutionBlocks,
 			}
 		}
@@ -119,10 +119,10 @@ func (bs *ChainService) GetSlotDetailsByBlockroot(ctx context.Context, blockroot
 			return nil, err
 		}
 		result = &CombinedBlockResponse{
-			Root:     blockInfo.Root,
-			Header:   blockInfo.GetHeader(),
-			Block:    blockInfo.GetBlock(),
-			Orphaned: true,
+			Root:            blockInfo.Root,
+			Header:          blockInfo.GetHeader(),
+			Block:           blockInfo.GetBlock(),
+			Orphaned:        true,
 			ExecutionBlocks: blockInfo.ExecutionBlocks,
 		}
 	}
@@ -150,11 +150,14 @@ func (bs *ChainService) GetSlotDetailsByBlockroot(ctx context.Context, blockroot
 			}
 		}
 		if err == nil && block != nil {
+			executionBlocks := beacon.RestoreExecutionBlocksFromDB(blockroot, bs.logger)
+
 			result = &CombinedBlockResponse{
-				Root:     blockroot,
-				Header:   header,
-				Block:    block,
-				Orphaned: false,
+				Root:            blockroot,
+				Header:          header,
+				Block:           block,
+				Orphaned:        false,
+				ExecutionBlocks: executionBlocks,
 			}
 		}
 	}
@@ -237,10 +240,10 @@ func (bs *ChainService) GetSlotDetailsBySlot(ctx context.Context, slot phase0.Sl
 		blockBody := cachedBlock.GetBlock()
 		if blockHeader != nil && blockBody != nil {
 			result = &CombinedBlockResponse{
-				Root:     cachedBlock.Root,
-				Header:   blockHeader,
-				Block:    blockBody,
-				Orphaned: isOrphaned,
+				Root:            cachedBlock.Root,
+				Header:          blockHeader,
+				Block:           blockBody,
+				Orphaned:        isOrphaned,
 				ExecutionBlocks: cachedBlock.ExecutionBlocks,
 			}
 		}
@@ -271,13 +274,14 @@ func (bs *ChainService) GetSlotDetailsBySlot(ctx context.Context, slot phase0.Sl
 				log.Warnf("Error loading block body for slot %v", slot)
 			}
 		}
+		executionBlocks := beacon.RestoreExecutionBlocksFromDB(blockRoot, bs.logger)
 		if err == nil && block != nil {
 			result = &CombinedBlockResponse{
-				Root:     blockRoot,
-				Header:   header,
-				Block:    block,
-				Orphaned: orphaned,
-				//todo	ExecutionBlocks: cachedBlock.ExecutionBlocks,
+				Root:            blockRoot,
+				Header:          header,
+				Block:           block,
+				Orphaned:        orphaned,
+				ExecutionBlocks: executionBlocks,
 			}
 		}
 	}
@@ -1033,7 +1037,6 @@ func (bs *ChainService) GetTransactionByHash(hash string) *dbtypes.Transaction {
 		return dbTransaction
 	}
 
-	bs.logger.Infof("tx not in db %v", hash)
 	clients := GlobalBeaconService.GetExecutionClients()
 	if len(clients) == 0 {
 		bs.logger.Warnf("no clients for read tx  %v", hash)

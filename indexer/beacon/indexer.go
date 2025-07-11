@@ -95,8 +95,8 @@ func NewIndexer(logger logrus.FieldLogger, consensusPool *consensus.Pool, execut
 
 	// Create the indexer instance.
 	indexer := &Indexer{
-		logger:                logger,
-		consensusPool:         consensusPool,
+		logger:        logger,
+		consensusPool: consensusPool,
 		executionPool: executionPool,
 
 		disableSync:           utils.Config.Indexer.DisableSynchronizer,
@@ -356,29 +356,29 @@ func (indexer *Indexer) StartIndexer() {
 			block.SetHeader(header)
 			indexer.blockCache.addBlockToParentMap(block)
 
-		blockBody, err := UnmarshalVersionedSignedBeaconBlockSSZ(indexer.dynSsz, dbBlock.BlockVer, dbBlock.BlockSSZ)
-		if err != nil {
-			indexer.logger.Warnf("could not restore unfinalized block body %v [%x] from db: %v", dbBlock.Slot, dbBlock.Root, err)
-		} else if block.processingStatus == 0 {
-			block.SetBlock(blockBody)
-			restoredBodyCount++
-		} else {
-			block.setBlockIndex(blockBody)
-			block.isInFinalizedDb = true
-		}
-
-		indexer.blockCache.addBlockToExecBlockMap(block)
-
-		blockFork := indexer.forkCache.getForkById(block.forkId)
-		if blockFork != nil {
-			if blockFork.headBlock == nil || blockFork.headBlock.Slot < block.Slot {
-				blockFork.headBlock = block
+			blockBody, err := UnmarshalVersionedSignedBeaconBlockSSZ(indexer.dynSsz, dbBlock.BlockVer, dbBlock.BlockSSZ)
+			if err != nil {
+				indexer.logger.Warnf("could not restore unfinalized block body %v [%x] from db: %v", dbBlock.Slot, dbBlock.Root, err)
+			} else if block.processingStatus == 0 {
+				block.SetBlock(blockBody)
+				restoredBodyCount++
+			} else {
+				block.setBlockIndex(blockBody)
+				block.isInFinalizedDb = true
 			}
-		}
-		restoreExecutionBlocksFromDB(indexer, block)
 
-		indexer.blockCache.latestBlock = block
-		restoredBlockCount++
+			indexer.blockCache.addBlockToExecBlockMap(block)
+
+			blockFork := indexer.forkCache.getForkById(block.forkId)
+			if blockFork != nil {
+				if blockFork.headBlock == nil || blockFork.headBlock.Slot < block.Slot {
+					blockFork.headBlock = block
+				}
+			}
+			block.ExecutionBlocks = RestoreExecutionBlocksFromDB(block.Root, indexer.logger)
+
+			indexer.blockCache.latestBlock = block
+			restoredBlockCount++
 
 			if time.Since(t1) > 5*time.Second {
 				indexer.logger.Infof("restoring unfinalized blocks from DB... (%v done)", restoredBlockCount)

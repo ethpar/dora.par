@@ -294,7 +294,7 @@ func processTransaction(tx *types.Transaction, blockTime uint64, rank uint64, et
 	var erc20_to *string
 	if contract != nil {
 		if contract.IsErc20 {
-			logger.Infof("tx to contract: %v", contract.Address)
+			logger.Debugf("tx to contract: %v", contract.Address)
 			var erc20_to_address *common.Address
 			erc20_method, erc20_value, erc20_to_address = parseFunction(input, logger)
 			if erc20_to_address != nil {
@@ -370,12 +370,13 @@ type rpcBlock struct {
 	//Requests     []*types.Request    `json:"requests,omitempty"`
 }
 
-func restoreExecutionBlocksFromDB(indexer *Indexer, block *Block) {
-	for _, dbBlock := range db.GetExecutionBlocks(block.Root[:]) {
+func RestoreExecutionBlocksFromDB(blockRoot phase0.Root, logger logrus.FieldLogger) map[uint64]ExecutionBlock {
+	var result = make(map[uint64]ExecutionBlock)
+	for _, dbBlock := range db.GetExecutionBlocks(blockRoot[:]) {
 		var raw = json.RawMessage(dbBlock.Block)
 		var parallelExecutionBlock, err = DecodeBlockRaw(raw)
 		if err != nil {
-			indexer.logger.Errorf("restoreExecutionBlocksFromDB %v", err)
+			logger.Errorf("restoreExecutionBlocksFromDB %v", err)
 		}
 		var executionBlock = ExecutionBlock{
 			Root:     phase0.Root(dbBlock.Root),
@@ -384,10 +385,10 @@ func restoreExecutionBlocksFromDB(indexer *Indexer, block *Block) {
 			blockRaw: &raw,
 			Rank:     dbBlock.Rank,
 		}
-		block.ExecutionBlocks[dbBlock.Rank] = executionBlock
+		result[dbBlock.Rank] = executionBlock
 	}
+	return result
 }
-
 func DecodeBlockRaw(raw json.RawMessage /*, ctx context.Context*/) (*types.Block, error) {
 	var head *types.Header
 	if err := json.Unmarshal(raw, &head); err != nil {

@@ -377,6 +377,8 @@ func getStateDepositBalanceToConsume(v *spec.VersionedBeaconState) (phase0.Gwei,
 		return 0, errors.New("no pending deposits in capella")
 	case spec.DataVersionDeneb:
 		return 0, errors.New("no pending deposits in deneb")
+	case spec.DataVersionAlpha:
+		return 0, errors.New("no pending deposits in alpha")
 	case spec.DataVersionElectra:
 		if v.Electra == nil {
 			return 0, errors.New("no electra block")
@@ -401,6 +403,8 @@ func getStatePendingDeposits(v *spec.VersionedBeaconState) ([]*electra.PendingDe
 		return nil, errors.New("no pending deposits in capella")
 	case spec.DataVersionDeneb:
 		return nil, errors.New("no pending deposits in deneb")
+	case spec.DataVersionAlpha:
+		return nil, errors.New("no pending deposits in alpha")
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.PendingDeposits == nil {
 			return nil, errors.New("no electra block")
@@ -425,6 +429,8 @@ func getStatePendingWithdrawals(v *spec.VersionedBeaconState) ([]*electra.Pendin
 		return nil, errors.New("no pending withdrawals in capella")
 	case spec.DataVersionDeneb:
 		return nil, errors.New("no pending withdrawals in deneb")
+	case spec.DataVersionAlpha:
+		return nil, errors.New("no pending withdrawals in alpha")
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.PendingPartialWithdrawals == nil {
 			return nil, errors.New("no electra block")
@@ -449,6 +455,8 @@ func getStatePendingConsolidations(v *spec.VersionedBeaconState) ([]*electra.Pen
 		return nil, errors.New("no pending consolidations in capella")
 	case spec.DataVersionDeneb:
 		return nil, errors.New("no pending consolidations in deneb")
+	case spec.DataVersionAlpha:
+		return nil, errors.New("no pending consolidations in alpha")
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.PendingConsolidations == nil {
 			return nil, errors.New("no electra block")
@@ -473,6 +481,8 @@ func getBlockSize(dynSsz *dynssz.DynSsz, block *spec.VersionedSignedBeaconBlock)
 		return dynSsz.SizeSSZ(block.Capella)
 	case spec.DataVersionDeneb:
 		return dynSsz.SizeSSZ(block.Deneb)
+	case spec.DataVersionAlpha:
+		return dynSsz.SizeSSZ(block.Alpha)
 	case spec.DataVersionElectra:
 		return dynSsz.SizeSSZ(block.Electra)
 	default:

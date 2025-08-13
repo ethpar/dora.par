@@ -471,6 +471,8 @@ func (cache *epochCache) loadEpochStats(epochStats *EpochStats) bool {
 	state, err := epochStats.dependentState.loadState(client.getContext(), client, cache)
 	if err != nil && epochStats.dependentState.loadingStatus == 0 {
 		client.logger.Warnf("failed loading epoch %v stats (dep: %v): %v", epochStats.epoch, epochStats.dependentRoot.String(), err)
+	} else {
+		client.logger.Infof("loaded epoch %v stats (dep: %v)", epochStats.epoch, epochStats.dependentRoot.String())
 	}
 
 	if epochStats.dependentState.loadingStatus != 2 {

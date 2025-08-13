@@ -94,4 +94,5 @@ type IndexPageDataForkGraph struct {
 	Tiles         map[string]bool `json:"tiles"`
 	Block         bool            `json:"block"`
 	BlockParallel bool            `json:"block_parallel"`
+	BlockPinned   bool            `json:"block_pinned"`
 }

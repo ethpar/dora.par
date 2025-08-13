@@ -34,6 +34,11 @@
   color: rgb(25, 135, 84);
 }
 
+.graph-container .graph-fork .graph-layer-block-pinned {
+  padding: 12px 5px;
+  font-size: 11px;
+  color: rgb(232, 202, 9);
+}
 .graph-container .graph-fork .graph-layer-vline {
   background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAAlwSFlzAAAOxAAADsQBlSsOGwAAAAd0SU1FB9wIHAYSMjc5iPMAAAAiSURBVDjLY2AgDvyHYoKAiYHKYNTAUQNHDRw1cNTAoWIgAMbwAiWGIjvFAAAAAElFTkSuQmCC");
 }
@@ -51,6 +56,11 @@
 
 .graph-container .graph-fork .graph-layer-fork {
   background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAAlwSFlzAAAOxAAADsQBlSsOGwAAAAd0SU1FB9wIHAcELNBsanAAAACZSURBVDjLY2RgYGBkIAz+QWkmQgqZiDBMkoEEQIyBuVC6jloGakPpB9QyUANK3yDW24x4sDkDA8N/BgaGXwwMDEIE1MIwXsmNUAPnEmkYXgODoS77z8DAIEupgflIhq0iwTBGBqgmZPwbib2URMOwGvifgYHhIQMDQwsZhmF4mZuBgUGdTIMYGRgYGBmJzMtUzXqjBo4aiAYAetAczGJolWwAAAAASUVORK5CYII=");
+  background-repeat: no-repeat;
+}
+
+.graph-container .graph-fork .graph-layer-pinned {
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAQAAAAngNWGAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAACYktHRAD/h4/MvwAAAAlwSFlzAAAOwwAADsMBx2+oZAAAAAd0SU1FB+kIDBMXFx8JCOsAAACKSURBVCjP7dExDgFRFIXh76JT0SkkOhILUFuDhViRUqOQWIB9KK1jJjzFKOTNMG8Bzmlu/pycm/teCLmeGOSwBd6a5WDY0fiwVbv2N96xLll9w6qNo+WpSrLJaEcwHCSXkuBcUtn1B8NJUtn3B8NRktRS4653bHQ2sjD5dfWnl8bNFF8bC//6HwQvXNEZU/b1UIsAAAAldEVYdGRhdGU6Y3JlYXRlADIwMjUtMDgtMTJUMTk6MjM6MjMrMDA6MDCUvpYrAAAAJXRFWHRkYXRlOm1vZGlmeQAyMDI1LTA4LTEyVDE5OjIzOjIzKzAwOjAw5eMulwAAACh0RVh0ZGF0ZTp0aW1lc3RhbXAAMjAyNS0wOC0xMlQxOToyMzoyMyswMDowMLL2D0gAAAAASUVORK5CYII=");
   background-repeat: no-repeat;
 }
 

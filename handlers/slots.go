@@ -232,6 +232,10 @@ func buildSlotsPageData(firstSlot uint64, pageSize uint64, displayColumns string
 		}
 	}
 
+	var currentSlotNumber uint64 = 0
+	var isPinned = false
+	var executionBlocksCount = 0
+
 	for slotIdx := int64(firstSlot); slotIdx >= int64(lastSlot); slotIdx-- {
 		slot := uint64(slotIdx)
 		finalized := finalizedEpoch > 0 && finalizedEpoch >= chainState.EpochOfSlot(phase0.Slot(slot))
@@ -296,11 +300,29 @@ func buildSlotsPageData(firstSlot uint64, pageSize uint64, displayColumns string
 				}
 			}
 
+			var pinnedRank uint64 = 4
+			if currentSlotNumber != slot {
+				isPinned = false
+				currentSlotNumber = slot
+				executionBlocksCount = dbSlot.ExecutionBlocksCount
+				if dbSlot.Rank == pinnedRank {
+					isPinned = true
+					executionBlocksCount = executionBlocksCount - 1
+					slotData.Graffiti = []byte("PinContract1")
+				}
+			}
+
 			pageData.Slots = append(pageData.Slots, slotData)
 			blockCount++
 			//buildSlotsPageSlotGraph(pageData, slotData, &maxOpenFork, openForks, isFirstPage)
 			//buildSlotsPageSlotGraphParallelL(pageData, slotData, dbSlots, dbIdx, dbSlot.ExecutionBlocksCount)
-			buildSlotsPageSlotGraphParallel(pageData, slotData, dbSlot.ExecutionBlocksCount, &maxOpenFork, dbSlot.ExecutionBlocksIdx)
+			var ExecutionBlocksIdx = dbSlot.ExecutionBlocksIdx
+			if isPinned {
+				ExecutionBlocksIdx = ExecutionBlocksIdx - 1
+			}
+			buildSlotsPageSlotGraphParallel(pageData, slotData, executionBlocksCount, &maxOpenFork,
+				ExecutionBlocksIdx, isPinned)
+
 			dbIdx++
 		}
 	}
@@ -323,7 +345,8 @@ func buildSlotsPageData(firstSlot uint64, pageSize uint64, displayColumns string
 	return pageData, cacheTimeout
 }
 
-func buildSlotsPageSlotGraphParallel(pageData *models.SlotsPageData, slotData *models.SlotsPageDataSlot, executionBlocksCount int, maxOpenFork *int, executionBlocksIdx int) {
+func buildSlotsPageSlotGraphParallel(pageData *models.SlotsPageData, slotData *models.SlotsPageDataSlot,
+	executionBlocksCount int, maxOpenFork *int, executionBlocksIdx int, isPinned bool) {
 	// fork tree
 	getForkGraph := func(slotData *models.SlotsPageDataSlot, forkIdx int) *models.SlotsPageDataForkGraph {
 		forkGraph := &models.SlotsPageDataForkGraph{}
@@ -347,12 +370,23 @@ func buildSlotsPageSlotGraphParallel(pageData *models.SlotsPageData, slotData *m
 		return forkGraph
 	}
 
+	var startIndex = 1
+
 	if slotData.Rank == 0 {
-		forkGraph := getForkGraph(slotData, 1)
+		if isPinned {
+			forkGraph := getForkGraph(slotData, 0)
+			forkGraph.Tiles["pinned"] = true
+			forkGraph.Tiles["tline"] = true
+		}
+
+		forkGraph := getForkGraph(slotData, startIndex)
 		forkGraph.Block = true
 		forkGraph.Tiles["vline"] = true
+		if isPinned {
+			forkGraph.Tiles["lline"] = true
+		}
 
-		for i := 2; i <= executionBlocksCount; i++ {
+		for i := startIndex + 1; i <= executionBlocksCount; i++ {
 			forkGraph.Tiles["rline"] = true
 
 			forkGraph = getForkGraph(slotData, i)
@@ -364,7 +398,19 @@ func buildSlotsPageSlotGraphParallel(pageData *models.SlotsPageData, slotData *m
 	} else {
 		forkGraph := getForkGraph(slotData, 1)
 		forkGraph.Tiles["vline"] = true
-		for i := 2; i <= executionBlocksCount; i++ {
+		if executionBlocksIdx == -1 {
+			if isPinned {
+				forkGraph = getForkGraph(slotData, 0)
+				forkGraph.BlockPinned = true
+				forkGraph.Tiles["bline"] = true
+			}
+		}
+		for i := startIndex + 1; i <= executionBlocksCount; i++ {
+			if isPinned && executionBlocksIdx >= 0 {
+				forkGraph = getForkGraph(slotData, 0)
+				forkGraph.Tiles["vline"] = true
+			}
+
 			forkGraph = getForkGraph(slotData, i)
 			if i+executionBlocksIdx > executionBlocksCount {
 				forkGraph.BlockParallel = false

@@ -235,10 +235,18 @@ func buildIndexPageData() (*models.IndexPageData, time.Duration) {
 			Active:  uint64(currentEpoch) >= *specs.AlphaForkEpoch,
 		})
 	}
+	if specs.BetaForkEpoch != nil && *specs.BetaForkEpoch < uint64(18446744073709551615) {
+		pageData.NetworkForks = append(pageData.NetworkForks, &models.IndexPageDataForks{
+			Name:    "Beta",
+			Epoch:   *specs.BetaForkEpoch,
+			Version: specs.BetaForkVersion[:],
+			Active:  uint64(currentEpoch) >= *specs.BetaForkEpoch,
+		})
+	}
 	if specs.ElectraForkEpoch != nil && *specs.ElectraForkEpoch < uint64(18446744073709551615) {
 		pageData.NetworkForks = append(pageData.NetworkForks, &models.IndexPageDataForks{
 			Name:    "Electra",
-			Epoch:   *specs.AlphaForkEpoch,
+			Epoch:   *specs.BetaForkEpoch,
 			Version: specs.ElectraForkVersion[:],
 			Active:  uint64(currentEpoch) >= *specs.ElectraForkEpoch,
 		})
@@ -372,7 +380,7 @@ func buildIndexPageRecentSlotsData(pageData *models.IndexPageData, firstSlot pha
 				ParentRoot:   dbSlot.ParentRoot,
 				ForkGraph:    make([]*models.IndexPageDataForkGraph, 0),
 			}
-			var pinnedRank uint64 = 4
+			var pinnedRank uint64 = 5
 			if currentSlotNumber != slot {
 				isPinned = false
 				currentSlotNumber = slot

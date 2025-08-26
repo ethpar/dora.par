@@ -8,6 +8,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/alpha"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/beta"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/electra"
@@ -45,6 +46,9 @@ func MarshalVersionedSignedBeaconBlockSSZ(dynSsz *dynssz.DynSsz, block *spec.Ver
 		case spec.DataVersionAlpha:
 			version = uint64(block.Version)
 			ssz, err = dynSsz.MarshalSSZ(block.Alpha)
+		case spec.DataVersionBeta:
+			version = uint64(block.Version)
+			ssz, err = dynSsz.MarshalSSZ(block.Beta)
 		case spec.DataVersionElectra:
 			version = uint64(block.Version)
 			ssz, err = dynSsz.MarshalSSZ(block.Electra)
@@ -114,7 +118,11 @@ func UnmarshalVersionedSignedBeaconBlockSSZ(dynSsz *dynssz.DynSsz, version uint6
 		if err := dynSsz.UnmarshalSSZ(block.Alpha, ssz); err != nil {
 			return nil, fmt.Errorf("failed to decode alpha signed beacon block: %v", err)
 		}
-
+	case spec.DataVersionBeta:
+		block.Beta = &beta.SignedBeaconBlock{}
+		if err := dynSsz.UnmarshalSSZ(block.Beta, ssz); err != nil {
+			return nil, fmt.Errorf("failed to decode Beta signed beacon block: %v", err)
+		}
 	case spec.DataVersionElectra:
 		block.Electra = &electra.SignedBeaconBlock{}
 		if err := dynSsz.UnmarshalSSZ(block.Electra, ssz); err != nil {
@@ -147,6 +155,9 @@ func MarshalVersionedSignedBeaconBlockJson(block *spec.VersionedSignedBeaconBloc
 	case spec.DataVersionAlpha:
 		version = uint64(block.Version)
 		jsonRes, err = block.Alpha.MarshalJSON()
+	case spec.DataVersionBeta:
+		version = uint64(block.Version)
+		jsonRes, err = block.Beta.MarshalJSON()
 	case spec.DataVersionElectra:
 		version = uint64(block.Version)
 		jsonRes, err = block.Electra.MarshalJSON()
@@ -198,6 +209,11 @@ func unmarshalVersionedSignedBeaconBlockJson(version uint64, ssz []byte) (*spec.
 		if err := block.Alpha.UnmarshalJSON(ssz); err != nil {
 			return nil, fmt.Errorf("failed to decode alpha signed beacon block: %v", err)
 		}
+	case spec.DataVersionBeta:
+		block.Beta = &beta.SignedBeaconBlock{}
+		if err := block.Beta.UnmarshalJSON(ssz); err != nil {
+			return nil, fmt.Errorf("failed to decode Beta signed beacon block: %v", err)
+		}
 	case spec.DataVersionElectra:
 		block.Electra = &electra.SignedBeaconBlock{}
 		if err := block.Electra.UnmarshalJSON(ssz); err != nil {
@@ -236,6 +252,12 @@ func getBlockExecutionExtraData(v *spec.VersionedSignedBeaconBlock) ([]byte, err
 		}
 
 		return v.Alpha.Message.Body.ExecutionPayload.ExtraData, nil
+	case spec.DataVersionBeta:
+		if v.Beta == nil || v.Beta.Message == nil || v.Beta.Message.Body == nil || v.Beta.Message.Body.ExecutionPayload == nil {
+			return nil, errors.New("no Beta block")
+		}
+
+		return v.Beta.Message.Body.ExecutionPayload.ExtraData, nil
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.Message == nil || v.Electra.Message.Body == nil || v.Electra.Message.Body.ExecutionPayload == nil {
 			return nil, errors.New("no electra block")
@@ -286,6 +308,12 @@ func getStateRandaoMixes(v *spec.VersionedBeaconState) ([]phase0.Root, error) {
 		}
 
 		return v.Alpha.RANDAOMixes, nil
+	case spec.DataVersionBeta:
+		if v.Beta == nil || v.Beta.RANDAOMixes == nil {
+			return nil, errors.New("no Beta block")
+		}
+
+		return v.Beta.RANDAOMixes, nil
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.RANDAOMixes == nil {
 			return nil, errors.New("no electra block")
@@ -312,6 +340,8 @@ func getStateDepositIndex(state *spec.VersionedBeaconState) uint64 {
 		return state.Deneb.ETH1DepositIndex
 	case spec.DataVersionAlpha:
 		return state.Alpha.ETH1DepositIndex
+	case spec.DataVersionBeta:
+		return state.Beta.ETH1DepositIndex
 	case spec.DataVersionElectra:
 		return state.Electra.ETH1DepositIndex
 	}
@@ -353,6 +383,12 @@ func getStateCurrentSyncCommittee(v *spec.VersionedBeaconState) ([]phase0.BLSPub
 		}
 
 		return v.Alpha.CurrentSyncCommittee.Pubkeys, nil
+	case spec.DataVersionBeta:
+		if v.Beta == nil || v.Beta.CurrentSyncCommittee == nil {
+			return nil, errors.New("no Beta block")
+		}
+
+		return v.Beta.CurrentSyncCommittee.Pubkeys, nil
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.CurrentSyncCommittee == nil {
 			return nil, errors.New("no electra block")
@@ -379,6 +415,8 @@ func getStateDepositBalanceToConsume(v *spec.VersionedBeaconState) (phase0.Gwei,
 		return 0, errors.New("no pending deposits in deneb")
 	case spec.DataVersionAlpha:
 		return 0, errors.New("no pending deposits in alpha")
+	case spec.DataVersionBeta:
+		return 0, errors.New("no pending deposits in Beta")
 	case spec.DataVersionElectra:
 		if v.Electra == nil {
 			return 0, errors.New("no electra block")
@@ -405,6 +443,8 @@ func getStatePendingDeposits(v *spec.VersionedBeaconState) ([]*electra.PendingDe
 		return nil, errors.New("no pending deposits in deneb")
 	case spec.DataVersionAlpha:
 		return nil, errors.New("no pending deposits in alpha")
+	case spec.DataVersionBeta:
+		return nil, errors.New("no pending deposits in Beta")
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.PendingDeposits == nil {
 			return nil, errors.New("no electra block")
@@ -431,6 +471,8 @@ func getStatePendingWithdrawals(v *spec.VersionedBeaconState) ([]*electra.Pendin
 		return nil, errors.New("no pending withdrawals in deneb")
 	case spec.DataVersionAlpha:
 		return nil, errors.New("no pending withdrawals in alpha")
+	case spec.DataVersionBeta:
+		return nil, errors.New("no pending withdrawals in Beta")
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.PendingPartialWithdrawals == nil {
 			return nil, errors.New("no electra block")
@@ -457,6 +499,8 @@ func getStatePendingConsolidations(v *spec.VersionedBeaconState) ([]*electra.Pen
 		return nil, errors.New("no pending consolidations in deneb")
 	case spec.DataVersionAlpha:
 		return nil, errors.New("no pending consolidations in alpha")
+	case spec.DataVersionBeta:
+		return nil, errors.New("no pending consolidations in Beta")
 	case spec.DataVersionElectra:
 		if v.Electra == nil || v.Electra.PendingConsolidations == nil {
 			return nil, errors.New("no electra block")
@@ -483,6 +527,8 @@ func getBlockSize(dynSsz *dynssz.DynSsz, block *spec.VersionedSignedBeaconBlock)
 		return dynSsz.SizeSSZ(block.Deneb)
 	case spec.DataVersionAlpha:
 		return dynSsz.SizeSSZ(block.Alpha)
+	case spec.DataVersionBeta:
+		return dynSsz.SizeSSZ(block.Beta)
 	case spec.DataVersionElectra:
 		return dynSsz.SizeSSZ(block.Electra)
 	default:

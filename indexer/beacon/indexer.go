@@ -70,7 +70,8 @@ type Indexer struct {
 	cachedChainHeads     []*ChainHead
 	badChainRoots        []phase0.Root
 
-	contracts map[string]*dbtypes.Contract
+	contracts       map[string]*dbtypes.Contract
+	pinnedContracts map[uint64]string
 }
 
 // NewIndexer creates a new instance of the Indexer.

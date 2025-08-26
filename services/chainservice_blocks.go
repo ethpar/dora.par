@@ -901,6 +901,13 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 								ExecutionBlocksIdx:   0, //i,
 								EthBlockNumber:       &number,
 							}
+							if i == 5 {
+								contractAddress := bs.beaconIndexer.GetPinnedContract(assignedBlock.Block.Proposer)
+								if contractAddress != "" {
+									assignedBlock1.Block.GraffitiText = contractAddress
+									assignedBlock1.Block.Graffiti = []byte(contractAddress)
+								}
+							}
 							resBlocks = append(resBlocks, &assignedBlock1)
 						}
 						//	j++

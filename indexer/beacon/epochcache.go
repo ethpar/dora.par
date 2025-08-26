@@ -487,6 +487,18 @@ func (cache *epochCache) loadEpochStats(epochStats *EpochStats) bool {
 		if err != nil {
 			cache.indexer.logger.Errorf("error getting validator set from state %v: %v", epochStats.dependentRoot.String(), err)
 		}
+		if state.Beta != nil {
+			pinnedValidators := state.Beta.PinnedValidators
+			if pinnedValidators != nil {
+				for _, validator := range pinnedValidators {
+					cache.indexer.logger.Infof("pinned validator contract: %v %v", validator.ValidatorIndex, validator.ContractAddress.String())
+					if cache.indexer.pinnedContracts == nil {
+						cache.indexer.pinnedContracts = make(map[uint64]string)
+					}
+					cache.indexer.pinnedContracts[validator.ValidatorIndex] = validator.ContractAddress.String()
+				}
+			}
+		}
 	}
 
 	dependentStats := []*EpochStats{}

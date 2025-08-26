@@ -2,9 +2,6 @@ package beacon
 
 import (
 	"context"
-	"github.com/sirupsen/logrus"
-	"math/big"
-
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -18,7 +15,10 @@ import (
 	"github.com/ethpandaops/dora/dbtypes"
 	"github.com/jmoiron/sqlx"
 	dynssz "github.com/pk910/dynamic-ssz"
+	"github.com/sirupsen/logrus"
+	"math/big"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -83,6 +83,12 @@ func processExecutionBlocks(c *Client, block *Block, isAsync bool) (err error) {
 		c.logger.Warn("processExecutionBlocks: block.block == nil")
 		return
 	}
+	if block.block.Beta != nil {
+		if block.block.Beta.Message.Body.ValidatorPins != nil && len(block.block.Beta.Message.Body.ValidatorPins) > 0 {
+			c.logger.Infof("pincontract: %v", block.block.Beta.Message.Body.ValidatorPins[0].Message.Contract)
+
+		}
+	}
 	var blockNumber, err1 = block.block.ExecutionBlockNumber()
 	if err1 != nil {
 		c.logger.Errorf("processExecutionBlocks:  %v", err1)
@@ -109,19 +115,24 @@ func processExecutionBlocksTi(c *Client, block *Block, blockNumber uint64, isAsy
 	//blockNumber = 22064102
 	c.logger.Infof("start check parallel Blocks for: %v", blockNumber)
 	var proposers, _ = c.client.GetRPCClient().GetRewards(c.getContext(), block.Root)
+	c.logger.Infof("proposers: %v", strings.Join(proposers, ","))
 
-	for rank := 0; rank < 5; rank++ {
+	for rank := 0; rank < len(proposers); rank++ {
 		var proposer *uint64 = nil
-		if len(proposers) > rank {
-			if proposers[rank] != "" {
-				mayByPproposer, err := strconv.ParseUint(proposers[rank], 10, 64)
-				if err == nil {
-					proposer = &mayByPproposer
-				} else {
-					c.logger.Debugf("error on get proposers: %v", blockNumber)
-				}
-			}
+		if proposers[rank] == "" {
+			c.logger.Debugf("empty proposer for rank: %v, skip check block", rank)
+			continue
 		}
+		if rank == 5 {
+			c.logger.Infof("proposer: %v for rank %v", proposers[rank], rank)
+		}
+		mayByPproposer, err := strconv.ParseUint(proposers[rank], 10, 64)
+		if err == nil {
+			proposer = &mayByPproposer
+		} else {
+			c.logger.Debugf("error on get proposers: %v", blockNumber)
+		}
+
 		c.logger.Debugf("check GetBlockByNumberAndRank: %v:%v", blockNumber, rank)
 		parallelExecutionBlockRaw, err := executionClient.GetRPCClient().GetBlockByNumberAndRankRaw(c.getContext(), blockNumber, uint64(rank))
 		if err != nil {

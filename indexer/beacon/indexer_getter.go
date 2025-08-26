@@ -203,6 +203,13 @@ func (indexer *Indexer) GetOrphanedBlockByRoot(blockRoot phase0.Root) (*Block, e
 	return block, nil
 }
 
+func (indexer *Indexer) GetPinnedContract(validatorIndex uint64) string {
+	if indexer.pinnedContracts == nil {
+		return ""
+	}
+	return indexer.pinnedContracts[validatorIndex]
+}
+
 // GetEpochStats returns the epoch stats for the given epoch and optional fork ID override.
 func (indexer *Indexer) GetEpochStats(epoch phase0.Epoch, overrideForkId *ForkKey) *EpochStats {
 	epochStats := indexer.epochCache.getEpochStatsByEpoch(epoch)

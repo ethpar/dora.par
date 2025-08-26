@@ -300,7 +300,7 @@ func buildSlotsPageData(firstSlot uint64, pageSize uint64, displayColumns string
 				}
 			}
 
-			var pinnedRank uint64 = 4
+			var pinnedRank uint64 = 5
 			if currentSlotNumber != slot {
 				isPinned = false
 				currentSlotNumber = slot
@@ -308,7 +308,7 @@ func buildSlotsPageData(firstSlot uint64, pageSize uint64, displayColumns string
 				if dbSlot.Rank == pinnedRank {
 					isPinned = true
 					executionBlocksCount = executionBlocksCount - 1
-					slotData.Graffiti = []byte("PinContract1")
+					slotData.Graffiti = []byte("PinContract")
 				}
 			}
 

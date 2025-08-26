@@ -438,7 +438,7 @@ func (c *Client) processBlock(slot phase0.Slot, root phase0.Root, header *phase0
 		c.indexer.blockCache.latestBlock = block
 		processPendingTransactions(c, block.Slot)
 
-		if block.block != nil && block.block.Alpha != nil {
+		if block.block != nil && (block.block.Alpha != nil || block.block.Beta != nil) {
 			processExecutionBlocks(c, block, true)
 		}
 	}

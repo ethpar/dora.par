@@ -53,6 +53,7 @@ func newSynchronizer(indexer *Indexer, logger logrus.FieldLogger) *synchronizer 
 	// restore sync state
 	syncState := &dbtypes.IndexerSyncState{}
 	if _, err := db.GetExplorerState("indexer.syncstate", syncState); err == nil {
+		logger.Infof("syncState:%v", syncState.Epoch)
 		sync.currentEpoch = phase0.Epoch(syncState.Epoch)
 	}
 
@@ -80,6 +81,7 @@ func (sync *synchronizer) startSync(startEpoch phase0.Epoch) {
 		sync.logger.Errorf("cannot start synchronizer: already running")
 		return
 	}
+	sync.logger.Infof("currentEpoch %v startEpoch %v", sync.currentEpoch, startEpoch)
 	if startEpoch < sync.currentEpoch {
 		sync.currentEpoch = startEpoch
 	}
@@ -145,6 +147,7 @@ func (sync *synchronizer) runSync() {
 		}
 
 		if syncEpoch >= sync.indexer.lastFinalizedEpoch {
+			sync.logger.Infof("sync complete %v", syncEpoch)
 			isComplete = true
 			break
 		}
@@ -171,6 +174,9 @@ func (sync *synchronizer) runSync() {
 		}
 
 		done, err := sync.syncEpoch(syncEpoch, syncClient, lastRetry)
+		if err != nil {
+			synclogger.Warnf("!!synchronization of epoch %v failed: %v - Retrying in 10 sec...", syncEpoch, err)
+		}
 		if done || lastRetry {
 			if err != nil {
 				sync.logger.Errorf("synchronization of epoch %v failed: %v - skipping epoch", syncEpoch, err)
@@ -270,6 +276,7 @@ func (sync *synchronizer) loadBlockBody(client *Client, root phase0.Root) (*spec
 }
 
 func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, lastTry bool) (bool, error) {
+	sync.logger.Infof("syncEpoch %v lastTry %v", syncEpoch, lastTry)
 	if !utils.Config.Indexer.ResyncForceUpdate && db.IsEpochSynchronized(uint64(syncEpoch)) {
 		return true, nil
 	}
@@ -288,6 +295,7 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 	var firstBlock *Block
 	for slot := firstSlot; slot <= lastSlot; slot++ {
 		if sync.cachedSlot < slot || sync.cachedBlocks[slot] == nil {
+			//			sync.logger.Infof("sync slot %v from %v", slot, lastSlot)
 			blockHeader, blockRoot, err := sync.loadBlockHeader(client, slot)
 			if err != nil {
 				return false, fmt.Errorf("error fetching slot %v header: %v", slot, err)
@@ -313,7 +321,7 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 
 				block.SetBlock(blockBody)
 			}
-			if block.block != nil && block.block.Alpha != nil {
+			if block.block != nil && (block.block.Alpha != nil || block.block.Beta != nil) {
 				processExecutionBlocks(client, block, false)
 			}
 			sync.cachedBlocks[slot] = block
@@ -333,6 +341,7 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 			nextEpochCanonicalBlocks = append(nextEpochCanonicalBlocks, sync.cachedBlocks[slot])
 		}
 	}
+	sync.logger.Infof("syncEpoch slots read complete %v", syncEpoch)
 	sync.cachedSlot = lastSlot
 
 	if sync.syncCtx.Err() != nil {
@@ -395,7 +404,10 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 	}
 
 	sim := newStateSimulator(sync.indexer, epochStats)
-	sim.validatorSet = validatorSet
+	if sim != nil {
+		sim.validatorSet = validatorSet
+	}
+	sim = nil
 
 	// save blocks
 	err = db.RunDBTransaction(func(tx *sqlx.Tx) error {
@@ -462,6 +474,6 @@ func (sync *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, last
 			delete(sync.cachedBlocks, slot)
 		}
 	}
-
+	sync.logger.Infof("syncEpoch completed %v", syncEpoch)
 	return true, nil
 }

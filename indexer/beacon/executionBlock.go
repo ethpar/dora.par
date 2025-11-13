@@ -297,7 +297,6 @@ func processTransaction(tx *types.Transaction, blockTime uint64, rank uint64, et
 	var contract *dbtypes.Contract
 	if contracts != nil {
 		contract = contracts[toAddress]
-
 	}
 
 	var erc20_method *string

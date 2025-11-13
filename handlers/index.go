@@ -246,7 +246,7 @@ func buildIndexPageData() (*models.IndexPageData, time.Duration) {
 	if specs.ElectraForkEpoch != nil && *specs.ElectraForkEpoch < uint64(18446744073709551615) {
 		pageData.NetworkForks = append(pageData.NetworkForks, &models.IndexPageDataForks{
 			Name:    "Electra",
-			Epoch:   *specs.BetaForkEpoch,
+			Epoch:   1, //*specs.ElectraForkEpoch,
 			Version: specs.ElectraForkVersion[:],
 			Active:  uint64(currentEpoch) >= *specs.ElectraForkEpoch,
 		})

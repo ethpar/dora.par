@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"github.com/ethpandaops/dora/dbtypes"
 	"github.com/jmoiron/sqlx"
+	"strings"
 )
 
 func GetTransactions(address string, start uint64, pageSize uint64) []*dbtypes.Transaction {
+	upperAddress := strings.ToUpper(address)
 	transactions := []*dbtypes.Transaction{}
 	err := ReaderDb.Select(&transactions, `
 	SELECT
@@ -14,9 +16,9 @@ func GetTransactions(address string, start uint64, pageSize uint64) []*dbtypes.T
 			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations, 
 			                          erc20_method, erc20_address_to, erc20_value
 	FROM transactions
-	WHERE "to" = $1 or "from"=$2
+	WHERE upper("to") = $1 or upper("from")=$2
 	ORDER BY block_number desc, block_rank desc LIMIT $3 OFFSET $4
-	`, address, address, pageSize, start)
+	`, upperAddress, upperAddress, pageSize, start)
 	if err != nil {
 		logger.Errorf("Error while fetching Transactions: %v", err)
 		return nil
@@ -25,6 +27,8 @@ func GetTransactions(address string, start uint64, pageSize uint64) []*dbtypes.T
 }
 
 func GetTransactionsErc20(address string, contract string, start uint64, pageSize uint64) []*dbtypes.Transaction {
+	upperAddress := strings.ToUpper(address)
+	upperContract := strings.ToUpper(contract)
 	transactions := []*dbtypes.Transaction{}
 	if contract != "" {
 		err := ReaderDb.Select(&transactions, `
@@ -33,9 +37,9 @@ func GetTransactionsErc20(address string, contract string, start uint64, pageSiz
 			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations, 
 			                          erc20_method, erc20_address_to, erc20_value
 	FROM transactions
-	WHERE "to" = $1 and ("from"=$2 or erc20_address_to =$3) and erc20_method !=''
+	WHERE upper("to") = $1 and (upper("from")=$2 or upper(erc20_address_to) =$3) and erc20_method !=''
 	ORDER BY block_number desc, block_rank desc LIMIT $4 OFFSET $5
-	`, contract, address, address, pageSize, start)
+	`, upperContract, upperAddress, upperAddress, pageSize, start)
 		if err != nil {
 			logger.Errorf("Error while fetching Transactions: %v", err)
 			return nil
@@ -47,9 +51,9 @@ func GetTransactionsErc20(address string, contract string, start uint64, pageSiz
 			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations, 
 			                          erc20_method, erc20_address_to, erc20_value
 	FROM transactions
-	WHERE ("from"=$1 or erc20_address_to =$2) and erc20_method !=''
+	WHERE (upper("from")=$1 or upper(erc20_address_to) =$2) and erc20_method !=''
 	ORDER BY block_number desc, block_rank desc LIMIT $3 OFFSET $4
-	`, address, address, pageSize, start)
+	`, upperAddress, upperAddress, pageSize, start)
 		if err != nil {
 			logger.Errorf("Error while fetching Transactions: %v", err)
 			return nil
@@ -59,8 +63,8 @@ func GetTransactionsErc20(address string, contract string, start uint64, pageSiz
 }
 
 func GetTransactionsCount(address string) (uint64, error) {
-
-	query := fmt.Sprintf("SELECT count(*)  FROM transactions WHERE \"to\" = '%s' or \"from\"='%s'", address, address)
+	upperAddress := strings.ToUpper(address)
+	query := fmt.Sprintf("SELECT count(*)  FROM transactions WHERE upper(\"to\") = '%s' or upper(\"from\")='%s'", upperAddress, upperAddress)
 
 	var count uint64
 	err := ReaderDb.DB.QueryRow(query).Scan(&count)
@@ -71,13 +75,14 @@ func GetTransactionsCount(address string) (uint64, error) {
 }
 
 func GetTransactionsErc20Count(address string, contract string) (uint64, error) {
-
-	query := fmt.Sprintf("SELECT count(*)  FROM transactions WHERE (\"from\"='%s' or erc20_address_to='%s') and erc20_method !=''",
-		address, address)
+	upperAddress := strings.ToUpper(address)
+	upperContract := strings.ToUpper(contract)
+	query := fmt.Sprintf("SELECT count(*)  FROM transactions WHERE (upper(\"from\")='%s' or upper(erc20_address_to)='%s') and erc20_method !=''",
+		upperAddress, upperAddress)
 
 	if contract != "" {
-		query = fmt.Sprintf("SELECT count(*)  FROM transactions WHERE \"to\" = '%s' and ( \"from\"='%s' or erc20_address_to='%s') and erc20_method !=''",
-			contract, address, address)
+		query = fmt.Sprintf("SELECT count(*)  FROM transactions WHERE upper(\"to\") = '%s' and ( upper(\"from\")='%s' or upper(erc20_address_to)='%s') and erc20_method !=''",
+			upperContract, upperAddress, upperAddress)
 	}
 
 	var count uint64
@@ -89,6 +94,7 @@ func GetTransactionsErc20Count(address string, contract string) (uint64, error) 
 }
 
 func GetTransactionByHash(hash string) *dbtypes.Transaction {
+	upperHash := strings.ToUpper(hash)
 	transactions := []*dbtypes.Transaction{}
 	err := ReaderDb.Select(&transactions, `
 	SELECT
@@ -96,8 +102,8 @@ func GetTransactionByHash(hash string) *dbtypes.Transaction {
 			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations,
 			                          erc20_method, erc20_address_to, erc20_value
 	FROM transactions
-	WHERE "hash" = $1
-	`, hash)
+	WHERE upper("hash") = $1
+	`, upperHash)
 	if err != nil {
 		logger.Errorf("Error while fetching Transactions: %v", err)
 		return nil

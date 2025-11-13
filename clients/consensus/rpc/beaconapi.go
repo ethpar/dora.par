@@ -423,7 +423,8 @@ func (bc *BeaconClient) GetBlockBodyByBlockroot(ctx context.Context, blockroot p
 		if strings.HasPrefix(err.Error(), "GET failed with status 404") {
 			return nil, nil
 		}
-
+		d := fmt.Sprintf("0x%x", blockroot)
+		bc.logger.Infof("/eth/v2/beacon/blocks/%v", d)
 		return nil, err
 	}
 
@@ -443,7 +444,12 @@ func (bc *BeaconClient) GetState(ctx context.Context, stateRef string) (*spec.Ve
 		},
 	})
 	if err != nil {
+		bc.logger.Warnf("/eth/v2/debug/beacon/states/%v", stateRef)
+		bc.logger.Infof("%v", err)
+
 		return nil, err
+	} else {
+		bc.logger.Infof("/eth/v2/debug/beacon/states/%v", stateRef)
 	}
 
 	return result.Data, nil

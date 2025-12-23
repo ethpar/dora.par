@@ -43,6 +43,7 @@ type SlotPageBlockData struct {
 	BlockRoot                  []byte                 `json:"blockroot"`
 	ParentRoot                 []byte                 `json:"parentroot"`
 	StateRoot                  []byte                 `json:"stateroot"`
+	BodyRoot                   []byte                 `json:"bodyroot"`
 	Signature                  []byte                 `json:"signature"`
 	RandaoReveal               []byte                 `json:"randaoreveal"`
 	Graffiti                   []byte                 `json:"graffiti"`
@@ -102,6 +103,11 @@ type SlotPageExecutionData struct {
 	BaseFeePerGas uint64    `json:"base_fee_per_gas"`
 	BlockHash     []byte    `json:"block_hash"`
 	BlockNumber   uint64    `json:"block_number"`
+	BlobGasUsed   *uint64   `json:"blob_gas_used,omitempty"`
+	BlobLimit     *uint64   `json:"blob_limit,omitempty"`
+	BlobGasLimit  *uint64   `json:"blob_gas_limit,omitempty"`
+	ExcessBlobGas *uint64   `json:"excess_blob_gas,omitempty"`
+	BlobBaseFee   *uint64   `json:"blob_base_fee,omitempty"`
 }
 
 type SlotPageAttestation struct {
@@ -115,11 +121,12 @@ type SlotPageAttestation struct {
 
 	Signature []byte `json:"signature"`
 
-	BeaconBlockRoot []byte   `json:"beaconblockroot"`
-	SourceEpoch     uint64   `json:"source_epoch"`
-	SourceRoot      []byte   `json:"source_root"`
-	TargetEpoch     uint64   `json:"target_epoch"`
-	TargetRoot      []byte   `json:"target_root"`
+	BeaconBlockRoot []byte `json:"beaconblockroot"`
+	BeaconBlockSlot uint64 `json:"beaconblockslot"`
+	SourceEpoch     uint64 `json:"source_epoch"`
+	SourceRoot      []byte `json:"source_root"`
+	TargetEpoch     uint64 `json:"target_epoch"`
+	TargetRoot      []byte `json:"target_root"`
 	ExecutionHashes []string `json:"execution_hashes"`
 }
 

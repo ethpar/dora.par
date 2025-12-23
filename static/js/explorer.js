@@ -100,17 +100,16 @@
     
     if (refreshButton.length === 0) return; // Button not found on this page
     
-    fetch('/clients/consensus/refresh/status')
+    // Determine the client type based on current URL
+    var clientType = window.location.pathname.includes('/clients/execution') ? 'execution' : 'consensus';
+
+    fetch(`/clients/${clientType}/refresh/status`)
       .then(response => response.json())
       .then(data => {
         if (data.cooldown_active) {
-          // Button is in cooldown
-          refreshButton.addClass('disabled').css({
-            'opacity': '0.5',
-            'cursor': 'not-allowed',
-            'pointer-events': 'none'
-          });
-          refreshButton.removeClass('fa-refresh').addClass('fa-clock-o');
+          // Hide button during cooldown
+          refreshButton.hide();
+
           var cooldownMsg = `Refresh cooldown active - ${data.remaining_seconds}s remaining`;
           if (data.online_clients) {
             if (data.total_cooldown === 60 && data.online_clients * 3 > 60) {
@@ -123,12 +122,13 @@
           
           // Update countdown every second
           var countdown = setInterval(() => {
-            fetch('/clients/consensus/refresh/status')
+            fetch(`/clients/${clientType}/refresh/status`)
               .then(response => response.json())
               .then(statusData => {
                 if (!statusData.cooldown_active) {
-                  // Cooldown ended
+                  // Cooldown ended - show button
                   clearInterval(countdown);
+                  refreshButton.show();
                   refreshButton.removeClass('disabled').css({
                     'opacity': '1',
                     'cursor': 'pointer',
@@ -162,7 +162,8 @@
               });
           }, 1000);
         } else {
-          // Button is available
+          // Button is available - show it
+          refreshButton.show();
           refreshButton.removeClass('disabled').css({
             'opacity': '1',
             'cursor': 'pointer',
@@ -173,8 +174,16 @@
         }
       })
       .catch(error => {
-        // On error, assume button is available
+        // On error, assume button is available - show it
         console.warn('Failed to check refresh cooldown status:', error);
+        refreshButton.show();
+        refreshButton.removeClass('disabled').css({
+          'opacity': '1',
+          'cursor': 'pointer',
+          'pointer-events': 'auto'
+        });
+        refreshButton.removeClass('fa-clock-o').addClass('fa-refresh');
+        refreshButton.attr('title', 'Refresh peer information');
       });
   }
 
@@ -281,30 +290,42 @@
         maxPendingRequests: requestNum,
       },
     });
-    var bhTransaction = new Bloodhound({
+    var bhValidators = new Bloodhound({
       datumTokenizer: Bloodhound.tokenizers.whitespace,
       queryTokenizer: Bloodhound.tokenizers.whitespace,
       identify: function (obj) {
-        return obj.hash
+        return obj.index
       },
       remote: {
-        url: "/search/tx?q=",
+        url: "/search/validator?q=",
         prepare: prepareQueryFn,
         maxPendingRequests: requestNum,
       },
     });
-    var bhAddress = new Bloodhound({
-      datumTokenizer: Bloodhound.tokenizers.whitespace,
-      queryTokenizer: Bloodhound.tokenizers.whitespace,
-      identify: function (obj) {
-        return obj.hash
-      },
-      remote: {
-        url: "/search/address?q=",
-        prepare: prepareQueryFn,
-        maxPendingRequests: requestNum,
-      },
-    });
+      var bhTransaction = new Bloodhound({
+          datumTokenizer: Bloodhound.tokenizers.whitespace,
+          queryTokenizer: Bloodhound.tokenizers.whitespace,
+          identify: function (obj) {
+              return obj.hash
+          },
+          remote: {
+              url: "/search/tx?q=",
+              prepare: prepareQueryFn,
+              maxPendingRequests: requestNum,
+          },
+      });
+      var bhAddress = new Bloodhound({
+          datumTokenizer: Bloodhound.tokenizers.whitespace,
+          queryTokenizer: Bloodhound.tokenizers.whitespace,
+          identify: function (obj) {
+              return obj.hash
+          },
+          remote: {
+              url: "/search/address?q=",
+              prepare: prepareQueryFn,
+              maxPendingRequests: requestNum,
+          },
+      });
 
 
     searchEl.typeahead(
@@ -382,29 +403,42 @@
           },
         },
       },
-     {
-      limit: 5,
-          name: "transaction",
-        source: bhTransaction,
-        display: "transaction",
+      {
+        limit: 5,
+        name: "validator",
+        source: bhValidators,
+        display: "index",
         templates: {
-      header: '<h3 class="h5">Transactions:</h3>',
+          header: '<h3 class="h5">Validators:</h3>',
           suggestion: function (data) {
-        return `<div class="text-monospace" style="display:flex"><div class="text-truncate" style="flex:1 1 auto;">${data.hash}</div><div style="max-width:fit-content;white-space:nowrap;">${data.count}</div></div>`
-      },
-    },
-    },
-        {
-          limit: 5,
-          name: "address",
-          source: bhAddress,
-          display: "address",
-          templates: {
-            header: '<h3 class="h5">Addresses:</h3>',
-            suggestion: function (data) {
-              return `<div class="text-monospace" style="display:flex"><div class="text-truncate" style="flex:1 1 auto;">${data.address}</div><div style="max-width:fit-content;white-space:nowrap;">${data.address}</div></div>`
-            },
+            var nameDisplay = data.name ? `<span class="text-muted" style="white-space:nowrap"> (${data.name})</span>` : '';
+            return `<div class="text-monospace"><div class="search-table"><span class="search-cell">${data.index}:</span><span class="search-cell search-truncate">${data.pubkey}</span>${nameDisplay}</div></div>`;
           },
+        },
+      },
+        {
+            limit: 5,
+            name: "transaction",
+            source: bhTransaction,
+            display: "transaction",
+            templates: {
+                header: '<h3 class="h5">Transactions:</h3>',
+                suggestion: function (data) {
+                    return `<div class="text-monospace" style="display:flex"><div class="text-truncate" style="flex:1 1 auto;">${data.hash}</div><div style="max-width:fit-content;white-space:nowrap;">${data.count}</div></div>`
+                },
+            },
+        },
+        {
+            limit: 5,
+            name: "address",
+            source: bhAddress,
+            display: "address",
+            templates: {
+                header: '<h3 class="h5">Addresses:</h3>',
+                suggestion: function (data) {
+                    return `<div class="text-monospace" style="display:flex"><div class="text-truncate" style="flex:1 1 auto;">${data.address}</div><div style="max-width:fit-content;white-space:nowrap;">${data.address}</div></div>`
+                },
+            },
         }
 
     )
@@ -435,6 +469,8 @@
         var el = document.createElement("textarea")
         el.innerHTML = sug.graffiti
         window.location = "/slots/filtered?f&f.orphaned=1&f.graffiti=" + encodeURIComponent(el.value)
+      } else if (sug.pubkey !== undefined) {
+        window.location = "/validator/" + sug.index
       } else if (sug.name !== undefined) {
           // sug.name is html-escaped to prevent xss, we need to unescape it
           var el = document.createElement("textarea")
@@ -465,8 +501,11 @@
     });
     refreshButton.removeClass('fa-refresh fa-clock-o').addClass('fa-refresh fa-spin');
     
+    // Determine the client type based on current URL
+    var clientType = window.location.pathname.includes('/clients/execution') ? 'execution' : 'consensus';
+
     // Call the refresh API
-    fetch('/clients/consensus/refresh', {
+    fetch(`/clients/${clientType}/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -525,8 +564,11 @@ window.refreshPeerInfos = function() {
   });
   refreshButton.removeClass('fa-refresh fa-clock-o').addClass('fa-refresh fa-spin');
   
+  // Determine the client type based on current URL
+  var clientType = window.location.pathname.includes('/clients/execution') ? 'execution' : 'consensus';
+
   // Call the refresh API
-  fetch('/clients/consensus/refresh', {
+  fetch(`/clients/${clientType}/refresh`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

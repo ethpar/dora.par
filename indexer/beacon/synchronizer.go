@@ -341,7 +341,7 @@ func (s *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, lastTry
 			nextEpochCanonicalBlocks = append(nextEpochCanonicalBlocks, s.cachedBlocks[slot])
 		}
 	}
-	sync.logger.Infof("syncEpoch slots read complete %v", syncEpoch)
+	s.logger.Infof("syncEpoch slots read complete %v", syncEpoch)
 	s.cachedSlot = lastSlot
 
 	if s.syncCtx.Err() != nil {
@@ -474,6 +474,6 @@ func (s *synchronizer) syncEpoch(syncEpoch phase0.Epoch, client *Client, lastTry
 			delete(s.cachedBlocks, slot)
 		}
 	}
-	sync.logger.Infof("syncEpoch completed %v", syncEpoch)
+	s.logger.Infof("syncEpoch completed %v", syncEpoch)
 	return true, nil
 }

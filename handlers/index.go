@@ -264,34 +264,45 @@ func buildIndexPageData() (*models.IndexPageData, time.Duration) {
 	if specs.AlphaForkEpoch != nil && *specs.AlphaForkEpoch < uint64(18446744073709551615) {
 		forkDigest := chainState.GetForkDigest(specs.AlphaForkVersion, nil)
 		pageData.NetworkForks = append(pageData.NetworkForks, &models.IndexPageDataForks{
-			Name:    "Alpha",
-			Epoch:   *specs.AlphaForkEpoch,
-			Version: specs.AlphaForkVersion[:],
+			Name:       "Alpha",
+			Epoch:      *specs.AlphaForkEpoch,
+			Version:    specs.AlphaForkVersion[:],
 			Time:       uint64(chainState.EpochToTime(phase0.Epoch(*specs.AlphaForkEpoch)).Unix()),
-			Active:  uint64(currentEpoch) >= *specs.AlphaForkEpoch,
+			Active:     uint64(currentEpoch) >= *specs.AlphaForkEpoch,
 			Type:       "consensus",
 			ForkDigest: forkDigest[:],
 		})
 	}
 	if specs.BetaForkEpoch != nil && *specs.BetaForkEpoch < uint64(18446744073709551615) {
 		forkDigest := chainState.GetForkDigest(specs.BetaForkVersion, nil)
+		var epoch = *specs.BetaForkEpoch
+		//temporary for fix fork time
+		if epoch > 10000000 { //11761760000
+			epoch = 200000
+		}
 		pageData.NetworkForks = append(pageData.NetworkForks, &models.IndexPageDataForks{
-			Name:    "Beta",
-			Epoch:   *specs.BetaForkEpoch,
-			Version: specs.BetaForkVersion[:],
-			Time:       uint64(chainState.EpochToTime(phase0.Epoch(*specs.BetaForkEpoch)).Unix()),
-			Active:  uint64(currentEpoch) >= *specs.BetaForkEpoch,
+			Name:       "Beta",
+			Epoch:      *specs.BetaForkEpoch,
+			Version:    specs.BetaForkVersion[:],
+			Time:       uint64(chainState.EpochToTime(phase0.Epoch(epoch)).Unix()), //*specs.BetaForkEpoch
+			Active:     uint64(currentEpoch) >= *specs.BetaForkEpoch,
 			Type:       "consensus",
 			ForkDigest: forkDigest[:],
 		})
 	}
+	//11761760000
 	if specs.ElectraForkEpoch != nil && *specs.ElectraForkEpoch < uint64(18446744073709551615) {
 		forkDigest := chainState.GetForkDigest(specs.ElectraForkVersion, nil)
+		var epoch = *specs.ElectraForkEpoch
+		//temporary for fix fork time
+		if epoch > 10000000 { //11761760000
+			epoch = 200000
+		}
 		pageData.NetworkForks = append(pageData.NetworkForks, &models.IndexPageDataForks{
 			Name:       "Electra",
 			Epoch:      *specs.ElectraForkEpoch,
 			Version:    specs.ElectraForkVersion[:],
-			Time:       uint64(chainState.EpochToTime(phase0.Epoch(*specs.ElectraForkEpoch)).Unix()),
+			Time:       uint64(chainState.EpochToTime(phase0.Epoch(epoch)).Unix()),
 			Active:     uint64(currentEpoch) >= *specs.ElectraForkEpoch,
 			Type:       "consensus",
 			ForkDigest: forkDigest[:],

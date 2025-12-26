@@ -94,7 +94,6 @@ func GetTransactionsErc20Count(address string, contract string) (uint64, error) 
 }
 
 func GetTransactionByHash(hash string) *dbtypes.Transaction {
-	lowerHash := strings.ToLower(hash)
 	transactions := []*dbtypes.Transaction{}
 	err := ReaderDb.Select(&transactions, `
 	SELECT
@@ -102,8 +101,8 @@ func GetTransactionByHash(hash string) *dbtypes.Transaction {
 			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations,
 			                          erc20_method, erc20_address_to, erc20_value
 	FROM transactions
-	WHERE LOWER("hash") = $1
-	`, lowerHash)
+	WHERE "hash" = $1
+	`, hash)
 	if err != nil {
 		logger.Errorf("Error while fetching Transactions: %v", err)
 		return nil

@@ -1120,6 +1120,10 @@ func (bs *ChainService) GetContracts() map[string]*dbtypes.Contract {
 	return bs.txIndexer.GetContracts()
 }
 
+func (bs *ChainService) GetLogger() logrus.FieldLogger {
+	return bs.logger
+}
+
 func (bs *ChainService) GetAllTransactionsForAddress(address string) []*dbtypes.Transaction {
 	return db.GetTransactions(address, 0, 100000000)
 }

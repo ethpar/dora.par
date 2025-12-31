@@ -27,7 +27,7 @@ func Transaction(w http.ResponseWriter, r *http.Request) {
 		hash = "0x" + hash
 	}
 
-	services.GlobalBeaconService.GetLogger().Infof("/tx/%v from IP %v", hash, getRealIP(r))
+	services.GlobalBeaconService.GetLogger().Infof("/ch/tx/%v from IP %v", hash, getRealIP(r))
 
 	dbTransaction := services.GlobalBeaconService.GetTransactionByHash(hash)
 

@@ -2,6 +2,7 @@ package beacon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -59,7 +60,10 @@ func LoadBeaconBlock(ctx context.Context, client *Client, root phase0.Root) (*sp
 	if err != nil {
 		return nil, err
 	}
-
+	var rank, _ = body.Rank()
+	if rank > uint64(0) {
+		return nil, errors.New("rank > 0 skip")
+	}
 	return body, nil
 }
 

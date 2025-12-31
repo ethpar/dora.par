@@ -345,7 +345,8 @@ func (c *Client) processReorg(oldHead *Block, newHead *Block) error {
 }
 
 // processBlock processes a block (from stream & polling).
-func (c *Client) processBlock(slot phase0.Slot, root phase0.Root, header *phase0.SignedBeaconBlockHeader, trackRecvDelay bool) (block *Block, isNew bool, processingTimes []time.Duration, err error) {
+func (c *Client) processBlock(slot phase0.Slot, root phase0.Root, header *phase0.SignedBeaconBlockHeader,
+	trackRecvDelay bool) (block *Block, isNew bool, processingTimes []time.Duration, err error) {
 	chainState := c.client.GetPool().GetChainState()
 	finalizedSlot := chainState.GetFinalizedSlot()
 	processingTimes = make([]time.Duration, 3)

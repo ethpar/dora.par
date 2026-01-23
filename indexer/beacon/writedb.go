@@ -138,6 +138,7 @@ func (dbw *dbWriter) persistEpochData(tx *sqlx.Tx, epoch phase0.Epoch, blocks []
 		})
 	}
 	canonicalForkId := ForkKey(0)
+	dbw.indexer.logger.Infof("persistEpochData: %v", epoch)
 
 	if sim == nil {
 		sim = newStateSimulator(dbw.indexer, epochStats)
@@ -157,11 +158,13 @@ func (dbw *dbWriter) persistEpochData(tx *sqlx.Tx, epoch phase0.Epoch, blocks []
 	}
 
 	// insert epoch
+	dbw.indexer.logger.Infof("persistEpochData save to db: %v", epoch)
 	err = db.InsertEpoch(dbEpoch, tx)
 	if err != nil {
 		return fmt.Errorf("error while saving epoch to db: %w", err)
 	}
 
+	dbw.indexer.alertsSender.sendAlert(tx, epoch, blocks, epochStats, epochVotes)
 	return nil
 }
 
@@ -228,7 +231,7 @@ func (dbw *dbWriter) buildDbBlock(block *Block, epochStats *EpochStats, override
 
 	blockBody := block.GetBlock()
 	if blockBody == nil {
-		dbw.indexer.logger.Warnf("error while building db blocks: block body not found: %v", block.Slot)
+		dbw.indexer.logger.Warnf("building db blocks: block body not found: %v:%v", block.Slot, block.Rank) //todo
 		return nil
 	}
 
@@ -408,7 +411,8 @@ func (dbw *dbWriter) buildDbBlock(block *Block, epochStats *EpochStats, override
 	return &dbBlock
 }
 
-func (dbw *dbWriter) buildDbEpoch(epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes, blockFn func(block *Block, depositIndex *uint64)) *dbtypes.Epoch {
+func (dbw *dbWriter) buildDbEpoch(epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes,
+	blockFn func(block *Block, depositIndex *uint64)) *dbtypes.Epoch {
 	chainState := dbw.indexer.consensusPool.GetChainState()
 
 	var epochStatsValues *EpochStatsValues
@@ -461,7 +465,7 @@ func (dbw *dbWriter) buildDbEpoch(epoch phase0.Epoch, blocks []*Block, epochStat
 
 			blockBody := block.GetBlock()
 			if blockBody == nil {
-				dbw.indexer.logger.Warnf("error while building db epoch: block body not found for aggregation: %v", block.Slot)
+				dbw.indexer.logger.Warnf("building db epoch: block body not found for aggregation: %v", block.Slot) //todo
 				continue
 			}
 			if blockFn != nil {

@@ -149,6 +149,15 @@ type Config struct {
 		EmptyFile string `yaml:"emptyFile" envconfig:"GRAPH_EMPTY_FILE"`
 	} `yaml:"graph"`
 
+	Email struct {
+		Enabled  bool   `yaml:"enabled"  envconfig:"EMAIL_ENABLED"`
+		From     string `yaml:"from" envconfig:"EMAIL_FROM"`
+		To       string `yaml:"to" envconfig:"EMAIL_TO"`
+		Subject  string `yaml:"subject" envconfig:"EMAIL_SUBJECT"`
+		Password string `yaml:"password" envconfig:"EMAIL_PASSWORD"`
+		DoraUrl  string `yaml:"doraUrl" envconfig:"DORA_URL_PASSWORD"`
+	} `yaml:"email"`
+
 	KillSwitch struct {
 		DisableSSZEncoding      bool `yaml:"disableSSZEncoding" envconfig:"KILLSWITCH_DISABLE_SSZ_ENCODING"`
 		DisableSSZRequests      bool `yaml:"disableSSZRequests" envconfig:"KILLSWITCH_DISABLE_SSZ_REQUESTS"`

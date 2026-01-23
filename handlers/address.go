@@ -56,15 +56,24 @@ func Address(w http.ResponseWriter, r *http.Request) {
 	if strings.Index(address, "0x") != 0 {
 		address = "0x" + address
 	}
+	services.GlobalBeaconService.GetLogger().Infof("/ch/address/%v from IP %v", address, getRealIP(r))
 
 	data := InitPageData(w, r, "address", "", "", addressTemplateFiles)
 
 	var account Account
 	account.AccountAddress = address
 
-	initTransactions(&account, start, pageSize, currentPage)
+	//todo:
+	//initTransactions(&account, start, pageSize, currentPage)
 
-	initTransactionsErc20(&account, start, pageSize, currentPage)
+	//initTransactionsErc20(&account, start, pageSize, currentPage)
+	//todo:
+	start = start + 1
+	account.PageSize = pageSize
+	account.TotalPages = 0
+	account.CurrentPageIndex = 0
+	account.IsDefaultPage = true
+	//todo:
 
 	clients := services.GlobalBeaconService.GetExecutionClients()
 	if len(clients) > 0 {

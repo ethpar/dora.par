@@ -52,6 +52,7 @@ type Indexer struct {
 	// indexer state
 	clients               []*Client
 	dbWriter              *dbWriter
+	alertsSender          *alertsSender
 	running               bool
 	backfillCompleteMutex sync.Mutex
 	backfillingCount      int
@@ -119,6 +120,7 @@ func NewIndexer(logger logrus.FieldLogger, consensusPool *consensus.Pool, execut
 	indexer.validatorCache = newValidatorCache(indexer)
 	indexer.validatorActivity = newValidatorActivityCache(indexer)
 	indexer.dbWriter = newDbWriter(indexer)
+	indexer.alertsSender = newAlertsSender(indexer)
 
 	badChainRoots := utils.Config.Indexer.BadChainRoots
 	if len(badChainRoots) > 0 {

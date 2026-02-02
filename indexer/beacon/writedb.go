@@ -164,7 +164,7 @@ func (dbw *dbWriter) persistEpochData(tx *sqlx.Tx, epoch phase0.Epoch, blocks []
 		return fmt.Errorf("error while saving epoch to db: %w", err)
 	}
 
-	dbw.indexer.alertsSender.sendAlert(tx, epoch, blocks, epochStats, epochVotes)
+	dbw.indexer.alertsSender.checkAndSendAlert(tx, epoch, blocks, epochStats, epochVotes)
 	return nil
 }
 

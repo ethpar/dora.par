@@ -44,7 +44,7 @@
           <div class="col-md-6">
             <span aria-ethereum-date="{{ .Ts.Unix }}" aria-ethereum-date-format="FROMNOW">{{ .Ts }}</span>
             (<span id="timestamp" aria-ethereum-date="{{ .Ts.Unix }}" aria-ethereum-date-format="LOCAL" data-timer="{{ .Ts.Unix }}">{{ formatRecentTimeShort .Ts }}</span>)
-            <i class="fa fa-copy text-muted p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" onclick="copyTs()"></i>
+            <i class="fa fa-copy text-muted p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ .Ts }}"></i>
           </div>
         </div>
         <div class="row border-bottom p-2 mx-0">
@@ -68,6 +68,10 @@
         <div class="row border-bottom p-2 mx-0">
           <div class="col-md-3">Slashings <span data-bs-toggle="tooltip" data-bs-placement="top" title="Proposers">P</span> / <span data-bs-toggle="tooltip" data-bs-placement="top" title="Attesters">A</span>:</div>
           <div class="col-md-9">{{ .ProposerSlashingCount }} / {{ .AttesterSlashingCount }}</div>
+        </div>
+        <div class="row border-bottom p-2 mx-0">
+          <div class="col-md-3">Txs / Blobs:</div>
+          <div class="col-md-9">{{ .EthTransactionCount }} / {{ .BlobCount }}</div>
         </div>
         <div class="row border-bottom p-2 mx-0">
           <div class="col-md-3">Correct Target Votes:</div>
@@ -149,14 +153,11 @@
                 <th>Prop<span class="d-none d-lg-inline">oser</span></th>
                 <th class="d-none d-md-table-cell">Att<span class="d-none d-lg-inline">estations</span></th>
                 <th>
-                  <nobr><span data-toggle="tooltip" data-placement="top" title="Deposits">D<span class="d-none d-lg-inline">eposits</span> </span> / 
-                  <span data-toggle="tooltip" data-placement="top" title="Exits">E<span class="d-none d-lg-inline">xits</span> </span></nobr>
+                  <nobr><span data-toggle="tooltip" data-placement="top" title="Deposits">D<span class="d-none d-lg-inline">ep</span> </span> / 
+                  <span data-toggle="tooltip" data-placement="top" title="Exits">E<span class="d-none d-lg-inline">x</span> </span></nobr>
                 </th>
-                <th><span class="d-none d-lg-inline">Slashings</span>
-                  <nobr><span data-toggle="tooltip" data-placement="top" title="Proposer Slashings">P</span> / 
-                  <span data-toggle="tooltip" data-placement="top" title="Attester Slashings">A</span></nobr>
-                </th>
-                <th>Tx<span class="d-none d-lg-inline"> Count</span></th>
+                <th><span data-toggle="tooltip" data-placement="top" title="Proposer Slashings / Attester Slashings">Slashings</span></th>
+                <th>Txs / Blobs</th>
                 <th>Sync<span class="d-none d-lg-inline"> Agg</span> %</th>
                 <th>Graffiti</th>
               </tr>
@@ -190,18 +191,17 @@
                     {{ end }}
                   </td>
                   <td data-timer="{{ $slot.Ts.Unix }}"><span data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="{{ $slot.Ts }}">{{ formatRecentTimeShort $slot.Ts }}</span></td>
-                  <td>{{ if gt $slot.Slot 0 }}{{ formatValidator $slot.Proposer $slot.ProposerName }}{{ end }}</td>
+                  <td>{{ if gt $slot.Slot 0 }}{{ formatValidatorWithIndex $slot.Proposer $slot.ProposerName }}{{ end }}</td>
                   {{ if or $epoch.Synchronized (not (eq $slot.Status 0)) }}
                     <td class="d-none d-md-table-cell">{{ if not (eq $slot.Status 0) }}{{ $slot.AttestationCount }}{{ end }}</td>
                     <td>{{ if not (eq $slot.Status 0) }}{{ $slot.DepositCount }} / {{ $slot.ExitCount }}{{ end }}</td>
                     <td>{{ if not (eq $slot.Status 0) }}{{ $slot.ProposerSlashingCount }} / {{ $slot.AttesterSlashingCount }}{{ end }}</td>
-                    <td>{{ if not (eq $slot.Status 0) }}{{ $slot.EthTransactionCount }}{{ end }}</td>
+                    <td>{{ if not (eq $slot.Status 0) }}{{ $slot.EthTransactionCount }} / {{ $slot.BlobCount }}{{ end }}</td>
                     <td>{{ if not (eq $slot.Status 0) }}{{ formatFloat $slot.SyncParticipation 2 }}%{{ end }}</td>
                     <td>{{ if not (eq $slot.Status 0) }}{{ formatGraffiti $slot.Graffiti }}{{ end }}</td>
                   {{ else }}
                     <td colspan="6">Not indexed yet</td>
                   {{ end }}
-                  
                 </tr>
               {{ end }}
             </tbody>

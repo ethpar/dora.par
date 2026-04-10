@@ -8,7 +8,8 @@
         <ol class="breadcrumb font-size-1 mb-0" style="padding:0; background-color:transparent;">
           <li class="breadcrumb-item"><a href="/" title="Home">Home</a></li>
           <li class="breadcrumb-item"><a href="/validators" title="Validators">Validators</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Withdrawal Requests</li>
+          <li class="breadcrumb-item"><a href="/validators/withdrawals" title="EL Withdrawals">Withdrawals</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Filtered</li>
         </ol>
       </nav>
     </div>
@@ -70,6 +71,14 @@
                   </div>
                   <div class="col-sm-12 col-md-6 col-lg-8">
                     <input name="f.vname" type="text" class="form-control" placeholder="Validator Name" aria-label="Validator Name" aria-describedby="basic-addon1" value="{{ .FilterValidatorName }}">
+                  </div>
+                </div>
+                <div class="row mt-1">
+                  <div class="col-sm-12 col-md-6 col-lg-4">
+                    Public Key
+                  </div>
+                  <div class="col-sm-12 col-md-6 col-lg-8">
+                    <input name="f.pubkey" type="text" class="form-control" placeholder="Public Key" aria-label="Public Key" aria-describedby="basic-addon1" value="{{ .FilterPublicKey }}">
                   </div>
                 </div>
               </div>
@@ -142,12 +151,10 @@
                 <th>Slot</th>
                 <th>Time</th>
                 <th><span class="d-none d-lg-inline">Source </span>Address</th>
-                <th><span class="d-none d-lg-inline">Request </span>Type</th>
+                <th><span class="d-none d-lg-inline">Req. </span>Type</th>
                 <th>Validator</th>
                 <th>Amount</th>
-                <!--
                 <th>Transaction</th>
-                -->
                 <th><span class="d-none d-lg-inline">Incl. </span>Status</th>
               </tr>
             </thead>
@@ -155,15 +162,17 @@
               <tbody>
                 {{ range $i, $request := .ElRequests }}
                   <tr>
-                    {{- if $request.Orphaned }}
-                    <td><a href="/slot/0x{{ printf "%x" $request.SlotRoot }}">{{ formatAddCommas $request.SlotNumber }}</a></td>
-                    {{- else }}
-                    <td><a href="/slot/{{ $request.SlotNumber }}">{{ formatAddCommas $request.SlotNumber }}</a></td>
-                    {{- end }}
+                    {{ if not $request.IsIncluded }}
+                      <td data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Consolidation request not included in the beacon chain yet">?</td>
+                    {{ else if eq $request.Status 2 }}
+                      <td><a href="/slot/0x{{ printf "%x" $request.SlotRoot }}">{{ formatAddCommas $request.SlotNumber }}</a></td>
+                    {{ else }}
+                      <td><a href="/slot/{{ $request.SlotNumber }}">{{ formatAddCommas $request.SlotNumber }}</a></td>
+                    {{ end }}
                     <td data-timer="{{ $request.Time.Unix }}"><span data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="{{ $request.Time }}">{{ formatRecentTimeShort $request.Time }}</span></td>
                     <td>
                       <div class="d-flex">
-                        <span class="flex-grow-1 text-truncate" style="max-width: 400px;">{{ ethAddressLink $request.SourceAddr }}</span>
+                        <span class="flex-grow-1 text-truncate" style="max-width: 300px;">{{ ethAddressLink $request.SourceAddr }}</span>
                         <div>
                           <i class="fa fa-copy text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ formatEthAddress $request.SourceAddr }}"></i>
                         </div>
@@ -178,7 +187,7 @@
                     </td>
                     <td>
                       {{- if $request.ValidatorValid }}
-                        {{ formatValidator $request.ValidatorIndex $request.ValidatorName }}
+                        {{ formatValidatorWithIndex $request.ValidatorIndex $request.ValidatorName }}
                       {{- else }}
                         <div class="d-flex">
                           <span class="flex-grow-1 text-truncate" style="max-width: 150px;" data-bs-toggle="tooltip" title="pubkey not in validator set">0x{{ printf "%x" $request.PublicKey }}</span>
@@ -189,26 +198,41 @@
                       {{- end }}
                     </td>
                     <td>{{ formatEthFromGwei $request.Amount }}</td>
-                    <!--
                     <td>
                       {{- if $request.LinkedTransaction }}
                       <div class="d-flex">
-                        <span class="flex-grow-1 text-truncate" style="max-width: 150px;">{{ ethTransactionLink $request.TransactionHash }}</span>
+                        <span class="flex-grow-1 text-truncate text-monospace" style="max-width: 150px;">{{ ethTransactionLink $request.TransactionHash 0 }}</span>
                         <div>
-                          <i class="fa fa-copy text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="{{ formatEthAddress $request.SourceAddress }}"></i>
+                          <i class="fa fa-copy text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="0x{{ printf "%x" $request.TransactionHash }}"></i>
+                        </div>
+                        <div>
+                          <i class="fa fa-info-circle text-muted ml-2 p-1 nojs-hide tx-details-btn" role="button" data-txdetails="{{ includeJSON $request.TransactionDetails true }}"></i>
                         </div>
                       </div>
                       {{- else }}
                       <span data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Corresponding withdrawal transaction has not been indexed yet.">?</span>
                       {{- end }}
                     </td>
-                    -->
                     <td>
-                      {{- if $request.Orphaned }}
-                        <span class="badge rounded-pill text-bg-info">Orphaned</span>
-                      {{- else }}
-                        <span class="badge rounded-pill text-bg-success">Included</span>
-                      {{- end }}
+                      {{ if eq $request.TxStatus 1 }}
+                        <span class="badge rounded-pill text-bg-success">Tx Included</span>
+                      {{ else if eq $request.TxStatus 2 }}
+                        <span class="badge rounded-pill text-bg-info">Tx Orphaned</span>
+                      {{ end }}
+                      
+                      {{ if eq $request.Status 0 }}
+                        <span class="badge rounded-pill text-bg-secondary">Req. Pending</span>
+                      {{ else if eq $request.Status 1 }}
+                        {{ if eq $request.Result 0 }}
+                          <span class="badge rounded-pill text-bg-warning" data-bs-toggle="tooltip" title="Request was included but result is unknown">Req. Included</span>
+                        {{ else if eq $request.Result 1 }}
+                          <span class="badge rounded-pill text-bg-success">Req. Included</span>
+                        {{ else }}
+                          <span class="badge rounded-pill text-bg-danger" data-bs-toggle="tooltip" data-bs-html="true" title="{{ $request.ResultMessage }}">Req. Failed</span>
+                        {{ end }}
+                      {{ else if eq $request.Status 2 }}
+                        <span class="badge rounded-pill text-bg-info">Req. Orphaned</span>
+                      {{ end }}
                     </td>
                   </tr>
                 {{ end }}
@@ -228,14 +252,101 @@
             {{ end }}
           </table>
         </div>
+        <div class="tx-details-content d-none">
+          <div>
+            <div class="d-flex">
+              <div class="tx-details-label">
+                Tx Hash:
+              </div>
+              <div class="flex-grow-1 tx-details-value">
+                <div class="d-flex">
+                  <span class="flex-grow-1 text-truncate txdetails-txhash"></span>
+                  <div>
+                    <i class="fa fa-copy text-muted ml-2 p-1 txdetails-txhash-copy" role="button" data-bs-toggle="tooltip" title="Copy to clipboard"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="d-flex">
+              <div class="tx-details-label">
+                Block:
+              </div>
+              <div class="flex-grow-1 tx-details-value">
+                <div class="d-flex">
+                  <span class="flex-grow-1 text-truncate txdetails-block"></span>
+                  <div>
+                    <i class="fa fa-copy text-muted ml-2 p-1 txdetails-block-copy" role="button" data-bs-toggle="tooltip" title="Copy to clipboard"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="d-flex">
+              <div class="tx-details-label">
+                Block Time:
+              </div>
+              <div class="flex-grow-1 tx-details-value">
+                <div class="d-flex">
+                  <span class="flex-grow-1 text-truncate txdetails-time"></span>
+                  <div>
+                    <i class="fa fa-copy text-muted ml-2 p-1 txdetails-time-copy" role="button" data-bs-toggle="tooltip" title="Copy to clipboard"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="d-flex">
+              <div class="tx-details-label">
+                TX Origin:
+              </div>
+              <div class="flex-grow-1 tx-details-value">
+                <div class="d-flex">
+                  <span class="flex-grow-1 text-truncate txdetails-txorigin"></span>
+                  <div>
+                    <i class="fa fa-copy text-muted ml-2 p-1 txdetails-txorigin-copy" role="button" data-bs-toggle="tooltip" title="Copy to clipboard"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="d-flex">
+              <div class="tx-details-label">
+                TX Target:  
+              </div>
+              <div class="flex-grow-1 tx-details-value">
+                <div class="d-flex">
+                  <span class="flex-grow-1 text-truncate txdetails-txtarget"></span>
+                  <div>
+                    <i class="fa fa-copy text-muted ml-2 p-1 txdetails-txtarget-copy" role="button" data-bs-toggle="tooltip" title="Copy to clipboard"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         {{ if gt .TotalPages 1 }}
           <div class="row">
             <div class="col-sm-12 col-md-5 table-metainfo">
               <div class="px-2">
-                <div class="table-meta" role="status" aria-live="polite">Showing withdrawal requests from slot {{ .FirstIndex }} to {{ .LastIndex }}</div>
+                <div class="table-meta" role="status" aria-live="polite">Showing {{ .RequestCount }} withdrawal requests from slot {{ .FirstIndex }} to {{ .LastIndex }}</div>
               </div>
             </div>
             <div class="col-sm-12 col-md-7 table-paging">
+              <div class="d-inline-block px-2">
+                <form method="GET" style="display: inline-flex; align-items: center;" id="pageJumpForm">
+                  <input type="hidden" name="f">
+                  {{ range $key, $value := .UrlParams }}
+                    {{ if ne $key "p" }}
+                      <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                    {{ end }}
+                  {{ end }}
+                  <div class="input-group" style="width: 120px;">
+                    <input type="number" class="form-control" name="p" id="pageJumpInput" 
+                           min="1" max="{{ .TotalPages }}" placeholder="Page" 
+                           style="height: 38px; font-size: 14px; text-align: center; border-radius: 0.375rem 0 0 0.375rem;">
+                    <button type="submit" class="btn btn-outline-secondary" style="height: 38px; border-radius: 0 0.375rem 0.375rem 0;">
+                      Go
+                    </button>
+                  </div>
+                </form>
+              </div>
               <div class="d-inline-block px-2">
                 <ul class="pagination">
                   <li class="first paginate_button page-item {{ if lt .PrevPageIndex 1 }}disabled{{ end }}" id="tpg_first">
@@ -259,11 +370,92 @@
           </div>
         {{ end }}
       </div>
-      <div id="footer-placeholder" style="height:71px;"></div>
     </div>
   </div>
 {{ end }}
 {{ define "js" }}
+<script>
+  $(document).ready(function() {
+    var lastPopover = null;
+
+    $('.tx-details-btn').click(function() {
+      var txdetails = $(this).data('txdetails');
+      var container = $(".tx-details-content");
+      container.find(".txdetails-txhash").text(txdetails.tx_hash);
+      container.find(".txdetails-txhash-copy").attr("data-clipboard-text", txdetails.tx_hash);
+      container.find(".txdetails-block").text(txdetails.block);
+      container.find(".txdetails-block-copy").attr("data-clipboard-text", txdetails.block);
+
+      var blockTimeRelative = window.explorer.renderRecentTime(txdetails.block_time);
+      var blockTimeAbsolute = new Date(txdetails.block_time * 1000).toISOString();
+      container.find(".txdetails-time").text(blockTimeRelative);
+      container.find(".txdetails-time-copy").attr("data-clipboard-text", blockTimeAbsolute);
+      container.find(".txdetails-txorigin").text(txdetails.tx_origin);
+      container.find(".txdetails-txorigin-copy").attr("data-clipboard-text", txdetails.tx_origin);
+      container.find(".txdetails-txtarget").text(txdetails.tx_target);
+      container.find(".txdetails-txtarget-copy").attr("data-clipboard-text", txdetails.tx_target);
+
+      var txDetailsContent = container.html();
+
+      var popover = bootstrap.Popover.getOrCreateInstance(this, {
+        html: true,
+        title: 'Transaction Details',
+        content: 'loading...',
+        trigger: 'manual',
+        customClass: 'tx-details-popover'
+      });
+
+      if (lastPopover === popover) {
+        return;
+      }
+      if(lastPopover) {
+        lastPopover.hide();
+      }
+      lastPopover = popover;
+      
+      popover.show();
+
+      $(".tx-details-popover .popover-body").html(txDetailsContent);
+      window.explorer.initControls();
+  
+    });
+
+    $(window).on('click', function(evt) {
+      if($(evt.target).closest('.tx-details-btn').length > 0 || $(evt.target).closest('.tx-details-popover').length > 0) {
+        return;
+      }
+
+      if(lastPopover) {
+        lastPopover.hide();
+        lastPopover = null;
+      }
+    });
+
+    // Page jump functionality
+    $('#pageJumpForm').on('submit', function(e) {
+      var pageInput = $('#pageJumpInput');
+      var pageNum = parseInt(pageInput.val());
+      var maxPages = parseInt(pageInput.attr('max'));
+      
+      if (isNaN(pageNum) || pageNum < 1 || pageNum > maxPages) {
+        e.preventDefault();
+        pageInput.addClass('is-invalid');
+        setTimeout(function() {
+          pageInput.removeClass('is-invalid');
+        }, 2000);
+        return false;
+      }
+    });
+
+    // Enter key support for page jump
+    $('#pageJumpInput').on('keypress', function(e) {
+      if (e.which === 13) {
+        $('#pageJumpForm').submit();
+      }
+    });
+
+  });
+</script>
 {{ end }}
 {{ define "css" }}
 <style>
@@ -272,6 +464,22 @@
   padding-top: 6px;
   padding-left: 10px;
   padding-right: 10px;
+}
+
+.tx-details-label {
+  min-width: 90px;
+}
+
+.tx-details-value {
+  max-width: calc(100% - 90px);
+}
+
+.tx-details-popover {
+  max-width: 470px;
+}
+
+.tx-details-popover .popover-body {
+  padding: 8px;
 }
 
 </style>

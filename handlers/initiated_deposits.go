@@ -167,16 +167,12 @@ func buildFilteredInitiatedDepositsPageData(pageIdx uint64, pageSize uint64, add
 	}
 
 	offset := (pageIdx - 1) * pageSize
-	depositSyncState := dbtypes.DepositIndexerState{}
-	db.GetExplorerState("indexer.depositstate", &depositSyncState)
+	canonicalForkIds := services.GlobalBeaconService.GetCanonicalForkIds()
 
-	dbDepositTxs, totalRows, err := db.GetDepositTxsFiltered(offset, uint32(pageSize), depositSyncState.FinalBlock, depositFilter)
+	dbDepositTxs, totalRows, err := db.GetDepositTxsFiltered(offset, uint32(pageSize), canonicalForkIds, depositFilter)
 	if err != nil {
 		panic(err)
 	}
-
-	validatorSetRsp := services.GlobalBeaconService.GetCachedValidatorPubkeyMap()
-	validatorActivityMap, validatorActivityMax := services.GlobalBeaconService.GetValidatorActivity(3, false)
 
 	for _, depositTx := range dbDepositTxs {
 		depositTxData := &models.InitiatedDepositsPageDataDeposit{
@@ -189,14 +185,19 @@ func buildFilteredInitiatedDepositsPageData(pageIdx uint64, pageSize uint64, add
 			Time:                  time.Unix(int64(depositTx.BlockTime), 0),
 			Block:                 depositTx.BlockNumber,
 			Orphaned:              depositTx.Orphaned,
-			Valid:                 depositTx.ValidSignature,
+			Valid:                 depositTx.ValidSignature == 1 || depositTx.ValidSignature == 2,
 			ValidatorStatus:       "",
 		}
 
-		validator := validatorSetRsp[phase0.BLSPubKey(depositTx.PublicKey)]
-		if validator == nil {
+		if validatorIdx, found := services.GlobalBeaconService.GetValidatorIndexByPubkey(phase0.BLSPubKey(depositTx.PublicKey)); !found {
 			depositTxData.ValidatorStatus = "Deposited"
+			depositTxData.ValidatorExists = false
 		} else {
+			depositTxData.ValidatorExists = true
+			depositTxData.ValidatorIndex = uint64(validatorIdx)
+			depositTxData.ValidatorName = services.GlobalBeaconService.GetValidatorName(uint64(validatorIdx))
+
+			validator := services.GlobalBeaconService.GetValidatorByIndex(validatorIdx, false)
 			if strings.HasPrefix(validator.Status.String(), "pending") {
 				depositTxData.ValidatorStatus = "Pending"
 			} else if validator.Status == v1.ValidatorStateActiveOngoing {
@@ -217,8 +218,8 @@ func buildFilteredInitiatedDepositsPageData(pageIdx uint64, pageSize uint64, add
 			}
 
 			if depositTxData.ShowUpcheck {
-				depositTxData.UpcheckActivity = validatorActivityMap[validator.Index]
-				depositTxData.UpcheckMaximum = uint8(validatorActivityMax)
+				depositTxData.UpcheckActivity = uint8(services.GlobalBeaconService.GetValidatorLiveness(validator.Index, 3))
+				depositTxData.UpcheckMaximum = uint8(3)
 			}
 		}
 
@@ -239,6 +240,15 @@ func buildFilteredInitiatedDepositsPageData(pageIdx uint64, pageSize uint64, add
 	if pageIdx < pageData.TotalPages {
 		pageData.NextPageIndex = pageIdx + 1
 	}
+
+	// Populate UrlParams for page jump functionality
+	pageData.UrlParams = make(map[string]string)
+	for key, values := range filterArgs {
+		if len(values) > 0 {
+			pageData.UrlParams[key] = values[0]
+		}
+	}
+	pageData.UrlParams["c"] = fmt.Sprintf("%v", pageData.PageSize)
 
 	pageData.FirstPageLink = fmt.Sprintf("/validators/initiated_deposits?f&%v&c=%v", filterArgs.Encode(), pageData.PageSize)
 	pageData.PrevPageLink = fmt.Sprintf("/validators/initiated_deposits?f&%v&c=%v&p=%v", filterArgs.Encode(), pageData.PageSize, pageData.PrevPageIndex)

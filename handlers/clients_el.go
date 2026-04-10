@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethpandaops/dora/clients/execution"
+	execrpc "github.com/ethpandaops/dora/clients/execution/rpc"
 	"github.com/ethpandaops/dora/services"
 	"github.com/ethpandaops/dora/templates"
 	"github.com/ethpandaops/dora/types/models"
@@ -24,10 +26,17 @@ func ClientsEl(w http.ResponseWriter, r *http.Request) {
 	var pageTemplate = templates.GetTemplate(clientsTemplateFiles...)
 	data := InitPageData(w, r, "clients/execution", "/clients/execution", "Execution clients", clientsTemplateFiles)
 
+	// Get sorting parameter
+	urlArgs := r.URL.Query()
+	var sortOrder string
+	if urlArgs.Has("o") {
+		sortOrder = urlArgs.Get("o")
+	}
+
 	var pageError error
 	pageError = services.GlobalCallRateLimiter.CheckCallLimit(r, 1)
 	if pageError == nil {
-		data.Data, pageError = getELClientsPageData()
+		data.Data, pageError = getELClientsPageData(sortOrder)
 	}
 	if pageError != nil {
 		handlePageError(w, r, pageError)
@@ -39,11 +48,11 @@ func ClientsEl(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getELClientsPageData() (*models.ClientsELPageData, error) {
+func getELClientsPageData(sortOrder string) (*models.ClientsELPageData, error) {
 	pageData := &models.ClientsELPageData{}
-	pageCacheKey := "clients/execution"
+	pageCacheKey := fmt.Sprintf("clients/execution/%s", sortOrder)
 	pageRes, pageErr := services.GlobalFrontendCache.ProcessCachedPage(pageCacheKey, true, pageData, func(pageCall *services.FrontendCacheProcessingPage) interface{} {
-		pageData, cacheTimeout := buildELClientsPageData()
+		pageData, cacheTimeout := buildELClientsPageData(sortOrder)
 		pageCall.CacheTimeout = cacheTimeout
 		return pageData
 	})
@@ -57,7 +66,7 @@ func getELClientsPageData() (*models.ClientsELPageData, error) {
 	return pageData, pageErr
 }
 
-func buildELPeerMapData() *models.ClientELPageDataPeerMap {
+func buildELPeerMapData(parseEnodeRecord func(enrStr string) *enode.Node) *models.ClientELPageDataPeerMap {
 	peerMap := &models.ClientELPageDataPeerMap{
 		ClientPageDataMapNode: []*models.ClientELPageDataPeerMapNode{},
 		ClientDataMapEdges:    []*models.ClientELDataMapPeerMapEdge{},
@@ -68,14 +77,11 @@ func buildELPeerMapData() *models.ClientELPageDataPeerMap {
 
 	for _, client := range services.GlobalBeaconService.GetExecutionClients() {
 		nodeInfo := client.GetNodeInfo()
-		peerID := "unknown"
+		peerID := fmt.Sprintf("unknown-%v", client.GetIndex())
 		var en *enode.Node
-		var err error
 		if nodeInfo != nil && nodeInfo.Enode != "" {
-			en, err = enode.ParseV4(nodeInfo.Enode)
-			if err != nil {
-				logrus.WithFields(logrus.Fields{"client": client.GetName(), "enode": nodeInfo.Enode}).Error("failed to parse enode")
-			} else {
+			en = parseEnodeRecord(nodeInfo.Enode)
+			if en != nil {
 				peerID = en.ID().String()
 			}
 
@@ -94,23 +100,18 @@ func buildELPeerMapData() *models.ClientELPageDataPeerMap {
 
 	for _, client := range services.GlobalBeaconService.GetExecutionClients() {
 		nodeInfo := client.GetNodeInfo()
-		nodeID := "unknown"
+		nodeID := fmt.Sprintf("unknown-%v", client.GetIndex())
 		if nodeInfo != nil {
-			en, err := enode.ParseV4(nodeInfo.Enode)
-			if err != nil {
-				logrus.WithFields(logrus.Fields{"client": client.GetName(), "enode": nodeInfo.Enode}).Error("failed to parse enode")
-			} else {
+			en := parseEnodeRecord(nodeInfo.Enode)
+			if en != nil {
 				nodeID = en.ID().String()
 			}
 		}
 		peers := client.GetNodePeers()
-		for _, peer := range peers {
-			nodeID := nodeID
-			en, err := enode.ParseV4(peer.Enode)
-			peerID := "unknown"
-			if err != nil {
-				logrus.WithFields(logrus.Fields{"client": client.GetName(), "enode": peer.Enode}).Error("failed to parse peer enode")
-			} else {
+		for idx, peer := range peers {
+			en := parseEnodeRecord(peer.Enode)
+			peerID := fmt.Sprintf("unknown-peer-%v-%v", client.GetIndex(), idx)
+			if en != nil {
 				peerID = en.ID().String()
 			}
 
@@ -157,12 +158,29 @@ func buildELPeerMapData() *models.ClientELPageDataPeerMap {
 	return peerMap
 }
 
-func buildELClientsPageData() (*models.ClientsELPageData, time.Duration) {
+func buildELClientsPageData(sortOrder string) (*models.ClientsELPageData, time.Duration) {
 	logrus.Debugf("clients page called")
+
+	enodeMap := map[string]*enode.Node{}
+
+	parseEnodeRecord := func(enodeStr string) *enode.Node {
+		if enr, ok := enodeMap[enodeStr]; ok {
+			return enr
+		}
+		rec, err := enode.ParseV4(enodeStr)
+		enodeMap[enodeStr] = rec
+		if err != nil {
+			logrus.WithFields(logrus.Fields{"enr": enodeStr}).Warn("failed to decode enode. ", err)
+			return nil
+		}
+		return rec
+	}
+
 	pageData := &models.ClientsELPageData{
 		Clients:                []*models.ClientsELPageDataClient{},
-		PeerMap:                buildELPeerMapData(),
+		PeerMap:                buildELPeerMapData(parseEnodeRecord),
 		ShowSensitivePeerInfos: utils.Config.Frontend.ShowSensitivePeerInfos,
+		Nodes:                  map[string]*models.ClientsELPageDataNode{},
 	}
 	chainState := services.GlobalBeaconService.GetChainState()
 	specs := chainState.GetSpecs()
@@ -173,11 +191,9 @@ func buildELClientsPageData() (*models.ClientsELPageData, time.Duration) {
 
 		nodeInfo := client.GetNodeInfo()
 		if nodeInfo != nil && nodeInfo.Enode != "" {
-			en, err := enode.ParseV4(nodeInfo.Enode)
+			en := parseEnodeRecord(nodeInfo.Enode)
 			nodeID := "unknown"
-			if err != nil {
-				logrus.WithFields(logrus.Fields{"client": client.GetName(), "enode": nodeInfo.Enode}).Error("failed to parse enode")
-			} else {
+			if en != nil {
 				nodeID = en.ID().String()
 			}
 
@@ -189,16 +205,14 @@ func buildELClientsPageData() (*models.ClientsELPageData, time.Duration) {
 		lastHeadSlot, lastHeadRoot := client.GetLastHead()
 
 		peers := client.GetNodePeers()
-		resPeers := []*models.ClientELPageDataClientPeers{}
+		resPeers := []*models.ClientELPageDataNodePeers{}
 
 		var inPeerCount, outPeerCount uint32
 		for _, peer := range peers {
-			en, err := enode.ParseV4(peer.Enode)
+			en := parseEnodeRecord(peer.Enode)
 			peerID := "unknown"
 			enoderaw := "unknown"
-			if err != nil {
-				logrus.WithFields(logrus.Fields{"client": client.GetName(), "enode": peer.Enode}).Error("failed to parse peer enode")
-			} else {
+			if en != nil {
 				peerID = en.ID().String()
 				enoderaw = en.String()
 			}
@@ -213,7 +227,7 @@ func buildELClientsPageData() (*models.ClientsELPageData, time.Duration) {
 				direction = "inbound"
 			}
 
-			resPeers = append(resPeers, &models.ClientELPageDataClientPeers{
+			resPeers = append(resPeers, &models.ClientELPageDataNodePeers{
 				ID:        peerID,
 				State:     peer.Name,
 				Direction: direction,
@@ -246,10 +260,8 @@ func buildELClientsPageData() (*models.ClientsELPageData, time.Duration) {
 		ipAddr := "unknown"
 		listenAddr := "unknown"
 		if nodeInfo != nil {
-			en, err := enode.ParseV4(nodeInfo.Enode)
-			if err != nil {
-				logrus.WithFields(logrus.Fields{"client": client.GetName(), "enode": nodeInfo.Enode}).Error("failed to parse peer enode")
-			} else {
+			en := parseEnodeRecord(nodeInfo.Enode)
+			if en != nil {
 				peerID = en.ID().String()
 				enoderaw = en.String()
 			}
@@ -263,18 +275,34 @@ func buildELClientsPageData() (*models.ClientsELPageData, time.Duration) {
 			Name:                 client.GetName(),
 			Version:              client.GetVersion(),
 			DidFetchPeers:        client.DidFetchPeers(),
-			Peers:                resPeers,
-			PeerID:               peerID,
-			PeerName:             peerName,
-			Enode:                enoderaw,
-			IPAddr:               ipAddr,
-			ListenAddr:           listenAddr,
+			PeerCount:            uint32(len(peers)),
 			PeersInboundCounter:  inPeerCount,
 			PeersOutboundCounter: outPeerCount,
 			HeadSlot:             uint64(lastHeadSlot),
 			HeadRoot:             lastHeadRoot[:],
 			Status:               client.GetStatus().String(),
 			LastRefresh:          client.GetLastEventTime(),
+			PeerID:               peerID,
+			ConfigWarnings:       client.GetConfigWarnings(),
+		}
+
+		forkConfig := buildForkConfig(client)
+
+		resNode := &models.ClientsELPageDataNode{
+			Name:          client.GetName(),
+			Version:       client.GetVersion(),
+			Status:        client.GetStatus().String(),
+			Peers:         resPeers,
+			PeerID:        peerID,
+			PeerName:      peerName,
+			DidFetchPeers: client.DidFetchPeers(),
+			ForkConfig:    forkConfig,
+		}
+
+		if pageData.ShowSensitivePeerInfos {
+			resNode.Enode = enoderaw
+			resNode.IPAddr = ipAddr
+			resNode.ListenAddr = listenAddr
 		}
 
 		lastError := client.GetLastClientError()
@@ -283,9 +311,143 @@ func buildELClientsPageData() (*models.ClientsELPageData, time.Duration) {
 		}
 
 		pageData.Clients = append(pageData.Clients, resClient)
-
+		pageData.Nodes[peerID] = resNode
 	}
 	pageData.ClientCount = uint64(len(pageData.Clients))
 
+	// Apply sorting
+	switch sortOrder {
+	case "index-d":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			return pageData.Clients[i].Index > pageData.Clients[j].Index
+		})
+	case "name":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			return pageData.Clients[i].Name < pageData.Clients[j].Name
+		})
+	case "name-d":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			return pageData.Clients[i].Name > pageData.Clients[j].Name
+		})
+	case "peers":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			return pageData.Clients[i].PeerCount < pageData.Clients[j].PeerCount
+		})
+	case "peers-d":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			return pageData.Clients[i].PeerCount > pageData.Clients[j].PeerCount
+		})
+	case "block":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			return pageData.Clients[i].HeadSlot < pageData.Clients[j].HeadSlot
+		})
+	case "block-d":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			return pageData.Clients[i].HeadSlot > pageData.Clients[j].HeadSlot
+		})
+	case "blockhash":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			return string(pageData.Clients[i].HeadRoot) < string(pageData.Clients[j].HeadRoot)
+		})
+	case "blockhash-d":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			return string(pageData.Clients[i].HeadRoot) > string(pageData.Clients[j].HeadRoot)
+		})
+	case "status":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			statusOrder := map[string]int{"online": 0, "synchronizing": 1, "optimistic": 2, "offline": 3}
+			aVal, aExists := statusOrder[pageData.Clients[i].Status]
+			bVal, bExists := statusOrder[pageData.Clients[j].Status]
+			if !aExists {
+				aVal = 4
+			}
+			if !bExists {
+				bVal = 4
+			}
+			return aVal < bVal
+		})
+	case "status-d":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			statusOrder := map[string]int{"online": 0, "synchronizing": 1, "optimistic": 2, "offline": 3}
+			aVal, aExists := statusOrder[pageData.Clients[i].Status]
+			bVal, bExists := statusOrder[pageData.Clients[j].Status]
+			if !aExists {
+				aVal = 4
+			}
+			if !bExists {
+				bVal = 4
+			}
+			return aVal > bVal
+		})
+	case "version":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			return pageData.Clients[i].Version < pageData.Clients[j].Version
+		})
+	case "version-d":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			return pageData.Clients[i].Version > pageData.Clients[j].Version
+		})
+	case "index":
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			return pageData.Clients[i].Index < pageData.Clients[j].Index
+		})
+	default:
+		// Default sort by name ascending
+		sort.Slice(pageData.Clients, func(i, j int) bool {
+			return pageData.Clients[i].Name < pageData.Clients[j].Name
+		})
+		pageData.IsDefaultSorting = true
+		sortOrder = "name"
+	}
+	pageData.Sorting = sortOrder
+
 	return pageData, cacheTime
+}
+
+func buildForkConfig(client *execution.Client) *models.ClientELPageDataForkConfig {
+	ethConfig := client.GetEthConfig()
+	if ethConfig == nil {
+		return nil
+	}
+
+	forkConfig := &models.ClientELPageDataForkConfig{}
+
+	if ethConfig.Current != nil {
+		forkConfig.Current = convertEthConfigFork(ethConfig.Current)
+	}
+
+	if ethConfig.Next != nil {
+		forkConfig.Next = convertEthConfigFork(ethConfig.Next)
+	}
+
+	if ethConfig.Last != nil {
+		forkConfig.Last = convertEthConfigFork(ethConfig.Last)
+	}
+
+	return forkConfig
+}
+
+func convertEthConfigFork(fork *execrpc.EthConfigFork) *models.EthConfigObject {
+	obj := &models.EthConfigObject{}
+
+	obj.ActivationTime = fork.ActivationTime
+	obj.ChainId = fork.ChainID
+	obj.ForkId = fork.ForkID
+
+	// Convert string maps to interface{} maps for model compatibility
+	obj.BlobSchedule.Max = fork.BlobSchedule.Max
+	obj.BlobSchedule.Target = fork.BlobSchedule.Target
+	obj.BlobSchedule.BaseFeeUpdateFraction = fork.BlobSchedule.BaseFeeUpdateFraction
+
+	obj.Precompiles = make(map[string]string)
+	for key, value := range fork.Precompiles {
+		obj.Precompiles[key] = value.String()
+	}
+
+	obj.SystemContracts = make(map[string]string)
+	for key, value := range fork.SystemContracts {
+		obj.SystemContracts[key] = value.String()
+	}
+
+	return obj
 }

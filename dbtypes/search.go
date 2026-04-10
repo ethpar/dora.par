@@ -42,6 +42,12 @@ type SearchAheadValidatorNameResult []struct {
 	Count uint64 `db:"count"`
 }
 
+type SearchAheadValidatorResult []struct {
+	Index  uint64 `db:"validator_index"`
+	Pubkey []byte `db:"pubkey"`
+	Name   string `db:"name"`
+}
+
 type SearchAheadTransactionResult []struct {
 	Hash  string `db:"hash"`
 	Count uint64 `db:"count"`

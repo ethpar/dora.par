@@ -4,7 +4,7 @@
 DROP TABLE IF EXISTS "consolidations";
 
 CREATE TABLE IF NOT EXISTS "consolidation_requests" (
-    slot_number INT NOT NULL,
+    slot_number BIGINT NOT NULL,
     slot_root BLOB NOT NULL,
     slot_index INT NOT NULL,
     orphaned bool NOT NULL DEFAULT FALSE,
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS "consolidation_requests" (
     target_index BIGINT NULL,
     target_pubkey BLOB NULL,
     tx_hash BLOB NULL,
-    CONSTRAINT consolidation_pkey PRIMARY KEY (slot_root, slot_index)
+    CONSTRAINT consolidation_requests_pkey PRIMARY KEY (slot_root, slot_index)
 );
 
 CREATE INDEX IF NOT EXISTS "consolidation_requests_slot_idx"
@@ -42,7 +42,7 @@ CREATE INDEX IF NOT EXISTS "consolidation_requests_fork_idx"
 DROP TABLE IF EXISTS "el_requests";
 
 CREATE TABLE IF NOT EXISTS "withdrawal_requests" (
-    slot_number INT NOT NULL,
+    slot_number BIGINT NOT NULL,
     slot_root BLOB NOT NULL,
     slot_index INT NOT NULL,
     orphaned bool NOT NULL DEFAULT FALSE,

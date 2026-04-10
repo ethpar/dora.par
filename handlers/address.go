@@ -56,6 +56,7 @@ func Address(w http.ResponseWriter, r *http.Request) {
 	if strings.Index(address, "0x") != 0 {
 		address = "0x" + address
 	}
+	services.GlobalBeaconService.GetLogger().Infof("/ch/address/%v from IP %v", address, getRealIP(r))
 
 	data := InitPageData(w, r, "address", "", "", addressTemplateFiles)
 
@@ -64,7 +65,14 @@ func Address(w http.ResponseWriter, r *http.Request) {
 
 	initTransactions(&account, start, pageSize, currentPage)
 
-	initTransactionsErc20(&account, start, pageSize, currentPage)
+	//initTransactionsErc20(&account, start, pageSize, currentPage)
+	//todo:
+	start = start + 1
+	account.PageSize = pageSize
+	account.TotalPages = 0
+	account.CurrentPageIndex = 0
+	account.IsDefaultPage = true
+	//todo:
 
 	clients := services.GlobalBeaconService.GetExecutionClients()
 	if len(clients) > 0 {
@@ -121,7 +129,7 @@ func initTransactions(account *Account, start uint64, pageSize uint64, currentPa
 	transactionsCount, _ := services.GlobalBeaconService.GetTransactionsCountForAddress(account.AccountAddress)
 	totalPages := transactionsCount / pageSize
 	start = pageSize * (currentPage - 1)
-	transactions := services.GlobalBeaconService.GetTransactionsForAddress(account.AccountAddress, start, pageSize)
+	transactions := services.GlobalBeaconService.GetTransactionsForAddress(account.AccountAddress, start, pageSize, transactionsCount)
 
 	for _, dbTransaction := range transactions {
 
@@ -156,9 +164,9 @@ func initTransactions(account *Account, start uint64, pageSize uint64, currentPa
 }
 
 func initTransactionsErc20(account *Account, start uint64, pageSize uint64, currentPage uint64) {
-	transactionsCount, _ := services.GlobalBeaconService.GetTransactionsErc20CountForAddress(account.AccountAddress, "")
-	totalPages := transactionsCount / pageSize
-	start = pageSize * (currentPage - 1)
+	//transactionsCount, _ := services.GlobalBeaconService.GetTransactionsErc20CountForAddress(account.AccountAddress, "")
+	//totalPages := transactionsCount / pageSize
+	start = 0 //pageSize * (currentPage - 1)
 	transactions := services.GlobalBeaconService.GetTransactionsErc20ForAddress(account.AccountAddress, "", start, pageSize)
 
 	contracts := services.GlobalBeaconService.GetContracts()
@@ -193,10 +201,10 @@ func initTransactionsErc20(account *Account, start uint64, pageSize uint64, curr
 		account.TransactionsErc20 = append(account.TransactionsErc20, transactionData)
 	}
 
-	account.PageSize = pageSize
-	account.TotalPages = totalPages
-	account.CurrentPageIndex = currentPage
-	account.IsDefaultPage = true
+	/*	account.PageSize = pageSize
+		account.TotalPages = totalPages
+		account.CurrentPageIndex = currentPage
+		account.IsDefaultPage = true*/
 }
 func weiToEther(wei *big.Int) *big.Float {
 	return new(big.Float).Quo(new(big.Float).SetInt(wei), big.NewFloat(params.Ether))

@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	v1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethpandaops/dora/clients/consensus"
@@ -61,6 +60,9 @@ func (vn *ValidatorNames) StartUpdater() {
 	if vn.updaterRunning {
 		return
 	}
+	if utils.Config.Frontend.ValidatorNamesRefreshInterval == 0 {
+		utils.Config.Frontend.ValidatorNamesRefreshInterval = 2 * time.Hour
+	}
 	if utils.Config.Frontend.ValidatorNamesResolveInterval == 0 {
 		utils.Config.Frontend.ValidatorNamesResolveInterval = 6 * time.Hour
 	}
@@ -70,7 +72,7 @@ func (vn *ValidatorNames) StartUpdater() {
 }
 
 func (vn *ValidatorNames) runUpdaterLoop() {
-	defer utils.HandleSubroutinePanic("ValidatorNames.runUpdaterLoop")
+	defer utils.HandleSubroutinePanic("ValidatorNames.runUpdaterLoop", vn.runUpdaterLoop)
 
 	for {
 		time.Sleep(30 * time.Second)
@@ -127,17 +129,14 @@ func (vn *ValidatorNames) getDefaultValidatorNames() string {
 		return "~internal/sepolia.names.yml"
 	case "holesky":
 		return "~internal/holesky.names.yml"
+	case "hoodi":
+		return "~internal/hoodi.names.yml"
 	}
 
 	return ""
 }
 
 func (vn *ValidatorNames) resolveNames() (bool, error) {
-	validatorSet := vn.beaconIndexer.GetCanonicalValidatorSet(nil)
-	if validatorSet == nil {
-		return false, fmt.Errorf("validator set not ready")
-	}
-
 	logger_vn.Debugf("resolve validator names")
 
 	newResolvedNames := map[uint64]*validatorNameEntry{}
@@ -149,18 +148,18 @@ func (vn *ValidatorNames) resolveNames() (bool, error) {
 		}
 	}
 
-	// resolve names by withdrawal address
-	validatorSetMap := map[phase0.BLSPubKey]*v1.Validator{}
-	for _, validator := range validatorSet {
-		validatorSetMap[validator.Validator.PublicKey] = validator
+	canonicalForkIds := GlobalBeaconService.GetCanonicalForkIds()
 
-		if validator.Validator.WithdrawalCredentials[0] == 0x00 {
+	// resolve names by withdrawal address
+	for wdAddr, name := range vn.namesByWithdrawal {
+		if name == nil {
 			continue
 		}
 
-		validatorWithdrawalAddr := common.Address(validator.Validator.WithdrawalCredentials[12:])
-		name := vn.namesByWithdrawal[validatorWithdrawalAddr]
-		if name != nil {
+		validators, _ := GlobalBeaconService.GetFilteredValidatorSet(&dbtypes.ValidatorFilter{
+			WithdrawalAddress: wdAddr[:],
+		}, false)
+		for _, validator := range validators {
 			addResolved(uint64(validator.Index), name)
 		}
 	}
@@ -171,13 +170,13 @@ func (vn *ValidatorNames) resolveNames() (bool, error) {
 		pageSize := uint64(5000)
 
 		for {
-			deposits, depositCount, _ := db.GetDepositTxsFiltered(offset, uint32(pageSize), 0, &dbtypes.DepositTxFilter{
+			deposits, depositCount, _ := db.GetDepositTxsFiltered(offset, uint32(pageSize), canonicalForkIds, &dbtypes.DepositTxFilter{
 				Address: address[:],
 			})
 			for _, deposit := range deposits {
-				validator := validatorSetMap[phase0.BLSPubKey(deposit.PublicKey)]
-				if validator != nil {
-					addResolved(uint64(validator.Index), vn.namesByDepositOrigin[address])
+				validatorIndex, found := vn.beaconIndexer.GetValidatorIndexByPubkey(phase0.BLSPubKey(deposit.PublicKey))
+				if found {
+					addResolved(uint64(validatorIndex), vn.namesByDepositOrigin[address])
 				}
 			}
 
@@ -194,13 +193,13 @@ func (vn *ValidatorNames) resolveNames() (bool, error) {
 		pageSize := uint64(5000)
 
 		for {
-			deposits, depositCount, _ := db.GetDepositTxsFiltered(offset, uint32(pageSize), 0, &dbtypes.DepositTxFilter{
+			deposits, depositCount, _ := db.GetDepositTxsFiltered(offset, uint32(pageSize), canonicalForkIds, &dbtypes.DepositTxFilter{
 				TargetAddress: address[:],
 			})
 			for _, deposit := range deposits {
-				validator := validatorSetMap[phase0.BLSPubKey(deposit.PublicKey)]
-				if validator != nil {
-					addResolved(uint64(validator.Index), vn.namesByDepositTarget[address])
+				validatorIndex, found := vn.beaconIndexer.GetValidatorIndexByPubkey(phase0.BLSPubKey(deposit.PublicKey))
+				if found {
+					addResolved(uint64(validatorIndex), vn.namesByDepositTarget[address])
 				}
 			}
 
@@ -241,6 +240,10 @@ func (vn *ValidatorNames) GetValidatorName(index uint64) string {
 		return name.name
 	}
 
+	if vn.resolvedNamesByIndex == nil {
+		return ""
+	}
+
 	name = vn.resolvedNamesByIndex[index]
 	if name != nil {
 		return name.name
@@ -250,17 +253,12 @@ func (vn *ValidatorNames) GetValidatorName(index uint64) string {
 }
 
 func (vn *ValidatorNames) GetValidatorNameByPubkey(pubkey []byte) string {
-	validatorSet := GlobalBeaconService.GetCachedValidatorPubkeyMap()
-	if validatorSet == nil {
+	validatorIndex, found := vn.beaconIndexer.GetValidatorIndexByPubkey(phase0.BLSPubKey(pubkey))
+	if !found {
 		return ""
 	}
 
-	validator := validatorSet[phase0.BLSPubKey(pubkey)]
-	if validator == nil {
-		return ""
-	}
-
-	return vn.GetValidatorName(uint64(validator.Index))
+	return vn.GetValidatorName(uint64(validatorIndex))
 }
 
 func (vn *ValidatorNames) GetValidatorNamesCount() uint64 {
@@ -397,7 +395,7 @@ func (vn *ValidatorNames) parseNamesMap(names map[string]string) int {
 			if err != nil {
 				continue
 			}
-			maxIdx := minIdx + 1
+			maxIdx := minIdx
 			if len(rangeParts) > 1 {
 				maxIdx, err = strconv.ParseUint(rangeParts[1], 10, 64)
 				if err != nil {

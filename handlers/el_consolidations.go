@@ -8,7 +8,9 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethpandaops/dora/clients/consensus"
 	"github.com/ethpandaops/dora/dbtypes"
+	"github.com/ethpandaops/dora/indexer/beacon"
 	"github.com/ethpandaops/dora/services"
 	"github.com/ethpandaops/dora/templates"
 	"github.com/ethpandaops/dora/types/models"
@@ -47,7 +49,8 @@ func ElConsolidations(w http.ResponseWriter, r *http.Request) {
 	var minTgtIndex uint64
 	var maxTgtIndex uint64
 	var tgtVName string
-	var withOrphaned uint64
+	var withOrphaned uint64 = 1
+	var pubkey string
 
 	if urlArgs.Has("f") {
 		if urlArgs.Has("f.mins") {
@@ -80,13 +83,14 @@ func ElConsolidations(w http.ResponseWriter, r *http.Request) {
 		if urlArgs.Has("f.orphaned") {
 			withOrphaned, _ = strconv.ParseUint(urlArgs.Get("f.orphaned"), 10, 64)
 		}
-	} else {
-		withOrphaned = 1
+		if urlArgs.Has("f.pubkey") {
+			pubkey = urlArgs.Get("f.pubkey")
+		}
 	}
 	var pageError error
 	pageError = services.GlobalCallRateLimiter.CheckCallLimit(r, 2)
 	if pageError == nil {
-		data.Data, pageError = getFilteredElConsolidationsPageData(pageIdx, pageSize, minSlot, maxSlot, sourceAddr, minSrcIndex, maxSrcIndex, srcVName, minTgtIndex, maxTgtIndex, tgtVName, uint8(withOrphaned))
+		data.Data, pageError = getFilteredElConsolidationsPageData(pageIdx, pageSize, minSlot, maxSlot, sourceAddr, minSrcIndex, maxSrcIndex, srcVName, minTgtIndex, maxTgtIndex, tgtVName, uint8(withOrphaned), pubkey)
 	}
 	if pageError != nil {
 		handlePageError(w, r, pageError)
@@ -98,11 +102,11 @@ func ElConsolidations(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getFilteredElConsolidationsPageData(pageIdx uint64, pageSize uint64, minSlot uint64, maxSlot uint64, sourceAddr string, minSrcIndex uint64, maxSrcIndex uint64, srcVName string, minTgtIndex uint64, maxTgtIndex uint64, tgtVName string, withOrphaned uint8) (*models.ElConsolidationsPageData, error) {
+func getFilteredElConsolidationsPageData(pageIdx uint64, pageSize uint64, minSlot uint64, maxSlot uint64, sourceAddr string, minSrcIndex uint64, maxSrcIndex uint64, srcVName string, minTgtIndex uint64, maxTgtIndex uint64, tgtVName string, withOrphaned uint8, pubkey string) (*models.ElConsolidationsPageData, error) {
 	pageData := &models.ElConsolidationsPageData{}
-	pageCacheKey := fmt.Sprintf("el_consolidations:%v:%v:%v:%v:%v:%v:%v:%v:%v:%v:%v:%v", pageIdx, pageSize, minSlot, maxSlot, sourceAddr, minSrcIndex, maxSrcIndex, srcVName, minTgtIndex, maxTgtIndex, tgtVName, withOrphaned)
+	pageCacheKey := fmt.Sprintf("el_consolidations:%v:%v:%v:%v:%v:%v:%v:%v:%v:%v:%v:%v:%v", pageIdx, pageSize, minSlot, maxSlot, sourceAddr, minSrcIndex, maxSrcIndex, srcVName, minTgtIndex, maxTgtIndex, tgtVName, withOrphaned, pubkey)
 	pageRes, pageErr := services.GlobalFrontendCache.ProcessCachedPage(pageCacheKey, true, pageData, func(_ *services.FrontendCacheProcessingPage) interface{} {
-		return buildFilteredElConsolidationsPageData(pageIdx, pageSize, minSlot, maxSlot, sourceAddr, minSrcIndex, maxSrcIndex, srcVName, minTgtIndex, maxTgtIndex, tgtVName, withOrphaned)
+		return buildFilteredElConsolidationsPageData(pageIdx, pageSize, minSlot, maxSlot, sourceAddr, minSrcIndex, maxSrcIndex, srcVName, minTgtIndex, maxTgtIndex, tgtVName, withOrphaned, pubkey)
 	})
 	if pageErr == nil && pageRes != nil {
 		resData, resOk := pageRes.(*models.ElConsolidationsPageData)
@@ -114,7 +118,7 @@ func getFilteredElConsolidationsPageData(pageIdx uint64, pageSize uint64, minSlo
 	return pageData, pageErr
 }
 
-func buildFilteredElConsolidationsPageData(pageIdx uint64, pageSize uint64, minSlot uint64, maxSlot uint64, sourceAddr string, minSrcIndex uint64, maxSrcIndex uint64, srcVName string, minTgtIndex uint64, maxTgtIndex uint64, tgtVName string, withOrphaned uint8) *models.ElConsolidationsPageData {
+func buildFilteredElConsolidationsPageData(pageIdx uint64, pageSize uint64, minSlot uint64, maxSlot uint64, sourceAddr string, minSrcIndex uint64, maxSrcIndex uint64, srcVName string, minTgtIndex uint64, maxTgtIndex uint64, tgtVName string, withOrphaned uint8, pubkey string) *models.ElConsolidationsPageData {
 	filterArgs := url.Values{}
 	if minSlot != 0 {
 		filterArgs.Add("f.mins", fmt.Sprintf("%v", minSlot))
@@ -143,8 +147,11 @@ func buildFilteredElConsolidationsPageData(pageIdx uint64, pageSize uint64, minS
 	if tgtVName != "" {
 		filterArgs.Add("f.tvname", tgtVName)
 	}
-	if withOrphaned != 0 {
+	if withOrphaned != 1 {
 		filterArgs.Add("f.orphaned", fmt.Sprintf("%v", withOrphaned))
+	}
+	if pubkey != "" {
+		filterArgs.Add("f.pubkey", pubkey)
 	}
 
 	pageData := &models.ElConsolidationsPageData{
@@ -158,6 +165,7 @@ func buildFilteredElConsolidationsPageData(pageIdx uint64, pageSize uint64, minS
 		FilterMaxTgtIndex:      maxTgtIndex,
 		FilterTgtValidatorName: tgtVName,
 		FilterWithOrphaned:     withOrphaned,
+		FilterPublicKey:        pubkey,
 	}
 	logrus.Debugf("el_consolidations page called: %v:%v [%v,%v,%v,%v,%v,%v,%v,%v]", pageIdx, pageSize, minSlot, maxSlot, minSrcIndex, maxSrcIndex, srcVName, minTgtIndex, maxTgtIndex, tgtVName)
 	if pageIdx == 1 {
@@ -174,56 +182,92 @@ func buildFilteredElConsolidationsPageData(pageIdx uint64, pageSize uint64, minS
 		pageData.PrevPageIndex = pageIdx - 1
 	}
 
-	// load voluntary exits
-	consolidationRequestFilter := &dbtypes.ConsolidationRequestFilter{
-		MinSlot:          minSlot,
-		MaxSlot:          maxSlot,
-		SourceAddress:    common.FromHex(sourceAddr),
-		MinSrcIndex:      minSrcIndex,
-		MaxSrcIndex:      maxSrcIndex,
-		SrcValidatorName: srcVName,
-		MinTgtIndex:      minTgtIndex,
-		MaxTgtIndex:      maxTgtIndex,
-		TgtValidatorName: tgtVName,
-		WithOrphaned:     withOrphaned,
+	// Update the filter to use CombinedConsolidationRequestFilter
+	consolidationRequestFilter := &services.CombinedConsolidationRequestFilter{
+		Filter: &dbtypes.ConsolidationRequestFilter{
+			MinSlot:          minSlot,
+			MaxSlot:          maxSlot,
+			SourceAddress:    common.FromHex(sourceAddr),
+			MinSrcIndex:      minSrcIndex,
+			MaxSrcIndex:      maxSrcIndex,
+			SrcValidatorName: srcVName,
+			MinTgtIndex:      minTgtIndex,
+			MaxTgtIndex:      maxTgtIndex,
+			TgtValidatorName: tgtVName,
+			WithOrphaned:     withOrphaned,
+			PublicKey:        common.FromHex(pubkey),
+		},
 	}
 
-	dbElConsolidations, totalRows := services.GlobalBeaconService.GetConsolidationRequestsByFilter(consolidationRequestFilter, pageIdx-1, uint32(pageSize))
-
+	dbElConsolidations, totalPendingTxRows, totalRequests := services.GlobalBeaconService.GetConsolidationRequestsByFilter(consolidationRequestFilter, (pageIdx-1)*pageSize, uint32(pageSize))
 	chainState := services.GlobalBeaconService.GetChainState()
-	validatorSetRsp := services.GlobalBeaconService.GetCachedValidatorSet()
-
-	for _, elConsolidation := range dbElConsolidations {
-		elWithdrawalData := &models.ElConsolidationsPageDataConsolidation{
-			SlotNumber:      elConsolidation.SlotNumber,
-			SlotRoot:        elConsolidation.SlotRoot,
-			Time:            chainState.SlotToTime(phase0.Slot(elConsolidation.SlotNumber)),
-			Orphaned:        elConsolidation.Orphaned,
-			SourceAddr:      elConsolidation.SourceAddress,
-			SourcePublicKey: elConsolidation.SourcePubkey,
-			TargetPublicKey: elConsolidation.TargetPubkey,
-		}
-
-		if elConsolidation.SourceIndex != nil {
-			elWithdrawalData.SourceValidatorIndex = *elConsolidation.SourceIndex
-			elWithdrawalData.SourceValidatorName = services.GlobalBeaconService.GetValidatorName(*elConsolidation.SourceIndex)
-
-			if uint64(len(validatorSetRsp)) > elWithdrawalData.SourceValidatorIndex && validatorSetRsp[elWithdrawalData.SourceValidatorIndex] != nil {
-				elWithdrawalData.SourceValidatorValid = true
-			}
-		}
-
-		if elConsolidation.TargetIndex != nil {
-			elWithdrawalData.TargetValidatorIndex = *elConsolidation.TargetIndex
-			elWithdrawalData.TargetValidatorName = services.GlobalBeaconService.GetValidatorName(*elConsolidation.TargetIndex)
-
-			if uint64(len(validatorSetRsp)) > elWithdrawalData.TargetValidatorIndex && validatorSetRsp[elWithdrawalData.TargetValidatorIndex] != nil {
-				elWithdrawalData.TargetValidatorValid = true
-			}
-		}
-
-		pageData.ElRequests = append(pageData.ElRequests, elWithdrawalData)
+	headBlock := services.GlobalBeaconService.GetBeaconIndexer().GetCanonicalHead(nil)
+	headBlockNum := uint64(0)
+	if headBlock != nil && headBlock.GetBlockIndex() != nil {
+		headBlockNum = uint64(headBlock.GetBlockIndex().ExecutionNumber)
 	}
+
+	for _, consolidation := range dbElConsolidations {
+		elConsolidationData := &models.ElConsolidationsPageDataConsolidation{
+			SourceAddr:      consolidation.SourceAddress(),
+			SourcePublicKey: consolidation.SourcePubkey(),
+			TargetPublicKey: consolidation.TargetPubkey(),
+		}
+
+		if sourceIndex := consolidation.SourceIndex(); sourceIndex != nil {
+			elConsolidationData.SourceValidatorIndex = *sourceIndex
+			elConsolidationData.SourceValidatorName = services.GlobalBeaconService.GetValidatorName(*sourceIndex)
+			elConsolidationData.SourceValidatorValid = true
+		}
+
+		if targetIndex := consolidation.TargetIndex(); targetIndex != nil {
+			elConsolidationData.TargetValidatorIndex = *targetIndex
+			elConsolidationData.TargetValidatorName = services.GlobalBeaconService.GetValidatorName(*targetIndex)
+			elConsolidationData.TargetValidatorValid = true
+		}
+
+		if request := consolidation.Request; request != nil {
+			elConsolidationData.IsIncluded = true
+			elConsolidationData.SlotNumber = request.SlotNumber
+			elConsolidationData.SlotRoot = request.SlotRoot
+			elConsolidationData.Time = chainState.SlotToTime(phase0.Slot(request.SlotNumber))
+			elConsolidationData.Status = uint64(1)
+			elConsolidationData.Result = request.Result
+			elConsolidationData.ResultMessage = getConsolidationResultMessage(request.Result, chainState.GetSpecs())
+			if consolidation.RequestOrphaned {
+				elConsolidationData.Status = uint64(2)
+			}
+		}
+
+		if transaction := consolidation.Transaction; transaction != nil {
+			elConsolidationData.TransactionHash = transaction.TxHash
+			elConsolidationData.LinkedTransaction = true
+			elConsolidationData.TransactionDetails = &models.ElConsolidationsPageDataConsolidationTxDetails{
+				BlockNumber: transaction.BlockNumber,
+				BlockHash:   fmt.Sprintf("%#x", transaction.BlockRoot),
+				BlockTime:   transaction.BlockTime,
+				TxOrigin:    common.Address(transaction.TxSender).Hex(),
+				TxTarget:    common.Address(transaction.TxTarget).Hex(),
+				TxHash:      fmt.Sprintf("%#x", transaction.TxHash),
+			}
+			elConsolidationData.TxStatus = uint64(1)
+			if consolidation.TransactionOrphaned {
+				elConsolidationData.TxStatus = uint64(2)
+			}
+
+			if !elConsolidationData.IsIncluded {
+				queuePos := int64(transaction.DequeueBlock) - int64(headBlockNum)
+				targetSlot := int64(chainState.CurrentSlot()) + queuePos
+				if targetSlot > 0 {
+					elConsolidationData.SlotNumber = uint64(targetSlot)
+					elConsolidationData.Time = chainState.SlotToTime(phase0.Slot(targetSlot))
+				}
+			}
+		}
+
+		pageData.ElRequests = append(pageData.ElRequests, elConsolidationData)
+	}
+
 	pageData.RequestCount = uint64(len(pageData.ElRequests))
 
 	if pageData.RequestCount > 0 {
@@ -231,6 +275,7 @@ func buildFilteredElConsolidationsPageData(pageIdx uint64, pageSize uint64, minS
 		pageData.LastIndex = pageData.ElRequests[pageData.RequestCount-1].SlotNumber
 	}
 
+	totalRows := totalPendingTxRows + totalRequests
 	pageData.TotalPages = totalRows / pageSize
 	if totalRows%pageSize > 0 {
 		pageData.TotalPages++
@@ -240,10 +285,88 @@ func buildFilteredElConsolidationsPageData(pageIdx uint64, pageSize uint64, minS
 		pageData.NextPageIndex = pageIdx + 1
 	}
 
+	// Populate UrlParams for page jump functionality
+	pageData.UrlParams = make(map[string]string)
+	for key, values := range filterArgs {
+		if len(values) > 0 {
+			pageData.UrlParams[key] = values[0]
+		}
+	}
+	pageData.UrlParams["c"] = fmt.Sprintf("%v", pageData.PageSize)
+
 	pageData.FirstPageLink = fmt.Sprintf("/validators/el_consolidations?f&%v&c=%v", filterArgs.Encode(), pageData.PageSize)
 	pageData.PrevPageLink = fmt.Sprintf("/validators/el_consolidations?f&%v&c=%v&p=%v", filterArgs.Encode(), pageData.PageSize, pageData.PrevPageIndex)
 	pageData.NextPageLink = fmt.Sprintf("/validators/el_consolidations?f&%v&c=%v&p=%v", filterArgs.Encode(), pageData.PageSize, pageData.NextPageIndex)
 	pageData.LastPageLink = fmt.Sprintf("/validators/el_consolidations?f&%v&c=%v&p=%v", filterArgs.Encode(), pageData.PageSize, pageData.LastPageIndex)
 
 	return pageData
+}
+
+func getConsolidationResultMessage(result uint8, specs *consensus.ChainSpec) string {
+	switch result {
+	case dbtypes.ConsolidationRequestResultUnknown:
+		return "Unknown result"
+	case dbtypes.ConsolidationRequestResultSuccess:
+		return "Success"
+	case dbtypes.ConsolidationRequestResultTotalBalanceTooLow:
+		requiredBalance := getConsolidationRequiredBalance(specs)
+		return fmt.Sprintf("Error: Total active balance too low (required: %v ETH)", requiredBalance/beacon.EtherGweiFactor)
+	case dbtypes.ConsolidationRequestResultQueueFull:
+		return "Error: Consolidation queue is full"
+	case dbtypes.ConsolidationRequestResultSrcNotFound:
+		return "Error: Source validator not found"
+	case dbtypes.ConsolidationRequestResultSrcInvalidCredentials:
+		return "Error: Source validator has invalid credentials"
+	case dbtypes.ConsolidationRequestResultSrcInvalidSender:
+		return "Error: Source validator withdrawal address does not match tx sender"
+	case dbtypes.ConsolidationRequestResultSrcNotActive:
+		return "Error: Source validator is not active"
+	case dbtypes.ConsolidationRequestResultSrcNotOldEnough:
+		return fmt.Sprintf("Error: Source validator is not old enough (min. %v epochs)", specs.ShardCommitteePeriod)
+	case dbtypes.ConsolidationRequestResultSrcHasPendingWithdrawal:
+		return "Error: Source validator has pending partial withdrawal"
+	case dbtypes.ConsolidationRequestResultTgtNotFound:
+		return "Error: Target validator not found"
+	case dbtypes.ConsolidationRequestResultTgtInvalidCredentials:
+		return "Error: Target validator has invalid credentials"
+	case dbtypes.ConsolidationRequestResultTgtNotCompounding:
+		return "Error: Target validator is not compounding"
+	case dbtypes.ConsolidationRequestResultTgtNotActive:
+		return "Error: Target validator is not active"
+	default:
+		return fmt.Sprintf("Unknown error code: %d", result)
+	}
+}
+
+func getConsolidationRequiredBalance(chainSpec *consensus.ChainSpec) phase0.Gwei {
+	// (c) claude-3.5-sonnet
+	// We need: consolidationChurnLimit > chainSpec.MinActivationBalance
+	// Where: consolidationChurnLimit = balanceChurnLimit - activationExitChurnLimit
+	// And: balanceChurnLimit = max(totalActiveBalance/ChurnLimitQuotient, MinPerEpochChurnLimitElectra)
+	// And: activationExitChurnLimit = min(balanceChurnLimit, MaxPerEpochActivationExitChurnLimit)
+
+	// Work backwards:
+	// 1. balanceChurnLimit - activationExitChurnLimit > MinActivationBalance
+	// 2. balanceChurnLimit - min(balanceChurnLimit, MaxPerEpochActivationExitChurnLimit) > MinActivationBalance
+	// 3. For the minimum valid totalActiveBalance, these will be equal:
+	//    balanceChurnLimit - MaxPerEpochActivationExitChurnLimit = MinActivationBalance
+	// 4. Therefore: balanceChurnLimit = MinActivationBalance + MaxPerEpochActivationExitChurnLimit
+
+	requiredBalanceChurnLimit := chainSpec.MinActivationBalance + chainSpec.MaxPerEpochActivationExitChurnLimit
+
+	// Round up to next increment
+	if requiredBalanceChurnLimit%chainSpec.EffectiveBalanceIncrement != 0 {
+		requiredBalanceChurnLimit += chainSpec.EffectiveBalanceIncrement - (requiredBalanceChurnLimit % chainSpec.EffectiveBalanceIncrement)
+	}
+
+	// Now solve for totalActiveBalance:
+	// balanceChurnLimit = max(totalActiveBalance/ChurnLimitQuotient, MinPerEpochChurnLimitElectra)
+	// Therefore: totalActiveBalance = balanceChurnLimit * ChurnLimitQuotient
+
+	// But first ensure we meet the minimum churn limit
+	if requiredBalanceChurnLimit < chainSpec.MinPerEpochChurnLimitElectra {
+		requiredBalanceChurnLimit = chainSpec.MinPerEpochChurnLimitElectra
+	}
+
+	return phase0.Gwei(requiredBalanceChurnLimit * chainSpec.ChurnLimitQuotient)
 }

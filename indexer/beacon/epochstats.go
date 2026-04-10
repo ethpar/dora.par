@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethpandaops/dora/clients/consensus"
 	"github.com/ethpandaops/dora/db"
@@ -16,7 +17,6 @@ import (
 	"github.com/ethpandaops/dora/indexer/beacon/duties"
 	"github.com/jmoiron/sqlx"
 	"github.com/mashingan/smapping"
-	dynssz "github.com/pk910/dynamic-ssz"
 )
 
 // EpochStats holds the epoch-specific information based on the underlying dependent beacon state.
@@ -44,35 +44,45 @@ type EpochStats struct {
 
 // EpochStatsValues holds the values for the epoch-specific information.
 type EpochStatsValues struct {
-	RandaoMix           phase0.Hash32
-	NextRandaoMix       phase0.Hash32
-	ActiveIndices       []phase0.ValidatorIndex
-	EffectiveBalances   []uint64
-	ProposerDuties      []phase0.ValidatorIndex
-	AttesterDuties      [][][]duties.ActiveIndiceIndex
-	SyncCommitteeDuties []phase0.ValidatorIndex
-	ActiveValidators    uint64
-	TotalBalance        phase0.Gwei
-	ActiveBalance       phase0.Gwei
-	EffectiveBalance    phase0.Gwei
-	FirstDepositIndex   uint64
+	RandaoMix             phase0.Hash32
+	NextRandaoMix         phase0.Hash32
+	ActiveIndices         []phase0.ValidatorIndex
+	EffectiveBalances     []uint32
+	ProposerDuties        []phase0.ValidatorIndex
+	AttesterDuties        [][][]duties.ActiveIndiceIndex
+	SyncCommitteeDuties   []phase0.ValidatorIndex
+	ActiveValidators      uint64
+	TotalBalance          phase0.Gwei
+	ActiveBalance         phase0.Gwei
+	EffectiveBalance      phase0.Gwei
+	FirstDepositIndex     uint64
+	PendingWithdrawals    []electra.PendingPartialWithdrawal
+	PendingConsolidations []electra.PendingConsolidation
+	ConsolidatingBalance  phase0.Gwei
 }
 
 // EpochStatsPacked holds the packed values for the epoch-specific information.
+//
+//	generate ssz: (this is really ugly, needs path patching and post-fixing to work)
+//	sszgen --suffix ssz --path . --include $GOPATH/pkg/mod/github.com/attestantio/go-eth2-client\@v0.26.0/spec/phase0,$GOPATH/pkg/mod/github.com/attestantio/go-eth2-client\@v0.26.0/spec/electra --objs EpochStatsPacked
 type EpochStatsPacked struct {
-	ActiveValidators    []EpochStatsPackedValidator
-	SyncCommitteeDuties []phase0.ValidatorIndex
-	RandaoMix           phase0.Hash32
-	NextRandaoMix       phase0.Hash32
-	TotalBalance        phase0.Gwei
-	ActiveBalance       phase0.Gwei
-	FirstDepositIndex   uint64
+	ActiveValidators      []EpochStatsPackedValidator `ssz-max:"10000000"`
+	ProposerDuties        []phase0.ValidatorIndex     `ssz-max:"100"`
+	SyncCommitteeDuties   []phase0.ValidatorIndex     `ssz-max:"10000"`
+	RandaoMix             phase0.Hash32               `ssz-size:"32"`
+	NextRandaoMix         phase0.Hash32               `ssz-size:"32"`
+	TotalBalance          phase0.Gwei
+	ActiveBalance         phase0.Gwei
+	FirstDepositIndex     uint64
+	PendingWithdrawals    []electra.PendingPartialWithdrawal `ssz-max:"10000000"`
+	PendingConsolidations []electra.PendingConsolidation     `ssz-max:"10000000"`
+	ConsolidatingBalance  phase0.Gwei
 }
 
 // EpochStatsPackedValidator holds the packed values for an active validator.
 type EpochStatsPackedValidator struct {
 	ValidatorIndexOffset uint32 // offset to the previous index in the list (this is smaller than storing the full validator index)
-	EffectiveBalanceEth  uint64 // effective balance in full ETP
+	EffectiveBalanceEth  uint32 // effective balance in full ETH
 }
 
 // newEpochStats creates a new EpochStats instance.
@@ -88,6 +98,10 @@ func newEpochStats(epoch phase0.Epoch, dependentRoot phase0.Root) *EpochStats {
 
 func (es *EpochStats) GetEpoch() phase0.Epoch {
 	return es.epoch
+}
+
+func (es *EpochStats) GetDependentRoot() phase0.Root {
+	return es.dependentRoot
 }
 
 // addRequestedBy adds a client to the list of clients that have requested this EpochStats.
@@ -116,12 +130,12 @@ func (es *EpochStats) getRequestedBy() []*Client {
 	return clients
 }
 
-func (es *EpochStats) restoreFromDb(dbDuty *dbtypes.UnfinalizedDuty, dynSsz *dynssz.DynSsz, chainState *consensus.ChainState) error {
+func (es *EpochStats) restoreFromDb(dbDuty *dbtypes.UnfinalizedDuty, chainState *consensus.ChainState, withDuties bool) error {
 	if es.ready {
 		return nil
 	}
 
-	values, err := es.parsePackedSSZ(dynSsz, chainState, dbDuty.DutiesSSZ)
+	values, err := es.parsePackedSSZ(chainState, dbDuty.DutiesSSZ, withDuties)
 	if err != nil {
 		return err
 	}
@@ -144,23 +158,23 @@ func (es *EpochStats) setStatsReady() {
 }
 
 // marshalSSZ marshals the EpochStats values using SSZ.
-func (es *EpochStats) buildPackedSSZ(dynSsz *dynssz.DynSsz) ([]byte, error) {
+func (es *EpochStats) buildPackedSSZ() ([]byte, error) {
 	if es.values == nil {
 		return nil, fmt.Errorf("no values to marshal")
 	}
 
-	if dynSsz == nil {
-		dynSsz = dynssz.NewDynSsz(nil)
-	}
-
 	packedValues := &EpochStatsPacked{
-		ActiveValidators:    make([]EpochStatsPackedValidator, es.values.ActiveValidators),
-		SyncCommitteeDuties: es.values.SyncCommitteeDuties,
-		RandaoMix:           es.values.RandaoMix,
-		NextRandaoMix:       es.values.NextRandaoMix,
-		TotalBalance:        es.values.TotalBalance,
-		ActiveBalance:       es.values.ActiveBalance,
-		FirstDepositIndex:   es.values.FirstDepositIndex,
+		ActiveValidators:      make([]EpochStatsPackedValidator, es.values.ActiveValidators),
+		ProposerDuties:        es.values.ProposerDuties,
+		SyncCommitteeDuties:   es.values.SyncCommitteeDuties,
+		RandaoMix:             es.values.RandaoMix,
+		NextRandaoMix:         es.values.NextRandaoMix,
+		TotalBalance:          es.values.TotalBalance,
+		ActiveBalance:         es.values.ActiveBalance,
+		FirstDepositIndex:     es.values.FirstDepositIndex,
+		PendingWithdrawals:    es.values.PendingWithdrawals,
+		PendingConsolidations: es.values.PendingConsolidations,
+		ConsolidatingBalance:  es.values.ConsolidatingBalance,
 	}
 
 	lastValidatorIndex := phase0.ValidatorIndex(0)
@@ -174,7 +188,7 @@ func (es *EpochStats) buildPackedSSZ(dynSsz *dynssz.DynSsz) ([]byte, error) {
 		}
 	}
 
-	rawSsz, err := dynSsz.MarshalSSZ(packedValues)
+	rawSsz, err := packedValues.MarshalSSZ()
 	if err != nil {
 		return nil, err
 	}
@@ -183,11 +197,8 @@ func (es *EpochStats) buildPackedSSZ(dynSsz *dynssz.DynSsz) ([]byte, error) {
 }
 
 // unmarshalSSZ unmarshals the EpochStats values using the provided SSZ bytes.
-func (es *EpochStats) parsePackedSSZ(dynSsz *dynssz.DynSsz, chainState *consensus.ChainState, ssz []byte) (*EpochStatsValues, error) {
-	if dynSsz == nil {
-		dynSsz = dynssz.NewDynSsz(nil)
-	}
-
+// skips computing attester duties if withCommittees is false to speed up the process.
+func (es *EpochStats) parsePackedSSZ(chainState *consensus.ChainState, ssz []byte, withDuties bool) (*EpochStatsValues, error) {
 	if len(ssz) == 0 {
 		return nil, nil
 	}
@@ -199,20 +210,24 @@ func (es *EpochStats) parsePackedSSZ(dynSsz *dynssz.DynSsz, chainState *consensu
 	}
 
 	packedValues := &EpochStatsPacked{}
-	if err := dynSsz.UnmarshalSSZ(packedValues, ssz); err != nil {
+	if err := packedValues.UnmarshalSSZ(ssz); err != nil {
 		return nil, err
 	}
 
 	values := &EpochStatsValues{
-		RandaoMix:           packedValues.RandaoMix,
-		NextRandaoMix:       packedValues.NextRandaoMix,
-		ActiveIndices:       make([]phase0.ValidatorIndex, len(packedValues.ActiveValidators)),
-		EffectiveBalances:   make([]uint64, len(packedValues.ActiveValidators)),
-		SyncCommitteeDuties: packedValues.SyncCommitteeDuties,
-		TotalBalance:        packedValues.TotalBalance,
-		ActiveBalance:       packedValues.ActiveBalance,
-		EffectiveBalance:    0,
-		FirstDepositIndex:   packedValues.FirstDepositIndex,
+		RandaoMix:             packedValues.RandaoMix,
+		NextRandaoMix:         packedValues.NextRandaoMix,
+		ActiveIndices:         make([]phase0.ValidatorIndex, len(packedValues.ActiveValidators)),
+		EffectiveBalances:     make([]uint32, len(packedValues.ActiveValidators)),
+		ProposerDuties:        packedValues.ProposerDuties,
+		SyncCommitteeDuties:   packedValues.SyncCommitteeDuties,
+		TotalBalance:          packedValues.TotalBalance,
+		ActiveBalance:         packedValues.ActiveBalance,
+		EffectiveBalance:      0,
+		FirstDepositIndex:     packedValues.FirstDepositIndex,
+		PendingWithdrawals:    packedValues.PendingWithdrawals,
+		PendingConsolidations: packedValues.PendingConsolidations,
+		ConsolidatingBalance:  packedValues.ConsolidatingBalance,
 	}
 
 	lastValidatorIndex := phase0.ValidatorIndex(0)
@@ -227,36 +242,38 @@ func (es *EpochStats) parsePackedSSZ(dynSsz *dynssz.DynSsz, chainState *consensu
 
 	values.ActiveValidators = uint64(len(packedValues.ActiveValidators))
 
-	beaconState := &duties.BeaconState{
-		RandaoMix: &values.RandaoMix,
-		GetActiveCount: func() uint64 {
-			return values.ActiveValidators
-		},
-		GetEffectiveBalance: func(index duties.ActiveIndiceIndex) phase0.Gwei {
-			return phase0.Gwei(values.EffectiveBalances[index]) * EtherGweiFactor
-		},
-	}
-
-	// compute proposers
-	proposerDuties := []phase0.ValidatorIndex{}
-	for slot := chainState.EpochToSlot(es.epoch); slot < chainState.EpochToSlot(es.epoch+1); slot++ {
-		proposer, err := duties.GetProposerIndex(chainState.GetSpecs(), beaconState, slot)
-		proposerIndex := phase0.ValidatorIndex(math.MaxInt64)
-		if err == nil {
-			proposerIndex = values.ActiveIndices[proposer]
+	if withDuties {
+		beaconState := &duties.BeaconState{
+			RandaoMix: &values.RandaoMix,
+			GetActiveCount: func() uint64 {
+				return values.ActiveValidators
+			},
+			GetEffectiveBalance: func(index duties.ActiveIndiceIndex) phase0.Gwei {
+				return phase0.Gwei(values.EffectiveBalances[index]) * EtherGweiFactor
+			},
 		}
 
-		proposerDuties = append(proposerDuties, proposerIndex)
-	}
+		// compute proposers
+		proposerDuties := []phase0.ValidatorIndex{}
+		for slot := chainState.EpochToSlot(es.epoch); slot < chainState.EpochToSlot(es.epoch+1); slot++ {
+			proposer, err := duties.GetProposerIndex(chainState.GetSpecs(), beaconState, slot)
+			proposerIndex := phase0.ValidatorIndex(math.MaxInt64)
+			if err == nil {
+				proposerIndex = values.ActiveIndices[proposer]
+			}
 
-	values.ProposerDuties = proposerDuties
-	if beaconState.RandaoMix != nil {
-		values.RandaoMix = *beaconState.RandaoMix
-	}
+			proposerDuties = append(proposerDuties, proposerIndex)
+		}
 
-	// compute committees
-	attesterDuties, _ := duties.GetAttesterDuties(chainState.GetSpecs(), beaconState, es.epoch)
-	values.AttesterDuties = attesterDuties
+		values.ProposerDuties = proposerDuties
+		if beaconState.RandaoMix != nil {
+			values.RandaoMix = *beaconState.RandaoMix
+		}
+
+		// compute committees
+		attesterDuties, _ := duties.GetAttesterDuties(chainState.GetSpecs(), beaconState, es.epoch)
+		values.AttesterDuties = attesterDuties
+	}
 
 	return values, nil
 }
@@ -268,23 +285,25 @@ func (es *EpochStats) pruneValues() {
 	}
 
 	es.prunedValues = &EpochStatsValues{
-		RandaoMix:           es.values.RandaoMix,
-		NextRandaoMix:       es.values.NextRandaoMix,
-		EffectiveBalances:   nil, // prune
-		ProposerDuties:      es.values.ProposerDuties,
-		AttesterDuties:      nil, // prune
-		SyncCommitteeDuties: es.values.SyncCommitteeDuties,
-		ActiveValidators:    es.values.ActiveValidators,
-		TotalBalance:        es.values.TotalBalance,
-		ActiveBalance:       es.values.ActiveBalance,
-		EffectiveBalance:    es.values.EffectiveBalance,
-		FirstDepositIndex:   es.values.FirstDepositIndex,
+		RandaoMix:             es.values.RandaoMix,
+		NextRandaoMix:         es.values.NextRandaoMix,
+		EffectiveBalances:     nil, // prune
+		ProposerDuties:        es.values.ProposerDuties,
+		AttesterDuties:        nil, // prune
+		SyncCommitteeDuties:   es.values.SyncCommitteeDuties,
+		ActiveValidators:      es.values.ActiveValidators,
+		TotalBalance:          es.values.TotalBalance,
+		ActiveBalance:         es.values.ActiveBalance,
+		EffectiveBalance:      es.values.EffectiveBalance,
+		FirstDepositIndex:     es.values.FirstDepositIndex,
+		PendingWithdrawals:    nil, // prune
+		PendingConsolidations: nil, // prune
 	}
 
 	es.values = nil
 }
 
-func (es *EpochStats) loadValuesFromDb(dynSsz *dynssz.DynSsz, chainState *consensus.ChainState) *EpochStatsValues {
+func (es *EpochStats) loadValuesFromDb(chainState *consensus.ChainState) *EpochStatsValues {
 	if !es.isInDb {
 		return nil
 	}
@@ -294,7 +313,7 @@ func (es *EpochStats) loadValuesFromDb(dynSsz *dynssz.DynSsz, chainState *consen
 		return nil
 	}
 
-	values, err := es.parsePackedSSZ(dynSsz, chainState, dbDuty.DutiesSSZ)
+	values, err := es.parsePackedSSZ(chainState, dbDuty.DutiesSSZ, true)
 	if err != nil {
 		return nil
 	}
@@ -303,10 +322,14 @@ func (es *EpochStats) loadValuesFromDb(dynSsz *dynssz.DynSsz, chainState *consen
 }
 
 // processState processes the epoch state and computes proposer and attester duties.
-func (es *EpochStats) processState(indexer *Indexer) {
+func (es *EpochStats) processState(indexer *Indexer, validatorSet []*phase0.Validator) {
 	if es.dependentState == nil || es.dependentState.loadingStatus != 2 {
 		return
 	}
+
+	// processState is executed in a separate goroutine. Here we copy dependentState to
+	// avoid the epoch cache pruner from setting dependentState to nil while we are processing.
+	dependentState := es.dependentState
 
 	es.processingMutex.Lock()
 	if es.processing {
@@ -325,31 +348,63 @@ func (es *EpochStats) processState(indexer *Indexer) {
 
 	chainState := indexer.consensusPool.GetChainState()
 	values := &EpochStatsValues{
-		ActiveIndices:       make([]phase0.ValidatorIndex, 0),
-		EffectiveBalances:   make([]uint64, 0),
-		SyncCommitteeDuties: es.dependentState.syncCommittee,
-		TotalBalance:        0,
-		ActiveBalance:       0,
-		EffectiveBalance:    0,
-		FirstDepositIndex:   es.dependentState.depositIndex,
+		ActiveIndices:         make([]phase0.ValidatorIndex, 0),
+		EffectiveBalances:     make([]uint32, 0),
+		SyncCommitteeDuties:   dependentState.syncCommittee,
+		TotalBalance:          0,
+		ActiveBalance:         0,
+		EffectiveBalance:      0,
+		FirstDepositIndex:     dependentState.depositIndex,
+		PendingWithdrawals:    make([]electra.PendingPartialWithdrawal, len(dependentState.pendingPartialWithdrawals)),
+		PendingConsolidations: make([]electra.PendingConsolidation, len(dependentState.pendingConsolidations)),
+	}
+
+	for i, pendingPartialWithdrawal := range dependentState.pendingPartialWithdrawals {
+		values.PendingWithdrawals[i] = *pendingPartialWithdrawal
+	}
+
+	for i, pendingConsolidation := range dependentState.pendingConsolidations {
+		srcIndicee := pendingConsolidation.SourceIndex
+		srcValidator := validatorSet[srcIndicee]
+		if srcValidator != nil {
+			values.ConsolidatingBalance += srcValidator.EffectiveBalance
+		}
+
+		values.PendingConsolidations[i] = *pendingConsolidation
+	}
+
+	if validatorSet != nil {
+		for index, validator := range validatorSet {
+			values.TotalBalance += dependentState.validatorBalances[index]
+			if es.epoch >= validator.ActivationEpoch && es.epoch < validator.ExitEpoch {
+				values.ActiveIndices = append(values.ActiveIndices, phase0.ValidatorIndex(index))
+				values.EffectiveBalances = append(values.EffectiveBalances, uint32(validator.EffectiveBalance/EtherGweiFactor))
+				values.EffectiveBalance += validator.EffectiveBalance
+				values.ActiveBalance += dependentState.validatorBalances[index]
+			}
+		}
+
+		values.ActiveValidators = uint64(len(values.ActiveIndices))
+	} else {
+		for _, balance := range dependentState.validatorBalances {
+			values.TotalBalance += balance
+		}
+
+		indexer.validatorCache.streamValidatorSetForRoot(es.dependentRoot, true, &es.epoch, func(index phase0.ValidatorIndex, flags uint16, activeData *ValidatorData, validator *phase0.Validator) error {
+			values.ActiveIndices = append(values.ActiveIndices, index)
+			values.EffectiveBalances = append(values.EffectiveBalances, uint32(activeData.EffectiveBalance()/EtherGweiFactor))
+			values.EffectiveBalance += activeData.EffectiveBalance()
+			values.ActiveBalance += dependentState.validatorBalances[index]
+			return nil
+		})
 	}
 
 	// get active validator indices & aggregate balances
-	for index, validator := range es.dependentState.validatorList {
-		values.TotalBalance += es.dependentState.validatorBalances[index]
-		if es.epoch >= validator.ActivationEpoch && es.epoch < validator.ExitEpoch {
-			values.ActiveIndices = append(values.ActiveIndices, phase0.ValidatorIndex(index))
-			var balance = uint64(validator.EffectiveBalance) / uint64(EtherGweiFactor)
-			values.EffectiveBalances = append(values.EffectiveBalances, balance)
-			values.EffectiveBalance += validator.EffectiveBalance
-			values.ActiveBalance += es.dependentState.validatorBalances[index]
-		}
-	}
 
 	values.ActiveValidators = uint64(len(values.ActiveIndices))
 	beaconState := &duties.BeaconState{
 		GetRandaoMixes: func() []phase0.Root {
-			return es.dependentState.randaoMixes
+			return dependentState.randaoMixes
 		},
 		GetActiveCount: func() uint64 {
 			return values.ActiveValidators
@@ -359,27 +414,33 @@ func (es *EpochStats) processState(indexer *Indexer) {
 		},
 	}
 
-	indexer.logger.Debugf("processing epoch %v stats (root: %v / state: %v), validators: %v/%v", es.epoch, es.dependentRoot.String(), es.dependentState.stateRoot.String(), values.ActiveValidators, len(es.dependentState.validatorList))
+	indexer.logger.Debugf("processing epoch %v stats (root: %v / state: %v), validators: %v/%v", es.epoch, es.dependentRoot.String(), dependentState.stateRoot.String(), values.ActiveValidators, len(validatorSet))
 
 	// compute proposers
-	proposerDuties := []phase0.ValidatorIndex{}
-	for slot := chainState.EpochToSlot(es.epoch); slot < chainState.EpochToSlot(es.epoch+1); slot++ {
-		proposer, err := duties.GetProposerIndex(chainState.GetSpecs(), beaconState, slot)
-		proposerIndex := phase0.ValidatorIndex(math.MaxInt64)
-		if err != nil {
-			indexer.logger.Warnf("failed computing proposer for slot %v: %v", slot, err)
-			proposerIndex = math.MaxInt64
-		} else {
-			proposerIndex = values.ActiveIndices[proposer]
+	if len(dependentState.proposerLookahead) > 0 && (es.epoch == chainState.EpochOfSlot(dependentState.stateSlot) || es.epoch == chainState.EpochOfSlot(dependentState.stateSlot)+1) {
+		slotsPerEpoch := chainState.GetSpecs().SlotsPerEpoch
+		offset := uint64(0)
+		if es.epoch == chainState.EpochOfSlot(dependentState.stateSlot)+1 {
+			offset = slotsPerEpoch
 		}
 
-		proposerDuties = append(proposerDuties, proposerIndex)
-	}
+		values.ProposerDuties = dependentState.proposerLookahead[offset : offset+slotsPerEpoch]
+	} else {
+		proposerDuties := []phase0.ValidatorIndex{}
+		for slot := chainState.EpochToSlot(es.epoch); slot < chainState.EpochToSlot(es.epoch+1); slot++ {
+			proposer, err := duties.GetProposerIndex(chainState.GetSpecs(), beaconState, slot)
+			proposerIndex := phase0.ValidatorIndex(math.MaxInt64)
+			if err != nil {
+				indexer.logger.Warnf("failed computing proposer for slot %v: %v", slot, err)
+				proposerIndex = math.MaxInt64
+			} else {
+				proposerIndex = values.ActiveIndices[proposer]
+			}
 
-	values.ProposerDuties = proposerDuties
-	if beaconState.RandaoMix != nil {
-		values.RandaoMix = *beaconState.RandaoMix
-		values.NextRandaoMix = *beaconState.NextRandaoMix
+			proposerDuties = append(proposerDuties, proposerIndex)
+		}
+
+		values.ProposerDuties = proposerDuties
 	}
 
 	// compute committees
@@ -389,10 +450,15 @@ func (es *EpochStats) processState(indexer *Indexer) {
 	}
 	values.AttesterDuties = attesterDuties
 
+	if beaconState.RandaoMix != nil {
+		values.RandaoMix = *beaconState.RandaoMix
+		values.NextRandaoMix = *beaconState.NextRandaoMix
+	}
+
 	es.values = values
 	es.precalcValues = nil
 
-	packedSsz, _ := es.buildPackedSSZ(indexer.dynSsz)
+	packedSsz, _ := es.buildPackedSSZ()
 	dbDuty := &dbtypes.UnfinalizedDuty{
 		Epoch:         uint64(es.epoch),
 		DependentRoot: es.dependentRoot[:],
@@ -403,7 +469,7 @@ func (es *EpochStats) processState(indexer *Indexer) {
 		return db.InsertUnfinalizedDuty(dbDuty, tx)
 	})
 	if err != nil {
-		indexer.logger.WithError(err).Errorf("failed storing epoch %v stats (%v / %v) to unfinalized duties", es.epoch, es.dependentRoot.String(), es.dependentState.stateRoot.String())
+		indexer.logger.WithError(err).Errorf("failed storing epoch %v stats (%v / %v) to unfinalized duties", es.epoch, es.dependentRoot.String(), dependentState.stateRoot.String())
 	}
 
 	es.isInDb = true
@@ -412,9 +478,9 @@ func (es *EpochStats) processState(indexer *Indexer) {
 		"processed epoch %v stats (root: %v / state: %v, validators: %v/%v, %v ms), %v bytes",
 		es.epoch,
 		es.dependentRoot.String(),
-		es.dependentState.stateRoot.String(),
+		dependentState.stateRoot.String(),
 		values.ActiveValidators,
-		len(es.dependentState.validatorList),
+		len(validatorSet),
 		time.Since(t1).Milliseconds(),
 		len(packedSsz),
 	)
@@ -458,6 +524,21 @@ func (es *EpochStats) precomputeFromParentState(indexer *Indexer, parentState *E
 			ActiveBalance:       parentStatsValues.ActiveBalance,
 			EffectiveBalance:    parentStatsValues.EffectiveBalance,
 		}
+
+		// update active validators from validator cache
+		values.ActiveIndices = make([]phase0.ValidatorIndex, 0, len(parentStatsValues.ActiveIndices))
+		values.EffectiveBalances = make([]uint32, 0, len(parentStatsValues.ActiveIndices))
+		values.ActiveBalance = 0
+		indexer.validatorCache.streamValidatorSetForRoot(es.dependentRoot, true, &es.epoch, func(index phase0.ValidatorIndex, flags uint16, activeData *ValidatorData, validator *phase0.Validator) error {
+			values.ActiveIndices = append(values.ActiveIndices, index)
+			values.EffectiveBalances = append(values.EffectiveBalances, uint32(activeData.EffectiveBalance()/EtherGweiFactor))
+			if parentState.dependentState != nil && len(parentState.dependentState.validatorBalances) > int(index) {
+				values.ActiveBalance += parentState.dependentState.validatorBalances[index]
+			} else {
+				values.ActiveBalance += activeData.EffectiveBalance()
+			}
+			return nil
+		})
 
 		values.ActiveValidators = uint64(len(values.ActiveIndices))
 
@@ -562,7 +643,7 @@ func (es *EpochStats) GetOrLoadValues(indexer *Indexer, withPrecalc bool, keepIn
 	}
 
 	if es.isInDb {
-		values := es.loadValuesFromDb(indexer.dynSsz, indexer.consensusPool.GetChainState())
+		values := es.loadValuesFromDb(indexer.consensusPool.GetChainState())
 		if values != nil {
 			if keepInCache {
 				es.values = values
@@ -587,7 +668,7 @@ func (v *EpochStatsValues) GetEffectiveBalance(index duties.ActiveIndiceIndex) p
 	return phase0.Gwei(v.EffectiveBalances[index]) * EtherGweiFactor
 }
 
-// GetDbEpoch returns the database Epoch representaion for the EpochStats.
+// GetDbEpoch returns the database Epoch representation for the EpochStats.
 func (es *EpochStats) GetDbEpoch(indexer *Indexer, headBlock *Block) *dbtypes.Epoch {
 	chainState := indexer.consensusPool.GetChainState()
 	if headBlock == nil {
@@ -633,6 +714,10 @@ func (es *EpochStats) GetDbEpoch(indexer *Indexer, headBlock *Block) *dbtypes.Ep
 			}
 
 			return dbEpoch
+		}
+
+		if len(epochBlocks) > 0 {
+			indexer.logger.Warnf("no pruned epoch aggregation found for epoch %v (head: %v)", es.epoch, epochBlocks[0].Root.String())
 		}
 	}
 

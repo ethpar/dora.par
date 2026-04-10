@@ -34,6 +34,9 @@
                   <div class="graph-layer graph-layer-block-parallel" data-bind="if: block_parallel">
                     <i class="fas fa-circle"></i>
                   </div>
+                  <div class="graph-layer graph-layer-block-pinned" data-bind="if: block_pinned">
+                    <i class="fas fa-circle"></i>
+                  </div>
                 </div>
                 {{ html "<!-- /ko -->" }}
               </td>
@@ -89,6 +92,11 @@
                         {{ end -}}
                         {{- if $graph.BlockParallel }}
                         <div class="graph-layer graph-layer-block-parallel">
+                          <i class="fas fa-circle"></i>
+                        </div>
+                        {{ end -}}
+                        {{- if $graph.BlockPinned }}
+                        <div class="graph-layer graph-layer-block-pinned">
                           <i class="fas fa-circle"></i>
                         </div>
                         {{ end -}}

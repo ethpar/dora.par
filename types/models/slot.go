@@ -43,6 +43,7 @@ type SlotPageBlockData struct {
 	BlockRoot                  []byte                 `json:"blockroot"`
 	ParentRoot                 []byte                 `json:"parentroot"`
 	StateRoot                  []byte                 `json:"stateroot"`
+	BodyRoot                   []byte                 `json:"bodyroot"`
 	Signature                  []byte                 `json:"signature"`
 	RandaoReveal               []byte                 `json:"randaoreveal"`
 	Graffiti                   []byte                 `json:"graffiti"`
@@ -53,6 +54,8 @@ type SlotPageBlockData struct {
 	SyncAggregateSignature     []byte                 `json:"syncaggregate_signature"`
 	SyncAggParticipation       float64                `json:"syncaggregate_participation"`
 	SyncAggCommittee           []types.NamedValidator `json:"syncaggregate_committee"`
+	ValidatorNames             map[uint64]string      `json:"validator_names"`
+	SpecValues                 map[string]interface{} `json:"spec_values"`
 	ProposerSlashingsCount     uint64                 `json:"proposer_slashings_count"`
 	AttesterSlashingsCount     uint64                 `json:"attester_slashings_count"`
 	AttestationsCount          uint64                 `json:"attestations_count"`
@@ -100,24 +103,30 @@ type SlotPageExecutionData struct {
 	BaseFeePerGas uint64    `json:"base_fee_per_gas"`
 	BlockHash     []byte    `json:"block_hash"`
 	BlockNumber   uint64    `json:"block_number"`
+	BlobGasUsed   *uint64   `json:"blob_gas_used,omitempty"`
+	BlobLimit     *uint64   `json:"blob_limit,omitempty"`
+	BlobGasLimit  *uint64   `json:"blob_gas_limit,omitempty"`
+	ExcessBlobGas *uint64   `json:"excess_blob_gas,omitempty"`
+	BlobBaseFee   *uint64   `json:"blob_base_fee,omitempty"`
 }
 
 type SlotPageAttestation struct {
 	Slot           uint64   `json:"slot"`
 	CommitteeIndex []uint64 `json:"committeeindex"`
+	TotalActive    uint64   `json:"total_active"`
 
-	AggregationBits []byte                 `json:"aggregationbits"`
-	Validators      []types.NamedValidator `json:"validators"`
-
-	IncludedValidators []types.NamedValidator `json:"included_validators"`
+	AggregationBits    []byte   `json:"aggregationbits"`
+	Validators         []uint64 `json:"validators"`
+	IncludedValidators []uint64 `json:"included_validators"`
 
 	Signature []byte `json:"signature"`
 
-	BeaconBlockRoot []byte   `json:"beaconblockroot"`
-	SourceEpoch     uint64   `json:"source_epoch"`
-	SourceRoot      []byte   `json:"source_root"`
-	TargetEpoch     uint64   `json:"target_epoch"`
-	TargetRoot      []byte   `json:"target_root"`
+	BeaconBlockRoot []byte `json:"beaconblockroot"`
+	BeaconBlockSlot uint64 `json:"beaconblockslot"`
+	SourceEpoch     uint64 `json:"source_epoch"`
+	SourceRoot      []byte `json:"source_root"`
+	TargetEpoch     uint64 `json:"target_epoch"`
+	TargetRoot      []byte `json:"target_root"`
 	ExecutionHashes []string `json:"execution_hashes"`
 }
 

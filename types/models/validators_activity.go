@@ -10,6 +10,9 @@ type ValidatorsActivityPageData struct {
 	LastValidator  uint64                            `json:"last_validx"`
 	Sorting        string                            `json:"sorting"`
 
+	// Filter parameters
+	SearchTerm string `json:"search_term"`
+
 	FirstGroup uint64 `json:"first_group"`
 	LastGroup  uint64 `json:"last_group"`
 
@@ -31,7 +34,7 @@ type ValidatorsActivityPageData struct {
 
 type ValidatorsActiviyPageDataGroup struct {
 	Group      string `json:"group"`
-	GroupLower string `json:"-"`
+	GroupLower string `json:"group_lower"`
 	Validators uint64 `json:"validators"`
 	Activated  uint64 `json:"activated"`
 	Online     uint64 `json:"online"`

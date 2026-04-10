@@ -12,15 +12,15 @@ func InsertUnfinalizedBlock(block *dbtypes.UnfinalizedBlock, tx *sqlx.Tx) error 
 	_, err := tx.Exec(EngineQuery(map[dbtypes.DBEngineType]string{
 		dbtypes.DBEnginePgsql: `
 			INSERT INTO unfinalized_blocks (
-				root, slot, header_ver, header_ssz, block_ver, block_ssz, status, fork_id, rank
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			ON CONFLICT (root,rank) DO NOTHING`,
+				root, slot, header_ver, header_ssz, block_ver, block_ssz, status, fork_id, recv_delay, min_exec_time, max_exec_time, exec_times, rank
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			ON CONFLICT (root, rank) DO NOTHING`,
 		dbtypes.DBEngineSqlite: `
 			INSERT OR IGNORE INTO unfinalized_blocks (
-				root, slot, header_ver, header_ssz, block_ver, block_ssz, status, fork_id, rank
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+				root, slot, header_ver, header_ssz, block_ver, block_ssz, status, fork_id, recv_delay, min_exec_time, max_exec_time, exec_times, rank
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 	}),
-		block.Root, block.Slot, block.HeaderVer, block.HeaderSSZ, block.BlockVer, block.BlockSSZ, block.Status, block.ForkId, block.Rank)
+		block.Root, block.Slot, block.HeaderVer, block.HeaderSSZ, block.BlockVer, block.BlockSSZ, block.Status, block.ForkId, block.RecvDelay, block.MinExecTime, block.MaxExecTime, block.ExecTimes, block.Rank)
 	if err != nil {
 		return err
 	}
@@ -80,13 +80,21 @@ func UpdateUnfinalizedBlockForkId(roots [][]byte, forkId uint64, tx *sqlx.Tx) er
 	return nil
 }
 
+func UpdateUnfinalizedBlockExecutionTimes(root []byte, minExecTime uint32, maxExecTime uint32, execTimes []byte, tx *sqlx.Tx) error {
+	_, err := tx.Exec(`UPDATE unfinalized_blocks SET min_exec_time = $1, max_exec_time = $2, exec_times = $3 WHERE root = $4`, minExecTime, maxExecTime, execTimes, root)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func GetUnfinalizedBlocks(filter *dbtypes.UnfinalizedBlockFilter) []*dbtypes.UnfinalizedBlock {
 	blockRefs := []*dbtypes.UnfinalizedBlock{}
 
 	var sql strings.Builder
 	args := []any{}
 
-	fmt.Fprint(&sql, `SELECT root, slot, status, fork_id, header_ver, header_ssz, rank`)
+	fmt.Fprint(&sql, `SELECT root, slot, status, fork_id, header_ver, header_ssz, recv_delay, min_exec_time, max_exec_time, exec_times, rank`)
 
 	if filter == nil || filter.WithBody {
 		fmt.Fprint(&sql, `, block_ver, block_ssz`)
@@ -123,7 +131,7 @@ func StreamUnfinalizedBlocks(slot uint64, cb func(block *dbtypes.UnfinalizedBloc
 	var sql strings.Builder
 	args := []any{slot}
 
-	fmt.Fprint(&sql, `SELECT root, slot, header_ver, header_ssz, block_ver, block_ssz, status, fork_id, rank FROM unfinalized_blocks WHERE slot >= $1`)
+	fmt.Fprint(&sql, `SELECT root, slot, header_ver, header_ssz, block_ver, block_ssz, status, fork_id, recv_delay, min_exec_time, max_exec_time, exec_times, rank FROM unfinalized_blocks WHERE slot >= $1`)
 
 	rows, err := ReaderDb.Query(sql.String(), args...)
 	if err != nil {
@@ -133,7 +141,10 @@ func StreamUnfinalizedBlocks(slot uint64, cb func(block *dbtypes.UnfinalizedBloc
 
 	for rows.Next() {
 		block := dbtypes.UnfinalizedBlock{}
-		err := rows.Scan(&block.Root, &block.Slot, &block.HeaderVer, &block.HeaderSSZ, &block.BlockVer, &block.BlockSSZ, &block.Status, &block.ForkId, &block.Rank)
+		err := rows.Scan(
+			&block.Root, &block.Slot, &block.HeaderVer, &block.HeaderSSZ, &block.BlockVer, &block.BlockSSZ, &block.Status, &block.ForkId, &block.RecvDelay,
+			&block.MinExecTime, &block.MaxExecTime, &block.ExecTimes, &block.Rank,
+		)
 		if err != nil {
 			logger.Errorf("Error while scanning unfinalized block: %v", err)
 			return err
@@ -147,7 +158,7 @@ func StreamUnfinalizedBlocks(slot uint64, cb func(block *dbtypes.UnfinalizedBloc
 func GetUnfinalizedBlock(root []byte) *dbtypes.UnfinalizedBlock {
 	block := dbtypes.UnfinalizedBlock{}
 	err := ReaderDb.Get(&block, `
-	SELECT root, slot, header_ver, header_ssz, block_ver, block_ssz, status, fork_id, rank
+	SELECT root, slot, header_ver, header_ssz, block_ver, block_ssz, status, fork_id, recv_delay, min_exec_time, max_exec_time, exec_times, rank
 	FROM unfinalized_blocks
 	WHERE root = $1
 	`, root)

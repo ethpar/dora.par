@@ -1,5 +1,10 @@
 package dbtypes
 
+import (
+	v1 "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+)
+
 type AssignedSlot struct {
 	Slot     uint64 `db:"slot"`
 	Proposer uint64 `db:"proposer"`
@@ -9,6 +14,12 @@ type AssignedSlot struct {
 type BlockStatus struct {
 	Root   []byte     `db:"root"`
 	Status SlotStatus `db:"status"`
+}
+
+type BlockBlobCount struct {
+	Root         []byte `db:"root"`
+	EthBlockHash []byte `db:"eth_block_hash"`
+	BlobCount    uint64 `db:"blob_count"`
 }
 
 type BlockHead struct {
@@ -32,12 +43,26 @@ type UnfinalizedBlockFilter struct {
 }
 
 type BlockFilter struct {
-	Graffiti      string
-	ExtraData     string
-	ProposerIndex *uint64
-	ProposerName  string
-	WithOrphaned  uint8
-	WithMissing   uint8
+	Graffiti             string
+	InvertGraffiti       bool
+	ExtraData            string
+	InvertExtraData      bool
+	ProposerIndex        *uint64
+	ProposerName         string
+	InvertProposer       bool
+	WithOrphaned         uint8
+	WithMissing          uint8
+	MinSyncParticipation *float32
+	MaxSyncParticipation *float32
+	MinExecTime          *uint32
+	MaxExecTime          *uint32
+	MinTxCount           *uint64
+	MaxTxCount           *uint64
+	MinBlobCount         *uint64
+	MaxBlobCount         *uint64
+	Slot                 *uint64  // Filter by specific slot number
+	BlockRoot            []byte   // Filter by specific block root
+	ForkIds              []uint64 // Filter by fork IDs
 }
 
 type MevBlockFilter struct {
@@ -52,14 +77,18 @@ type MevBlockFilter struct {
 }
 
 type DepositTxFilter struct {
-	Address       []byte
-	TargetAddress []byte
-	PublicKey     []byte
-	ValidatorName string
-	MinAmount     uint64
-	MaxAmount     uint64
-	WithOrphaned  uint8
-	WithValid     uint8
+	MinIndex          uint64
+	MaxIndex          uint64
+	Address           []byte
+	TargetAddress     []byte
+	PublicKey         []byte
+	PublicKeys        [][]byte
+	WithdrawalAddress []byte
+	ValidatorName     string
+	MinAmount         uint64
+	MaxAmount         uint64
+	WithOrphaned      uint8
+	WithValid         uint8
 }
 
 type DepositFilter struct {
@@ -95,6 +124,20 @@ type SlashingFilter struct {
 type WithdrawalRequestFilter struct {
 	MinSlot       uint64
 	MaxSlot       uint64
+	PublicKey     []byte
+	SourceAddress []byte
+	MinIndex      uint64
+	MaxIndex      uint64
+	ValidatorName string
+	MinAmount     *uint64
+	MaxAmount     *uint64
+	WithOrphaned  uint8
+}
+
+type WithdrawalRequestTxFilter struct {
+	MinDequeue    uint64
+	MaxDequeue    uint64
+	PublicKey     []byte
 	SourceAddress []byte
 	MinIndex      uint64
 	MaxIndex      uint64
@@ -107,6 +150,7 @@ type WithdrawalRequestFilter struct {
 type ConsolidationRequestFilter struct {
 	MinSlot          uint64
 	MaxSlot          uint64
+	PublicKey        []byte
 	SourceAddress    []byte
 	MinSrcIndex      uint64
 	MaxSrcIndex      uint64
@@ -115,4 +159,50 @@ type ConsolidationRequestFilter struct {
 	MaxTgtIndex      uint64
 	TgtValidatorName string
 	WithOrphaned     uint8
+}
+
+type ConsolidationRequestTxFilter struct {
+	MinDequeue       uint64
+	MaxDequeue       uint64
+	PublicKey        []byte
+	SourceAddress    []byte
+	MinSrcIndex      uint64
+	MaxSrcIndex      uint64
+	SrcValidatorName string
+	MinTgtIndex      uint64
+	MaxTgtIndex      uint64
+	TgtValidatorName string
+	WithOrphaned     uint8
+}
+
+type ValidatorOrder uint8
+
+const (
+	ValidatorOrderIndexAsc ValidatorOrder = iota
+	ValidatorOrderIndexDesc
+	ValidatorOrderPubKeyAsc
+	ValidatorOrderPubKeyDesc
+	ValidatorOrderBalanceAsc
+	ValidatorOrderBalanceDesc
+	ValidatorOrderActivationEpochAsc
+	ValidatorOrderActivationEpochDesc
+	ValidatorOrderExitEpochAsc
+	ValidatorOrderExitEpochDesc
+	ValidatorOrderWithdrawableEpochAsc
+	ValidatorOrderWithdrawableEpochDesc
+)
+
+type ValidatorFilter struct {
+	MinIndex          *uint64
+	MaxIndex          *uint64
+	Indices           []phase0.ValidatorIndex
+	PubKey            []byte
+	WithdrawalAddress []byte
+	WithdrawalCreds   []byte
+	ValidatorName     string
+	Status            []v1.ValidatorState
+
+	OrderBy ValidatorOrder
+	Limit   uint64
+	Offset  uint64
 }

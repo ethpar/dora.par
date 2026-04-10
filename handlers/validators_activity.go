@@ -4,17 +4,18 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethpandaops/dora/indexer/beacon"
 	"github.com/ethpandaops/dora/services"
 	"github.com/ethpandaops/dora/templates"
 	"github.com/ethpandaops/dora/types/models"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/maps"
 )
 
 // ValidatorsActivity will return the filtered "slots" page using a go template
@@ -57,10 +58,16 @@ func ValidatorsActivity(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse filter parameters
+	var searchTerm string
+	if urlArgs.Has("search") {
+		searchTerm = strings.TrimSpace(urlArgs.Get("search"))
+	}
+
 	var pageError error
 	pageError = services.GlobalCallRateLimiter.CheckCallLimit(r, 2)
 	if pageError == nil {
-		data.Data, pageError = getValidatorsActivityPageData(pageIdx, pageSize, sortOrder, groupBy)
+		data.Data, pageError = getValidatorsActivityPageData(pageIdx, pageSize, sortOrder, groupBy, searchTerm)
 	}
 	if pageError != nil {
 		handlePageError(w, r, pageError)
@@ -72,12 +79,12 @@ func ValidatorsActivity(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getValidatorsActivityPageData(pageIdx uint64, pageSize uint64, sortOrder string, groupBy uint64) (*models.ValidatorsActivityPageData, error) {
+func getValidatorsActivityPageData(pageIdx uint64, pageSize uint64, sortOrder string, groupBy uint64, searchTerm string) (*models.ValidatorsActivityPageData, error) {
 	pageData := &models.ValidatorsActivityPageData{}
-	pageCacheKey := fmt.Sprintf("validators_activiy:%v:%v:%v:%v", pageIdx, pageSize, sortOrder, groupBy)
+	pageCacheKey := fmt.Sprintf("validators_activiy:%v:%v:%v:%v:%v", pageIdx, pageSize, sortOrder, groupBy, searchTerm)
 	pageRes, pageErr := services.GlobalFrontendCache.ProcessCachedPage(pageCacheKey, true, pageData, func(processingPage *services.FrontendCacheProcessingPage) interface{} {
 		processingPage.CacheTimeout = 10 * time.Second
-		return buildValidatorsActivityPageData(pageIdx, pageSize, sortOrder, groupBy)
+		return buildValidatorsActivityPageData(pageIdx, pageSize, sortOrder, groupBy, searchTerm)
 	})
 	if pageErr == nil && pageRes != nil {
 		resData, resOk := pageRes.(*models.ValidatorsActivityPageData)
@@ -89,13 +96,17 @@ func getValidatorsActivityPageData(pageIdx uint64, pageSize uint64, sortOrder st
 	return pageData, pageErr
 }
 
-func buildValidatorsActivityPageData(pageIdx uint64, pageSize uint64, sortOrder string, groupBy uint64) *models.ValidatorsActivityPageData {
+func buildValidatorsActivityPageData(pageIdx uint64, pageSize uint64, sortOrder string, groupBy uint64, searchTerm string) *models.ValidatorsActivityPageData {
 	filterArgs := url.Values{}
 	filterArgs.Add("group", fmt.Sprintf("%v", groupBy))
+	if searchTerm != "" {
+		filterArgs.Add("search", searchTerm)
+	}
 
 	pageData := &models.ValidatorsActivityPageData{
 		ViewOptionGroupBy: groupBy,
 		Sorting:           sortOrder,
+		SearchTerm:        searchTerm,
 	}
 	logrus.Debugf("validators_activity page called: %v:%v [%v]", pageIdx, pageSize, groupBy)
 	if pageIdx == 0 {
@@ -114,24 +125,23 @@ func buildValidatorsActivityPageData(pageIdx uint64, pageSize uint64, sortOrder 
 
 	// group validators
 	validatorGroupMap := map[string]*models.ValidatorsActiviyPageDataGroup{}
-	validatorSet := services.GlobalBeaconService.GetCachedValidatorSet()
-	activityMap, _ := services.GlobalBeaconService.GetValidatorActivity(4, true)
+	currentEpoch := services.GlobalBeaconService.GetChainState().CurrentEpoch()
 
-	for vIdx, validator := range validatorSet {
+	services.GlobalBeaconService.StreamActiveValidatorData(false, func(index phase0.ValidatorIndex, validatorFlags uint16, activeData *beacon.ValidatorData, validator *phase0.Validator) error {
 		var groupKey string
 		var groupName string
 
 		switch groupBy {
 		case 1:
-			groupIdx := uint64(vIdx) / 100000
+			groupIdx := index / 100000
 			groupKey = fmt.Sprintf("%06d", groupIdx)
 			groupName = fmt.Sprintf("%v - %v", groupIdx*100000, (groupIdx+1)*100000)
 		case 2:
-			groupIdx := uint64(vIdx) / 10000
+			groupIdx := index / 10000
 			groupKey = fmt.Sprintf("%06d", groupIdx)
 			groupName = fmt.Sprintf("%v - %v", groupIdx*10000, (groupIdx+1)*10000)
 		case 3:
-			groupName = services.GlobalBeaconService.GetValidatorName(uint64(vIdx))
+			groupName = services.GlobalBeaconService.GetValidatorName(uint64(index))
 			groupKey = strings.ToLower(groupName)
 		}
 
@@ -152,26 +162,74 @@ func buildValidatorsActivityPageData(pageIdx uint64, pageSize uint64, sortOrder 
 
 		validatorGroup.Validators++
 
-		statusStr := validator.Status.String()
-		if strings.HasPrefix(statusStr, "active_") {
-			validatorGroup.Activated++
-
-			if activityMap[phase0.ValidatorIndex(vIdx)] > 0 {
-				validatorGroup.Online++
-			} else {
-				validatorGroup.Offline++
-			}
+		if validatorFlags&beacon.ValidatorStatusSlashed != 0 {
+			validatorGroup.Slashed++
 		}
-		if strings.HasPrefix(statusStr, "exited_") || strings.HasPrefix(statusStr, "withdrawal_") {
+
+		isExited := false
+		if activeData != nil && activeData.ActivationEpoch <= currentEpoch {
+			if activeData.ExitEpoch > currentEpoch {
+				votingActivity := services.GlobalBeaconService.GetValidatorLiveness(index, 3)
+
+				validatorGroup.Activated++
+				if votingActivity > 0 {
+					validatorGroup.Online++
+				} else {
+					validatorGroup.Offline++
+				}
+			} else {
+				isExited = true
+			}
+		} else if validatorFlags&beacon.ValidatorStatusExited != 0 {
+			isExited = true
+		}
+
+		if isExited {
 			validatorGroup.Exited++
 		}
-		if strings.HasSuffix(statusStr, "_slashed") {
-			validatorGroup.Slashed++
+
+		return nil
+	})
+
+	// filter groups based on search term
+	validatorGroups := []*models.ValidatorsActiviyPageDataGroup{}
+
+	// Check if search term is a valid regex pattern
+	var searchRegex *regexp.Regexp
+	if searchTerm != "" {
+		// Try to compile as regex
+		var err error
+		searchRegex, err = regexp.Compile("(?i)" + searchTerm) // Case-insensitive regex
+		if err != nil {
+			// If not valid regex, fall back to literal string matching
+			searchRegex = nil
 		}
 	}
 
-	// sort / filter groups
-	validatorGroups := maps.Values(validatorGroupMap)
+	for _, group := range validatorGroupMap {
+		// Apply search filter
+		if searchTerm != "" {
+			matched := false
+
+			if searchRegex != nil {
+				// Use regex matching
+				matched = searchRegex.MatchString(group.Group)
+			} else {
+				// Fall back to substring matching for invalid regex
+				groupNameLower := strings.ToLower(group.Group)
+				searchTermLower := strings.ToLower(searchTerm)
+				matched = strings.Contains(groupNameLower, searchTermLower)
+			}
+
+			if !matched {
+				continue
+			}
+		}
+
+		validatorGroups = append(validatorGroups, group)
+	}
+
+	// sort filtered groups
 	switch sortOrder {
 	case "group":
 		sort.Slice(validatorGroups, func(a, b int) bool {

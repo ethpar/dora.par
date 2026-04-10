@@ -3,10 +3,12 @@ package beacon
 import (
 	"bytes"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethpandaops/dora/db"
 	"github.com/ethpandaops/dora/dbtypes"
 	"github.com/jmoiron/sqlx"
@@ -14,20 +16,27 @@ import (
 
 // forkCache is a struct that represents the fork cache in the indexer.
 type forkCache struct {
-	indexer         *Indexer
-	cacheMutex      sync.RWMutex
-	forkMap         map[ForkKey]*Fork
-	finalizedForkId ForkKey
-	lastForkId      ForkKey
-
-	forkProcessLock sync.Mutex
+	indexer            *Indexer
+	cacheMutex         sync.RWMutex
+	forkMap            map[ForkKey]*Fork
+	finalizedForkId    ForkKey
+	lastForkId         ForkKey
+	parentIdCache      *lru.Cache[ForkKey, ForkKey]
+	parentIdCacheHit   uint64
+	parentIdCacheMiss  uint64
+	parentIdsCache     *lru.Cache[ForkKey, []ForkKey]
+	parentIdsCacheHit  uint64
+	parentIdsCacheMiss uint64
+	forkProcessLock    sync.Mutex
 }
 
 // newForkCache creates a new instance of the forkCache struct.
 func newForkCache(indexer *Indexer) *forkCache {
 	return &forkCache{
-		indexer: indexer,
-		forkMap: make(map[ForkKey]*Fork),
+		indexer:        indexer,
+		forkMap:        make(map[ForkKey]*Fork),
+		parentIdCache:  lru.NewCache[ForkKey, ForkKey](1000),
+		parentIdsCache: lru.NewCache[ForkKey, []ForkKey](30),
 	}
 }
 
@@ -116,13 +125,39 @@ func (cache *forkCache) removeFork(forkId ForkKey) {
 
 // getParentForkIds returns the parent fork ids of the given fork.
 func (cache *forkCache) getParentForkIds(forkId ForkKey) []ForkKey {
-	parentForks := []ForkKey{forkId}
-
-	thisFork := cache.getForkById(forkId)
-	for thisFork != nil && thisFork.parentFork != 0 {
-		parentForks = append(parentForks, thisFork.parentFork)
-		thisFork = cache.getForkById(thisFork.parentFork)
+	parentForks, isCached := cache.parentIdsCache.Get(forkId)
+	if isCached {
+		cache.parentIdsCacheHit++
+		return parentForks
 	}
+
+	parentForks = []ForkKey{forkId}
+	parentForkId := forkId
+
+	for parentForkId > 1 {
+		if cachedParent, isCached := cache.parentIdCache.Get(parentForkId); isCached {
+			cache.parentIdCacheHit++
+			parentForkId = cachedParent
+		} else if parentFork := cache.getForkById(parentForkId); parentFork != nil {
+			parentForkId = parentFork.parentFork
+		} else if dbFork := db.GetForkById(uint64(parentForkId)); dbFork != nil {
+			cache.parentIdCache.Add(ForkKey(parentForkId), ForkKey(dbFork.ParentFork))
+			parentForkId = ForkKey(dbFork.ParentFork)
+			cache.parentIdCacheMiss++
+		} else {
+			cache.parentIdCache.Add(ForkKey(parentForkId), ForkKey(0))
+			parentForkId = 0
+			cache.parentIdCacheMiss++
+		}
+
+		if slices.Contains(parentForks, parentForkId) {
+			break
+		}
+		parentForks = append(parentForks, parentForkId)
+	}
+
+	cache.parentIdsCache.Add(forkId, parentForks)
+	cache.parentIdsCacheMiss++
 
 	return parentForks
 }
@@ -200,6 +235,8 @@ func (cache *forkCache) setFinalizedEpoch(finalizedSlot phase0.Slot, justifiedRo
 			continue
 		}
 
+		cache.parentIdCache.Add(fork.forkId, fork.parentFork)
+
 		delete(cache.forkMap, fork.forkId)
 	}
 
@@ -225,6 +262,7 @@ func (cache *forkCache) setFinalizedEpoch(finalizedSlot phase0.Slot, justifiedRo
 	}
 
 	cache.finalizedForkId = finalizedForkId
+	cache.parentIdsCache.Purge()
 
 	err := db.RunDBTransaction(func(tx *sqlx.Tx) error {
 		return cache.updateForkState(tx)

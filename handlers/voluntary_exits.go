@@ -156,8 +156,6 @@ func buildFilteredVoluntaryExitsPageData(pageIdx uint64, pageSize uint64, minSlo
 	dbVoluntaryExits, totalRows := services.GlobalBeaconService.GetVoluntaryExitsByFilter(voluntaryExitFilter, pageIdx-1, uint32(pageSize))
 
 	chainState := services.GlobalBeaconService.GetChainState()
-	validatorSetRsp := services.GlobalBeaconService.GetCachedValidatorSet()
-	validatorActivityMap, validatorActivityMax := services.GlobalBeaconService.GetValidatorActivity(3, false)
 
 	for _, voluntaryExit := range dbVoluntaryExits {
 		voluntaryExitData := &models.VoluntaryExitsPageDataExit{
@@ -170,7 +168,7 @@ func buildFilteredVoluntaryExitsPageData(pageIdx uint64, pageSize uint64, minSlo
 			ValidatorStatus: "",
 		}
 
-		validator := validatorSetRsp[phase0.ValidatorIndex(voluntaryExit.ValidatorIndex)]
+		validator := services.GlobalBeaconService.GetValidatorByIndex(phase0.ValidatorIndex(voluntaryExit.ValidatorIndex), false)
 		if validator == nil {
 			voluntaryExitData.ValidatorStatus = "Unknown"
 		} else {
@@ -197,8 +195,8 @@ func buildFilteredVoluntaryExitsPageData(pageIdx uint64, pageSize uint64, minSlo
 			}
 
 			if voluntaryExitData.ShowUpcheck {
-				voluntaryExitData.UpcheckActivity = validatorActivityMap[validator.Index]
-				voluntaryExitData.UpcheckMaximum = uint8(validatorActivityMax)
+				voluntaryExitData.UpcheckActivity = uint8(services.GlobalBeaconService.GetValidatorLiveness(validator.Index, 3))
+				voluntaryExitData.UpcheckMaximum = uint8(3)
 			}
 		}
 
@@ -219,6 +217,15 @@ func buildFilteredVoluntaryExitsPageData(pageIdx uint64, pageSize uint64, minSlo
 	if pageIdx < pageData.TotalPages {
 		pageData.NextPageIndex = pageIdx + 1
 	}
+
+	// Populate UrlParams for page jump functionality
+	pageData.UrlParams = make(map[string]string)
+	for key, values := range filterArgs {
+		if len(values) > 0 {
+			pageData.UrlParams[key] = values[0]
+		}
+	}
+	pageData.UrlParams["c"] = fmt.Sprintf("%v", pageData.PageSize)
 
 	pageData.FirstPageLink = fmt.Sprintf("/validators/voluntary_exits?f&%v&c=%v", filterArgs.Encode(), pageData.PageSize)
 	pageData.PrevPageLink = fmt.Sprintf("/validators/voluntary_exits?f&%v&c=%v&p=%v", filterArgs.Encode(), pageData.PageSize, pageData.PrevPageIndex)

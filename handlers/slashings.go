@@ -174,8 +174,6 @@ func buildFilteredSlashingsPageData(pageIdx uint64, pageSize uint64, minSlot uin
 	dbSlashings, totalRows := services.GlobalBeaconService.GetSlashingsByFilter(slashingFilter, pageIdx-1, uint32(pageSize))
 
 	chainState := services.GlobalBeaconService.GetChainState()
-	validatorSetRsp := services.GlobalBeaconService.GetCachedValidatorSet()
-	validatorActivityMap, validatorActivityMax := services.GlobalBeaconService.GetValidatorActivity(3, false)
 
 	for _, slashing := range dbSlashings {
 		slashingData := &models.SlashingsPageDataSlashing{
@@ -191,7 +189,7 @@ func buildFilteredSlashingsPageData(pageIdx uint64, pageSize uint64, minSlot uin
 			ValidatorStatus: "",
 		}
 
-		validator := validatorSetRsp[phase0.ValidatorIndex(slashing.ValidatorIndex)]
+		validator := services.GlobalBeaconService.GetValidatorByIndex(phase0.ValidatorIndex(slashing.ValidatorIndex), false)
 		if validator == nil {
 			slashingData.ValidatorStatus = "Unknown"
 		} else {
@@ -217,8 +215,8 @@ func buildFilteredSlashingsPageData(pageIdx uint64, pageSize uint64, minSlot uin
 			}
 
 			if slashingData.ShowUpcheck {
-				slashingData.UpcheckActivity = validatorActivityMap[validator.Index]
-				slashingData.UpcheckMaximum = uint8(validatorActivityMax)
+				slashingData.UpcheckActivity = uint8(services.GlobalBeaconService.GetValidatorLiveness(validator.Index, 3))
+				slashingData.UpcheckMaximum = uint8(3)
 			}
 		}
 
@@ -239,6 +237,15 @@ func buildFilteredSlashingsPageData(pageIdx uint64, pageSize uint64, minSlot uin
 	if pageIdx < pageData.TotalPages {
 		pageData.NextPageIndex = pageIdx + 1
 	}
+
+	// Populate UrlParams for page jump functionality
+	pageData.UrlParams = make(map[string]string)
+	for key, values := range filterArgs {
+		if len(values) > 0 {
+			pageData.UrlParams[key] = values[0]
+		}
+	}
+	pageData.UrlParams["c"] = fmt.Sprintf("%v", pageData.PageSize)
 
 	pageData.FirstPageLink = fmt.Sprintf("/validators/slashings?f&%v&c=%v", filterArgs.Encode(), pageData.PageSize)
 	pageData.PrevPageLink = fmt.Sprintf("/validators/slashings?f&%v&c=%v&p=%v", filterArgs.Encode(), pageData.PageSize, pageData.PrevPageIndex)

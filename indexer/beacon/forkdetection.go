@@ -57,7 +57,7 @@ func (cache *forkCache) processBlock(block *Block) error {
 			parentIsProcessed = true
 			parentIsFinalized = parentSlot < chainState.GetFinalizedSlot()
 		}
-	} else if parentBlock.fokChecked {
+	} else if parentBlock.forkChecked {
 		parentForkId = parentBlock.forkId
 		parentSlot = parentBlock.Slot
 		parentIsProcessed = true
@@ -98,6 +98,18 @@ func (cache *forkCache) processBlock(block *Block) error {
 			otherChildren = append(otherChildren, child)
 		}
 
+		if parentIsFinalized {
+			// parent is finalized, so blocks building on top of it might be finalized as well.
+			// check if we have other finalized blocks building on top of the parent in the database
+			for _, child := range db.GetSlotsByParentRoot((*parentRoot)[:]) {
+				if bytes.Equal(child.Root, block.Root[:]) {
+					continue
+				}
+
+				otherChildren = append(otherChildren, newBlock(cache.indexer.dynSsz, phase0.Root(child.Root), phase0.Slot(child.Slot)))
+			}
+		}
+
 		if len(otherChildren) > 0 {
 			logbuf := strings.Builder{}
 
@@ -113,6 +125,7 @@ func (cache *forkCache) processBlock(block *Block) error {
 				newFork := &newForkInfo{
 					fork: fork,
 				}
+				cache.parentIdCache.Add(fork.forkId, fork.parentFork)
 				newForks = append(newForks, newFork)
 
 				fmt.Fprintf(&logbuf, ", head1(%v): %v [%v]", fork.forkId, block.Slot, block.Root.String())
@@ -142,6 +155,7 @@ func (cache *forkCache) processBlock(block *Block) error {
 						fork:        otherFork,
 						updateRoots: updatedRoots,
 					}
+					cache.parentIdCache.Add(otherFork.forkId, otherFork.parentFork)
 					newForks = append(newForks, newFork)
 
 					if updatedFork != nil {
@@ -158,10 +172,24 @@ func (cache *forkCache) processBlock(block *Block) error {
 		}
 	}
 
+	// avoid using forkid 0 for unfinalized blocks, add a new temporary forkid if needed
+	if currentForkId == 0 && parentIsFinalized {
+		cache.lastForkId++
+		fork := newFork(cache.lastForkId, parentSlot, *parentRoot, block, parentForkId)
+		cache.addFork(fork)
+		cache.parentIdCache.Add(fork.forkId, fork.parentFork)
+		newForks = append(newForks, &newForkInfo{
+			fork: fork,
+		})
+
+		currentForkId = cache.lastForkId
+		cache.indexer.logger.Infof("new fork for canonical chain (base(%v) %v [%v], head(%v) %v [%v])", parentForkId, parentSlot, parentRoot.String(), currentForkId, block.Slot, block.Root.String())
+	}
+
 	// check scenario 2
 	childBlocks := make([]*Block, 0)
 	for _, child := range cache.indexer.blockCache.getBlocksByParentRoot(block.Root) {
-		if !child.fokChecked {
+		if !child.forkChecked {
 			continue
 		}
 
@@ -185,6 +213,7 @@ func (cache *forkCache) processBlock(block *Block) error {
 					fork:        fork,
 					updateRoots: updatedRoots,
 				}
+				cache.parentIdCache.Add(fork.forkId, fork.parentFork)
 				newForks = append(newForks, newFork)
 
 				if updatedFork != nil {
@@ -208,7 +237,7 @@ func (cache *forkCache) processBlock(block *Block) error {
 
 	// set detected fork id to the block
 	block.forkId = currentForkId
-	block.fokChecked = true
+	block.forkChecked = true
 
 	// update fork head block if needed
 	fork := cache.getForkById(currentForkId)
@@ -224,6 +253,9 @@ func (cache *forkCache) processBlock(block *Block) error {
 
 	// persist new forks and updated blocks to the database
 	if len(newForks) > 0 || len(updatedBlocks) > 0 {
+		// purge parent ids cache as the fork id tree has changed
+		cache.parentIdsCache.Purge()
+
 		err := db.RunDBTransaction(func(tx *sqlx.Tx) error {
 			// helper function to update unfinalized block fork ids in batches
 			updateUnfinalizedBlockForkIds := func(updateRoots [][]byte, forkId ForkKey) error {
@@ -321,6 +353,7 @@ func (cache *forkCache) updateForkBlocks(startBlock *Block, forkId ForkKey, skip
 			if forks := cache.getForkByBase(startBlock.Root); len(forks) > 0 && forks[0].parentFork != forkId {
 				for _, fork := range forks {
 					fork.parentFork = forkId
+					cache.parentIdCache.Add(fork.forkId, fork.parentFork)
 				}
 
 				updatedFork = &updateForkInfo{
@@ -332,7 +365,7 @@ func (cache *forkCache) updateForkBlocks(startBlock *Block, forkId ForkKey, skip
 		}
 
 		nextBlock := nextBlocks[0]
-		if !nextBlock.fokChecked {
+		if !nextBlock.forkChecked {
 			break
 		}
 

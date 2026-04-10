@@ -11,7 +11,7 @@ import (
 )
 
 func parseFunction(txDataHex string, log logrus.FieldLogger) (functionName *string, value *big.Int, to *common.Address) {
-	log.Infof("try to parse: %v", txDataHex)
+	//log.Infof("try to parse: %v", txDataHex)
 	contractABI, err := abi.JSON(strings.NewReader(erc20ABI))
 	if err != nil {
 		log.Warnf("Failed to parse ABI: %v", err)
@@ -43,8 +43,8 @@ func parseFunction(txDataHex string, log logrus.FieldLogger) (functionName *stri
 		return nil, nil, nil
 	}
 
-	fmt.Printf("Method called: %s\n", method.Name)
-	fmt.Printf("Signature: 0x%x\n", methodSig)
+	//fmt.Printf("Method called: %s\n", method.Name)
+	//fmt.Printf("Signature: 0x%x\n", methodSig)
 
 	if method.Name == "transfer" || method.Name == "mint" {
 		toAddress := args["to"].(common.Address)

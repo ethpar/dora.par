@@ -43,7 +43,7 @@ jobs:
     needs: [build_binaries]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       with:
         fetch-depth: 100
         ref: ${{ github.sha }}
@@ -54,21 +54,32 @@ jobs:
         prev_tag=$(git tag --sort=-version:refname | grep -e "^v[0-9.]*$" | head -n 1)
         echo "previous release: $prev_tag"
         if [ "$prev_tag" ]; then
-          changelog=$(git log --oneline --no-decorate $prev_tag..HEAD)
+          changelog=$(git log --oneline --merges --first-parent --no-decorate $prev_tag..HEAD)
         else
-          changelog=$(git log --oneline --no-decorate)
+          changelog=$(git log --oneline --merges --first-parent --no-decorate)
         fi
         echo "changelog<<EOF" >> $GITHUB_OUTPUT
         echo " - ${changelog//$'\n'/$'\n' - }" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
+        echo "prev_tag=$prev_tag" >> $GITHUB_OUTPUT
+
+    - name: "Generate AI release notes"
+      id: ai_release_notes
+      run: |
+        ./.github/scripts/ai-release-notes.sh "${{ steps.changelog.outputs.prev_tag }}"
+      env:
+        OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+        OPENROUTER_TOKEN: ${{ secrets.OPENROUTER_TOKEN }}
+        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
 
     # download build artifacts
     - name: "Download build artifacts"
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
 
     # create draft release
     - name: Create latest release
-      uses: actions/create-release@v1
+      uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1.1.4
       id: create_release
       with:
         draft: true
@@ -76,8 +87,15 @@ jobs:
         release_name: "v${{ inputs.version }}"
         tag_name: "v${{ inputs.version }}"
         body: |
-          ### Changes
+          ### Major Changes
+          ${{ steps.ai_release_notes.outputs.release_notes }}
+
+          <details>
+            <summary>Full changelog</summary>
+
+            ### Full changelog
           ${{ steps.changelog.outputs.changelog }}
+          </details>
 
           ### Release Artifacts
           Please read through the [wiki](https://github.com/ethpandaops/dora/wiki) for setup & configuration instructions.
@@ -97,7 +115,7 @@ jobs:
         cd explorer_windows_amd64
         zip -r -q ../dora_${{ inputs.version }}_windows_amd64.zip .
     - name: "Upload release artifact: dora_${{ inputs.version }}_windows_amd64.zip"
-      uses: actions/upload-release-asset@v1
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./dora_${{ inputs.version }}_windows_amd64.zip
@@ -111,7 +129,7 @@ jobs:
         cd explorer_linux_amd64
         tar -czf ../dora_${{ inputs.version }}_linux_amd64.tar.gz .
     - name: "Upload release artifact: dora_${{ inputs.version }}_linux_amd64.tar.gz"
-      uses: actions/upload-release-asset@v1
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./dora_${{ inputs.version }}_linux_amd64.tar.gz
@@ -125,7 +143,7 @@ jobs:
         cd explorer_linux_arm64
         tar -czf ../dora_${{ inputs.version }}_linux_arm64.tar.gz .
     - name: "Upload release artifact: dora_${{ inputs.version }}_linux_arm64.tar.gz"
-      uses: actions/upload-release-asset@v1
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./dora_${{ inputs.version }}_linux_arm64.tar.gz
@@ -139,7 +157,7 @@ jobs:
         cd explorer_darwin_amd64
         tar -czf ../dora_${{ inputs.version }}_darwin_amd64.tar.gz .
     - name: "Upload release artifact: dora_${{ inputs.version }}_darwin_amd64.tar.gz"
-      uses: actions/upload-release-asset@v1
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./dora_${{ inputs.version }}_darwin_amd64.tar.gz
@@ -153,7 +171,7 @@ jobs:
         cd explorer_darwin_arm64
         tar -czf ../dora_${{ inputs.version }}_darwin_arm64.tar.gz .
     - name: "Upload release artifact: dora_${{ inputs.version }}_darwin_arm64.tar.gz"
-      uses: actions/upload-release-asset@v1
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./dora_${{ inputs.version }}_darwin_arm64.tar.gz

@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	v1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/jmoiron/sqlx"
@@ -67,7 +66,7 @@ func (mev *MevIndexer) StartUpdater() {
 }
 
 func (mev *MevIndexer) runUpdaterLoop() {
-	defer utils.HandleSubroutinePanic("MevIndexer.runUpdaterLoop")
+	defer utils.HandleSubroutinePanic("MevIndexer.runUpdaterLoop", mev.runUpdaterLoop)
 
 	for {
 		time.Sleep(15 * time.Second)
@@ -81,11 +80,6 @@ func (mev *MevIndexer) runUpdaterLoop() {
 
 func (mev *MevIndexer) runUpdater() error {
 	if time.Since(mev.lastRefresh) < utils.Config.MevIndexer.RefreshInterval {
-		return nil
-	}
-
-	validatorSet := mev.beaconIndexer.GetCanonicalValidatorSet(nil)
-	if validatorSet == nil {
 		return nil
 	}
 
@@ -235,16 +229,6 @@ func (mev *MevIndexer) loadMevBlocksFromRelay(relay *types.MevRelayConfig) error
 	}
 
 	// parse blocks
-	validatorSet := mev.beaconIndexer.GetCanonicalValidatorSet(nil)
-	if len(validatorSet) == 0 {
-		return fmt.Errorf("validator set is empty")
-	}
-
-	validatorMap := map[phase0.BLSPubKey]*v1.Validator{}
-	for _, validator := range validatorSet {
-		validatorMap[validator.Validator.PublicKey] = validator
-	}
-
 	mev.mevBlockCacheMutex.Lock()
 	defer mev.mevBlockCacheMutex.Unlock()
 
@@ -321,8 +305,8 @@ func (mev *MevIndexer) loadMevBlocksFromRelay(relay *types.MevRelayConfig) error
 			blockValueGwei := big.NewInt(0).Div(blockValue, utils.GWEI)
 
 			validatorPubkey := phase0.BLSPubKey(common.FromHex(blockData.ProposerPubkey))
-			validator := validatorMap[validatorPubkey]
-			if validator == nil {
+			validatorIndex, found := mev.beaconIndexer.GetValidatorIndexByPubkey(validatorPubkey)
+			if !found {
 				mev.logger.Warnf("failed parsing mev block %v: ProposerPubkey (%v) not found in validator set", idx, validatorPubkey.String())
 				continue
 			}
@@ -332,7 +316,7 @@ func (mev *MevIndexer) loadMevBlocksFromRelay(relay *types.MevRelayConfig) error
 				BlockHash:      blockHash[:],
 				BlockNumber:    blockNumber,
 				BuilderPubkey:  common.FromHex(blockData.BuilderPubkey),
-				ProposerIndex:  uint64(validator.Index),
+				ProposerIndex:  uint64(validatorIndex),
 				SeenbyRelays:   relayFlag,
 				FeeRecipient:   common.FromHex(blockData.ProposerFeeRecipient),
 				TxCount:        txCount,

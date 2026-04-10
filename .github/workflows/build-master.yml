@@ -54,38 +54,38 @@ jobs:
     steps:
     # download build artifacts
     - name: "Download build artifacts"
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
 
     # (re)create snapshot binary release
     - name: Update snapshot tag & remove previous snapshot release
-      uses: actions/github-script@v3
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       with:
         github-token: ${{secrets.GITHUB_TOKEN}}          
         script: |
           try {
             var snapshotTag = "snapshot";
-            var snapshotRelease = await github.repos.getReleaseByTag({
+            var snapshotRelease = await github.rest.repos.getReleaseByTag({
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag: snapshotTag
             });
             if(snapshotRelease && snapshotRelease.data && snapshotRelease.data.tag_name == snapshotTag) {
               console.log("delete previous snapshot release");
-              await github.repos.deleteRelease({
+              await github.rest.repos.deleteRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 release_id: snapshotRelease.data.id
               });
             }
 
-            var snapshotRef = await github.git.getRef({
+            var snapshotRef = await github.rest.git.getRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
               ref: "tags/" + snapshotTag
             });
             if(snapshotRef && snapshotRef.data && snapshotRef.data.ref) {
               if(snapshotRef.data.object.sha !== context.sha) {
-                await github.git.updateRef({
+                await github.rest.git.updateRef({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   ref: "tags/" + snapshotTag,
@@ -94,7 +94,7 @@ jobs:
               }
             }
             else {
-              await github.git.createRef({
+              await github.rest.git.createRef({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 ref: "tags/" + snapshotTag,
@@ -105,7 +105,7 @@ jobs:
             console.log(e)
           }
     - name: Create snapshot release
-      uses: actions/create-release@v1
+      uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1.1.4
       id: create_release
       with:
         draft: false
@@ -135,7 +135,7 @@ jobs:
         cd explorer_windows_amd64
         zip -r -q ../dora_snapshot_windows_amd64.zip .
     - name: "Upload snapshot release artifact: dora_snapshot_windows_amd64.zip"
-      uses: actions/upload-release-asset@v1
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./dora_snapshot_windows_amd64.zip
@@ -149,7 +149,7 @@ jobs:
         cd explorer_linux_amd64
         tar -czf ../dora_snapshot_linux_amd64.tar.gz .
     - name: "Upload snapshot release artifact: dora_snapshot_linux_amd64.tar.gz"
-      uses: actions/upload-release-asset@v1
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./dora_snapshot_linux_amd64.tar.gz
@@ -163,7 +163,7 @@ jobs:
         cd explorer_linux_arm64
         tar -czf ../dora_snapshot_linux_arm64.tar.gz .
     - name: "Upload snapshot release artifact: dora_snapshot_linux_arm64.tar.gz"
-      uses: actions/upload-release-asset@v1
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./dora_snapshot_linux_arm64.tar.gz
@@ -177,7 +177,7 @@ jobs:
         cd explorer_darwin_amd64
         tar -czf ../dora_snapshot_darwin_amd64.tar.gz .
     - name: "Upload snapshot release artifact: dora_snapshot_darwin_amd64.tar.gz"
-      uses: actions/upload-release-asset@v1
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./dora_snapshot_darwin_amd64.tar.gz
@@ -191,7 +191,7 @@ jobs:
         cd explorer_darwin_arm64
         tar -czf ../dora_snapshot_darwin_arm64.tar.gz .
     - name: "Upload snapshot release artifact: dora_snapshot_darwin_arm64.tar.gz"
-      uses: actions/upload-release-asset@v1
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./dora_snapshot_darwin_arm64.tar.gz

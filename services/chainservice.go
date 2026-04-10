@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	v1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/jmoiron/sqlx"
 
+	"github.com/ethpandaops/dora/blockdb"
 	"github.com/ethpandaops/dora/clients/consensus"
 	"github.com/ethpandaops/dora/clients/execution"
 	"github.com/ethpandaops/dora/clients/sshtunnel"
@@ -19,19 +23,25 @@ import (
 	"github.com/ethpandaops/dora/indexer/beacon"
 	execindexer "github.com/ethpandaops/dora/indexer/execution"
 	"github.com/ethpandaops/dora/indexer/mevrelay"
+	"github.com/ethpandaops/dora/indexer/snooper"
+	"github.com/ethpandaops/dora/types"
 	"github.com/ethpandaops/dora/utils"
 	"github.com/sirupsen/logrus"
 )
 
 type ChainService struct {
-	logger          logrus.FieldLogger
-	consensusPool   *consensus.Pool
-	executionPool   *execution.Pool
-	beaconIndexer   *beacon.Indexer
+	logger               logrus.FieldLogger
+	consensusPool        *consensus.Pool
+	executionPool        *execution.Pool
+	beaconIndexer        *beacon.Indexer
 	txIndexer       *beacon.TxIndexer
-	validatorNames  *ValidatorNames
-	mevRelayIndexer *mevrelay.MevIndexer
-	started         bool
+	validatorNames       *ValidatorNames
+	depositIndexer       *execindexer.DepositIndexer
+	consolidationIndexer *execindexer.ConsolidationIndexer
+	withdrawalIndexer    *execindexer.WithdrawalIndexer
+	mevRelayIndexer      *mevrelay.MevIndexer
+	snooperManager       *snooper.SnooperManager
+	started              bool
 }
 
 var GlobalBeaconService *ChainService
@@ -51,6 +61,10 @@ func InitChainService(ctx context.Context, logger logrus.FieldLogger) {
 	chainState := consensusPool.GetChainState()
 	validatorNames := NewValidatorNames(beaconIndexer, chainState)
 	mevRelayIndexer := mevrelay.NewMevIndexer(logger.WithField("service", "mev-relay"), beaconIndexer, chainState)
+	snooperManager := snooper.NewSnooperManager(logger.WithField("service", "snooper-manager"), beaconIndexer)
+
+	// Set execution time provider
+	beaconIndexer.SetExecutionTimeProvider(snooper.NewExecutionTimeProvider(snooperManager.GetCache()))
 
 	GlobalBeaconService = &ChainService{
 		logger:          logger,
@@ -60,7 +74,69 @@ func InitChainService(ctx context.Context, logger logrus.FieldLogger) {
 		txIndexer:       txIndexer,
 		validatorNames:  validatorNames,
 		mevRelayIndexer: mevRelayIndexer,
+		snooperManager:  snooperManager,
 	}
+}
+
+// applyAuthGroupToEndpoint applies authGroup settings to an endpoint configuration
+func applyAuthGroupToEndpoint(endpoint *types.EndpointConfig) (*types.EndpointConfig, error) {
+	if endpoint.AuthGroup == "" {
+		return endpoint, nil
+	}
+
+	authGroup, exists := utils.Config.AuthGroups[endpoint.AuthGroup]
+	if !exists {
+		return nil, fmt.Errorf("authGroup '%s' not found", endpoint.AuthGroup)
+	}
+
+	// Create a copy of the endpoint to avoid modifying the original
+	endpointCopy := *endpoint
+
+	// Apply credentials to URLs if provided
+	if authGroup.Credentials != nil && (authGroup.Credentials.Username != "" || authGroup.Credentials.Password != "") {
+		// Apply to main URL
+		urlObj, err := url.Parse(endpointCopy.Url)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse URL: %v", err)
+		}
+
+		if authGroup.Credentials.Username != "" && authGroup.Credentials.Password != "" {
+			urlObj.User = url.UserPassword(authGroup.Credentials.Username, authGroup.Credentials.Password)
+		} else if authGroup.Credentials.Username != "" {
+			urlObj.User = url.User(authGroup.Credentials.Username)
+		} else if authGroup.Credentials.Password != "" {
+			credParts := strings.SplitN(authGroup.Credentials.Password, ":", 2)
+			if len(credParts) == 2 {
+				urlObj.User = url.UserPassword(credParts[0], credParts[1])
+			}
+		}
+		endpointCopy.Url = urlObj.String()
+
+		// Apply to snooper URL if present
+		if endpointCopy.EngineSnooperUrl != "" {
+			snooperUrlObj, err := url.Parse(endpointCopy.EngineSnooperUrl)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse snooper URL: %v", err)
+			}
+
+			snooperUrlObj.User = url.UserPassword(authGroup.Credentials.Username, authGroup.Credentials.Password)
+			endpointCopy.EngineSnooperUrl = snooperUrlObj.String()
+		}
+	}
+
+	// Merge headers (endpoint headers take precedence)
+	if len(authGroup.Headers) > 0 {
+		if endpointCopy.Headers == nil {
+			endpointCopy.Headers = make(map[string]string)
+		}
+		for key, value := range authGroup.Headers {
+			if _, exists := endpointCopy.Headers[key]; !exists {
+				endpointCopy.Headers[key] = value
+			}
+		}
+	}
+
+	return &endpointCopy, nil
 }
 
 // StartService is used to start the beaconchain service
@@ -72,32 +148,50 @@ func (cs *ChainService) StartService() error {
 
 	executionIndexerCtx := execindexer.NewIndexerCtx(cs.logger.WithField("service", "el-indexer"), cs.executionPool, cs.consensusPool, cs.beaconIndexer)
 
+	// load genesis config if configured
+	if utils.Config.ExecutionApi.GenesisConfig != "" {
+		genesis, err := utils.LoadGenesisFromPathOrURL(utils.Config.ExecutionApi.GenesisConfig)
+		if err != nil {
+			cs.logger.WithError(err).Errorf("failed to load execution layer genesis config from %s", utils.Config.ExecutionApi.GenesisConfig)
+		} else if genesis != nil {
+			cs.executionPool.GetChainState().SetGenesisConfig(genesis)
+			cs.logger.Infof("loaded execution layer genesis config from %s", utils.Config.ExecutionApi.GenesisConfig)
+		}
+	}
+
 	// add consensus clients
 	for index, endpoint := range utils.Config.BeaconApi.Endpoints {
+		// Apply authGroup settings if configured
+		processedEndpoint, err := applyAuthGroupToEndpoint(&endpoint)
+		if err != nil {
+			cs.logger.Errorf("could not apply authGroup to beacon client '%v': %v", endpoint.Name, err)
+			continue
+		}
+
 		endpointConfig := &consensus.ClientConfig{
-			URL:        endpoint.Url,
-			Name:       endpoint.Name,
-			Headers:    endpoint.Headers,
+			URL:        processedEndpoint.Url,
+			Name:       processedEndpoint.Name,
+			Headers:    processedEndpoint.Headers,
 			DisableSSZ: utils.Config.KillSwitch.DisableSSZRequests,
 		}
 
-		if endpoint.Ssh != nil {
+		if processedEndpoint.Ssh != nil {
 			endpointConfig.SshConfig = &sshtunnel.SshConfig{
-				Host:     endpoint.Ssh.Host,
-				Port:     endpoint.Ssh.Port,
-				User:     endpoint.Ssh.User,
-				Password: endpoint.Ssh.Password,
-				Keyfile:  endpoint.Ssh.Keyfile,
+				Host:     processedEndpoint.Ssh.Host,
+				Port:     processedEndpoint.Ssh.Port,
+				User:     processedEndpoint.Ssh.User,
+				Password: processedEndpoint.Ssh.Password,
+				Keyfile:  processedEndpoint.Ssh.Keyfile,
 			}
 		}
 
 		client, err := cs.consensusPool.AddEndpoint(endpointConfig)
 		if err != nil {
-			cs.logger.Errorf("could not add beacon client '%v' to pool: %v", endpoint.Name, err)
+			cs.logger.Errorf("could not add beacon client '%v' to pool: %v", processedEndpoint.Name, err)
 			continue
 		}
 
-		cs.beaconIndexer.AddClient(uint16(index), client, endpoint.Priority, endpoint.Archive, endpoint.SkipValidators)
+		cs.beaconIndexer.AddClient(uint16(index), client, processedEndpoint.Priority, processedEndpoint.Archive, processedEndpoint.SkipValidators)
 	}
 
 	if len(cs.consensusPool.GetAllEndpoints()) == 0 {
@@ -106,29 +200,61 @@ func (cs *ChainService) StartService() error {
 
 	// add execution clients
 	for _, endpoint := range utils.Config.ExecutionApi.Endpoints {
-		endpointConfig := &execution.ClientConfig{
-			URL:     endpoint.Url,
-			Name:    endpoint.Name,
-			Headers: endpoint.Headers,
+		// Apply authGroup settings if configured
+		processedEndpoint, err := applyAuthGroupToEndpoint(&endpoint)
+		if err != nil {
+			cs.logger.Errorf("could not apply authGroup to execution client '%v': %v", endpoint.Name, err)
+			continue
 		}
 
-		if endpoint.Ssh != nil {
+		endpointConfig := &execution.ClientConfig{
+			URL:     processedEndpoint.Url,
+			Name:    processedEndpoint.Name,
+			Headers: processedEndpoint.Headers,
+		}
+
+		if processedEndpoint.Ssh != nil {
 			endpointConfig.SshConfig = &sshtunnel.SshConfig{
-				Host:     endpoint.Ssh.Host,
-				Port:     endpoint.Ssh.Port,
-				User:     endpoint.Ssh.User,
-				Password: endpoint.Ssh.Password,
-				Keyfile:  endpoint.Ssh.Keyfile,
+				Host:     processedEndpoint.Ssh.Host,
+				Port:     processedEndpoint.Ssh.Port,
+				User:     processedEndpoint.Ssh.User,
+				Password: processedEndpoint.Ssh.Password,
+				Keyfile:  processedEndpoint.Ssh.Keyfile,
 			}
 		}
 
 		client, err := cs.executionPool.AddEndpoint(endpointConfig)
 		if err != nil {
-			cs.logger.Errorf("could not add execution client '%v' to pool: %v", endpoint.Name, err)
+			cs.logger.Errorf("could not add execution client '%v' to pool: %v", processedEndpoint.Name, err)
 			continue
 		}
 
-		executionIndexerCtx.AddClientInfo(client, endpoint.Priority, endpoint.Archive)
+		executionIndexerCtx.AddClientInfo(client, processedEndpoint.Priority, processedEndpoint.Archive)
+
+		// Add snooper client if configured
+		if processedEndpoint.EngineSnooperUrl != "" {
+			if err := cs.snooperManager.AddClient(client, processedEndpoint.EngineSnooperUrl); err != nil {
+				cs.logger.WithError(err).Errorf("could not add snooper client for '%v'", processedEndpoint.Name)
+			}
+		}
+	}
+
+	// initialize blockdb if configured
+	switch utils.Config.BlockDb.Engine {
+	case "pebble":
+		err := blockdb.InitWithPebble(utils.Config.BlockDb.Pebble)
+		if err != nil {
+			return fmt.Errorf("failed initializing pebble blockdb: %v", err)
+		}
+		cs.logger.Infof("Pebble blockdb initialized at %v", utils.Config.BlockDb.Pebble.Path)
+	case "s3":
+		err := blockdb.InitWithS3(utils.Config.BlockDb.S3)
+		if err != nil {
+			return fmt.Errorf("failed initializing s3 blockdb: %v", err)
+		}
+		cs.logger.Infof("S3 blockdb initialized at %v", utils.Config.BlockDb.S3.Bucket)
+	default:
+		cs.logger.Infof("Blockdb disabled")
 	}
 
 	// reset sync state if configured
@@ -184,7 +310,9 @@ func (cs *ChainService) StartService() error {
 	cs.txIndexer.StartIndexer()
 
 	// add execution indexers
-	execindexer.NewDepositIndexer(executionIndexerCtx)
+	cs.depositIndexer = execindexer.NewDepositIndexer(executionIndexerCtx)
+	cs.consolidationIndexer = execindexer.NewConsolidationIndexer(executionIndexerCtx)
+	cs.withdrawalIndexer = execindexer.NewWithdrawalIndexer(executionIndexerCtx)
 
 	// start MEV relay indexer
 	cs.mevRelayIndexer.StartUpdater()
@@ -192,8 +320,40 @@ func (cs *ChainService) StartService() error {
 	return nil
 }
 
+func (bs *ChainService) StopService() {
+	if !bs.started {
+		return
+	}
+
+	if bs.beaconIndexer != nil {
+		bs.beaconIndexer.StopIndexer()
+		bs.beaconIndexer = nil
+	}
+
+	if bs.snooperManager != nil {
+		bs.snooperManager.Close()
+		bs.snooperManager = nil
+	}
+
+	if blockdb.GlobalBlockDb != nil {
+		blockdb.GlobalBlockDb.Close()
+	}
+}
+
 func (bs *ChainService) GetBeaconIndexer() *beacon.Indexer {
 	return bs.beaconIndexer
+}
+
+func (bs *ChainService) GetConsolidationIndexer() *execindexer.ConsolidationIndexer {
+	return bs.consolidationIndexer
+}
+
+func (bs *ChainService) GetWithdrawalIndexer() *execindexer.WithdrawalIndexer {
+	return bs.withdrawalIndexer
+}
+
+func (bs *ChainService) GetSnooperManager() *snooper.SnooperManager {
+	return bs.snooperManager
 }
 
 func (bs *ChainService) GetConsensusClients() []*consensus.Client {
@@ -216,8 +376,47 @@ func (bs *ChainService) GetChainState() *consensus.ChainState {
 	return bs.consensusPool.GetChainState()
 }
 
+func (bs *ChainService) GetExecutionChainState() *execution.ChainState {
+	if bs == nil || bs.executionPool == nil {
+		return nil
+	}
+
+	return bs.executionPool.GetChainState()
+}
+
+func (bs *ChainService) GetSystemContractAddress(systemContract string) common.Address {
+	return bs.executionPool.GetChainState().GetSystemContractAddress(systemContract)
+}
+
 func (bs *ChainService) GetHeadForks(readyOnly bool) []*beacon.ForkHead {
 	return bs.beaconIndexer.GetForkHeads()
+}
+
+func (bs *ChainService) GetCanonicalForkKeys() []beacon.ForkKey {
+	canonicalHead := bs.beaconIndexer.GetCanonicalHead(nil)
+	if canonicalHead == nil {
+		return []beacon.ForkKey{0}
+	}
+
+	return bs.beaconIndexer.GetParentForkIds(canonicalHead.GetForkId())
+}
+
+func (bs *ChainService) GetCanonicalForkIds() []uint64 {
+	parentForkKeys := bs.GetCanonicalForkKeys()
+	forkIds := make([]uint64, len(parentForkKeys))
+	for idx, forkId := range parentForkKeys {
+		forkIds[idx] = uint64(forkId)
+	}
+	return forkIds
+}
+
+func (bs *ChainService) isCanonicalForkId(forkId uint64, canonicalForkIds []uint64) bool {
+	for _, canonicalForkId := range canonicalForkIds {
+		if canonicalForkId == forkId {
+			return true
+		}
+	}
+	return false
 }
 
 func (bs *ChainService) GetValidatorName(index uint64) string {
@@ -228,18 +427,6 @@ func (bs *ChainService) GetValidatorNamesCount() uint64 {
 	return bs.validatorNames.GetValidatorNamesCount()
 }
 
-func (bs *ChainService) GetCachedValidatorSet() []*v1.Validator {
-	return bs.beaconIndexer.GetCanonicalValidatorSet(nil)
-}
-
-func (bs *ChainService) GetCachedValidatorPubkeyMap() map[phase0.BLSPubKey]*v1.Validator {
-	pubkeyMap := map[phase0.BLSPubKey]*v1.Validator{}
-	for _, val := range bs.GetCachedValidatorSet() {
-		pubkeyMap[val.Validator.PublicKey] = val
-	}
-	return pubkeyMap
-}
-
 func (bs *ChainService) GetFinalizedEpoch() (phase0.Epoch, phase0.Root) {
 	chainState := bs.consensusPool.GetChainState()
 	return chainState.GetFinalizedCheckpoint()
@@ -248,6 +435,34 @@ func (bs *ChainService) GetFinalizedEpoch() (phase0.Epoch, phase0.Root) {
 func (bs *ChainService) GetGenesis() (*v1.Genesis, error) {
 	chainState := bs.consensusPool.GetChainState()
 	return chainState.GetGenesis(), nil
+}
+
+func (bs *ChainService) GetParentForkIds(forkId beacon.ForkKey) []beacon.ForkKey {
+	return bs.beaconIndexer.GetParentForkIds(forkId)
+}
+
+func (bs *ChainService) GetRecentEpochStats(overrideForkId *beacon.ForkKey) (*beacon.EpochStatsValues, phase0.Epoch) {
+	chainState := bs.consensusPool.GetChainState()
+	currentEpoch := chainState.CurrentEpoch()
+
+	var recentEpochStatsValues *beacon.EpochStatsValues
+
+	epochStatsEpoch := currentEpoch
+	for epochStatsEpoch+3 > currentEpoch {
+		recentEpochStats := bs.beaconIndexer.GetEpochStats(epochStatsEpoch, overrideForkId)
+		if recentEpochStats != nil {
+			recentEpochStatsValues = recentEpochStats.GetValues(false)
+			if recentEpochStatsValues != nil {
+				break
+			}
+		}
+		if epochStatsEpoch == 0 {
+			break
+		}
+		epochStatsEpoch--
+	}
+
+	return recentEpochStatsValues, epochStatsEpoch
 }
 
 type ConsensusClientFork struct {
@@ -267,7 +482,7 @@ func (bs *ChainService) GetConsensusClientForks() []*ConsensusClientFork {
 		for _, fork := range headForks {
 
 			if cHeadSlot < chainState.GetFinalizedSlot() && bytes.Equal(fork.Root[:], cHeadRoot[:]) {
-				// TODO: find a more elgant way to group forks for finalized blocks
+				// TODO: find a more elegant way to group forks for finalized blocks
 				matchingFork = fork
 				break
 			}
@@ -324,47 +539,4 @@ func (bs *ChainService) GetConsensusClientForks() []*ConsensusClientFork {
 	})
 
 	return headForks
-}
-
-func (bs *ChainService) GetValidatorActivity(epochLimit uint64, withCurrentEpoch bool) (map[phase0.ValidatorIndex]uint8, uint64) {
-	chainState := bs.consensusPool.GetChainState()
-	_, prunedEpoch := bs.beaconIndexer.GetBlockCacheState()
-	currentEpoch := chainState.CurrentEpoch()
-	if !withCurrentEpoch {
-		if currentEpoch == 0 {
-			return map[phase0.ValidatorIndex]uint8{}, 0
-		}
-
-		currentEpoch--
-	}
-
-	activityMap := map[phase0.ValidatorIndex]uint8{}
-	aggregationCount := uint64(0)
-
-	for epochIdx := int64(currentEpoch); epochIdx >= int64(prunedEpoch) && epochLimit > 0; epochIdx-- {
-		epoch := phase0.Epoch(epochIdx)
-		epochLimit--
-
-		epochStats := bs.beaconIndexer.GetEpochStats(epoch, nil)
-		if epochStats == nil {
-			continue
-		}
-
-		epochStatsValues := epochStats.GetValues(true)
-		if epochStatsValues == nil {
-			continue
-		}
-
-		epochVotes := epochStats.GetEpochVotes(bs.beaconIndexer, nil)
-
-		for valIdx, validatorIndex := range epochStatsValues.ActiveIndices {
-			if epochVotes.ActivityBitfield.BitAt(uint64(valIdx)) {
-				activityMap[validatorIndex]++
-			}
-		}
-
-		aggregationCount++
-	}
-
-	return activityMap, aggregationCount
 }

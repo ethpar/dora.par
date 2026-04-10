@@ -25,3 +25,8 @@ type DepositIndexerState struct {
 	HeadBlock    uint64 `json:"head_block"`
 	DepositIndex uint64 `json:"deposit_index"`
 }
+
+type EpochAlertState struct {
+	Epoch   uint64 `json:"epoch"`
+	Percent int    `json:"percent"`
+}

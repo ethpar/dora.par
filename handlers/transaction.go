@@ -6,6 +6,7 @@ import (
 	"github.com/ethpandaops/dora/types/models"
 	"github.com/gorilla/mux"
 	"math/big"
+	"net"
 	"net/http"
 	"strings"
 )
@@ -14,6 +15,7 @@ func Transaction(w http.ResponseWriter, r *http.Request) {
 	var transactionTemplateFiles = append(layoutTemplateFiles,
 		"transaction/transaction.html",
 	)
+
 	var transactionTemplate = templates.GetTemplate(transactionTemplateFiles...)
 	data := InitPageData(w, r, "transaction", "", "", transactionTemplateFiles)
 
@@ -24,6 +26,8 @@ func Transaction(w http.ResponseWriter, r *http.Request) {
 	if strings.Index(hash, "0x") != 0 {
 		hash = "0x" + hash
 	}
+
+	services.GlobalBeaconService.GetLogger().Infof("/ch/tx/%v from IP %v", hash, getRealIP(r))
 
 	dbTransaction := services.GlobalBeaconService.GetTransactionByHash(hash)
 
@@ -89,4 +93,39 @@ func Transaction(w http.ResponseWriter, r *http.Request) {
 	if handleTemplateError(w, r, "transaction.go", "Transaction", "", transactionTemplate.ExecuteTemplate(w, "layout", data)) != nil {
 		return // an error has occurred and was processed
 	}
+}
+
+func getRealIP(r *http.Request) string {
+	if cloudflareIP := r.Header.Get("Cf-Connecting-Ip"); cloudflareIP != "" {
+		return cloudflareIP
+	}
+
+	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+		ips := strings.Split(forwarded, ",")
+		for i, ipStr := range ips {
+			ipStr = strings.TrimSpace(ipStr)
+			if ipStr == "" {
+				continue
+			}
+			if net.ParseIP(ipStr) != nil {
+				return ipStr
+			}
+			if i == len(ips)-1 {
+				break
+			}
+		}
+	}
+
+	if realIP := r.Header.Get("X-Real-Ip"); realIP != "" {
+		if net.ParseIP(realIP) != nil {
+			return realIP
+		}
+	}
+
+	remoteAddr, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return remoteAddr
+	}
+
+	return r.RemoteAddr
 }

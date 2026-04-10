@@ -20,7 +20,7 @@
               </div>
               {{ ethAddressLink $consolidationreq.Address }}
             </td>
-            <td>
+            <td class="text-monospace">
               <div class="ellipsis-copy-btn">
                 <i class="fa fa-copy text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="0x{{ printf "%x" $consolidationreq.SourcePubkey }}"></i>
               </div>
@@ -28,12 +28,12 @@
             </td>
             <td>
               {{- if $consolidationreq.SourceFound }}
-                {{ formatValidator $consolidationreq.SourceIndex $consolidationreq.SourceName }}
+                {{ formatValidatorWithIndex $consolidationreq.SourceIndex $consolidationreq.SourceName }}
               {{- else }}
                 ?
               {{- end }}
             </td>
-            <td>
+            <td class="text-monospace">
               <div class="ellipsis-copy-btn">
                 <i class="fa fa-copy text-muted ml-2 p-1" role="button" data-bs-toggle="tooltip" title="Copy to clipboard" data-clipboard-text="0x{{ printf "%x" $consolidationreq.TargetPubkey }}"></i>
               </div>
@@ -41,7 +41,7 @@
             </td>
             <td>
               {{- if $consolidationreq.TargetFound }}
-                {{ formatValidator $consolidationreq.TargetIndex $consolidationreq.TargetName }}
+                {{ formatValidatorWithIndex $consolidationreq.TargetIndex $consolidationreq.TargetName }}
               {{- else }}
                 ?
               {{- end }}

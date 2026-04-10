@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"math"
-	"strings"
-
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"math"
+	"strings"
+	"time"
 
+	"github.com/ethpandaops/dora/blockdb"
 	"github.com/ethpandaops/dora/db"
 	"github.com/ethpandaops/dora/dbtypes"
 	"github.com/ethpandaops/dora/indexer/beacon"
@@ -59,41 +60,27 @@ func (bs *ChainService) GetBlockBlob(ctx context.Context, blockroot phase0.Root,
 // If found, it constructs a CombinedBlockResponse using the block information from the cache.
 // If not found, it checks if the block root is present in the orphaned block database.
 // If found, it constructs a CombinedBlockResponse with the orphaned block information.
+// If not found and blockDb is configured, it retrieves the block body from the block database.
 // If not found in either cache or db, it retrieves the block header and block body from a random
 // ready client and constructs a CombinedBlockResponse with the retrieved information.
 func (bs *ChainService) GetSlotDetailsByBlockroot(ctx context.Context, blockroot phase0.Root) (*CombinedBlockResponse, error) {
 	var result *CombinedBlockResponse
-	if blockInfo := bs.beaconIndexer.GetBlockByRoot(blockroot); blockInfo != nil {
-		result = &CombinedBlockResponse{
-			Root:            blockInfo.Root,
-			Header:          blockInfo.GetHeader(),
-			Block:           blockInfo.GetBlock(),
-			Orphaned:        !bs.beaconIndexer.IsCanonicalBlock(blockInfo, nil),
-			ExecutionBlocks: blockInfo.ExecutionBlocks,
-		}
-	} else if blockInfo, err := bs.beaconIndexer.GetOrphanedBlockByRoot(blockroot); blockInfo != nil || err != nil {
-		if err != nil {
-			return nil, err
-		}
-		result = &CombinedBlockResponse{
-			Root:            blockInfo.Root,
-			Header:          blockInfo.GetHeader(),
-			Block:           blockInfo.GetBlock(),
-			Orphaned:        true,
-			ExecutionBlocks: blockInfo.ExecutionBlocks,
-		}
-	} else {
-		var header *phase0.SignedBeaconBlockHeader
-		var err error
-		clients := bs.beaconIndexer.GetReadyClientsByBlockRoot(blockroot, false)
-		if len(clients) == 0 {
-			clients = bs.beaconIndexer.GetReadyClients(true)
-		}
-		if len(clients) == 0 {
-			return nil, fmt.Errorf("no clients available")
+	var clients []*beacon.Client
+	var header *phase0.SignedBeaconBlockHeader
+
+	loadBlockHeader := func() error {
+		if clients == nil {
+			clients = bs.beaconIndexer.GetReadyClientsByBlockRoot(blockroot, false)
+			if len(clients) == 0 {
+				clients = bs.beaconIndexer.GetReadyClients(true)
+			}
+			if len(clients) == 0 {
+				return fmt.Errorf("no clients available")
+			}
 		}
 
 		headRetry := 0
+		var err error
 		for ; headRetry < 3; headRetry++ {
 			client := clients[headRetry%len(clients)]
 			header, err = beacon.LoadBeaconHeader(ctx, client, blockroot)
@@ -108,12 +95,49 @@ func (bs *ChainService) GetSlotDetailsByBlockroot(ctx context.Context, blockroot
 			}
 		}
 		if err != nil || header == nil {
+			return err
+		}
+		return nil
+	}
+
+	// try loading from cache
+	if blockInfo := bs.beaconIndexer.GetBlockByRoot(blockroot); blockInfo != nil {
+		blockHeader := blockInfo.GetHeader()
+		blockBody := blockInfo.GetBlock()
+		if blockHeader != nil && blockBody != nil {
+			result = &CombinedBlockResponse{
+				Root:            blockInfo.Root,
+				Header:          blockInfo.GetHeader(),
+				Block:           blockInfo.GetBlock(),
+				Orphaned:        !bs.beaconIndexer.IsCanonicalBlock(blockInfo, nil),
+				ExecutionBlocks: blockInfo.ExecutionBlocks,
+			}
+		}
+	} else if blockInfo, err := bs.beaconIndexer.GetOrphanedBlockByRoot(blockroot); blockInfo != nil || err != nil {
+		// try loading from orphaned block db
+		if err != nil {
+			return nil, err
+		}
+		result = &CombinedBlockResponse{
+			Root:            blockInfo.Root,
+			Header:          blockInfo.GetHeader(),
+			Block:           blockInfo.GetBlock(),
+			Orphaned:        true,
+			ExecutionBlocks: blockInfo.ExecutionBlocks,
+		}
+	}
+
+	// try loading from connected clients
+	if result == nil {
+		err := loadBlockHeader()
+		if err != nil {
 			return nil, err
 		}
 
 		var block *spec.VersionedSignedBeaconBlock
-		for retry := headRetry; retry < headRetry+3; retry++ {
-			client := clients[headRetry%len(clients)]
+		bodyRetry := 0
+		for ; bodyRetry < 3; bodyRetry++ {
+			client := clients[bodyRetry%len(clients)]
 			block, err = beacon.LoadBeaconBlock(ctx, client, blockroot)
 			if block != nil {
 				break
@@ -125,14 +149,31 @@ func (bs *ChainService) GetSlotDetailsByBlockroot(ctx context.Context, blockroot
 				log.Warnf("Error loading block body for root 0x%x", blockroot)
 			}
 		}
-		if err != nil || block == nil {
-			return nil, err
+		if err == nil && block != nil {
+			executionBlocks := beacon.RestoreExecutionBlocksFromDB(blockroot, bs.logger)
+
+			result = &CombinedBlockResponse{
+				Root:            blockroot,
+				Header:          header,
+				Block:           block,
+				Orphaned:        false,
+				ExecutionBlocks: executionBlocks,
+			}
 		}
-		result = &CombinedBlockResponse{
-			Root:     blockroot,
-			Header:   header,
-			Block:    block,
-			Orphaned: false,
+	}
+
+	// try loading from block db
+	if result == nil && header != nil && blockdb.GlobalBlockDb != nil {
+		blockData, err := blockdb.GlobalBlockDb.GetBlock(ctx, uint64(header.Message.Slot), blockroot[:], func(version uint64, block []byte) (interface{}, error) {
+			return beacon.UnmarshalVersionedSignedBeaconBlockSSZ(bs.beaconIndexer.GetDynSSZ(), version, block)
+		})
+		if err == nil && blockData != nil {
+			result = &CombinedBlockResponse{
+				Root:     blockroot,
+				Header:   header,
+				Block:    blockData.Body.(*spec.VersionedSignedBeaconBlock),
+				Orphaned: false,
+			}
 		}
 	}
 
@@ -146,39 +187,21 @@ func (bs *ChainService) GetSlotDetailsByBlockroot(ctx context.Context, blockroot
 // using the slot and constructs a CombinedBlockResponse with the retrieved information.
 func (bs *ChainService) GetSlotDetailsBySlot(ctx context.Context, slot phase0.Slot) (*CombinedBlockResponse, error) {
 	var result *CombinedBlockResponse
-	if cachedBlocks := bs.beaconIndexer.GetBlocksBySlot(slot); len(cachedBlocks) > 0 {
-		var cachedBlock *beacon.Block
-		isOrphaned := false
-		for _, block := range cachedBlocks {
-			if bs.beaconIndexer.IsCanonicalBlock(block, nil) {
-				cachedBlock = block
-				break
+	var clients []*beacon.Client
+	var header *phase0.SignedBeaconBlockHeader
+	var blockRoot phase0.Root
+	var orphaned bool
+
+	loadBlockHeader := func() error {
+		if clients == nil {
+			clients = bs.beaconIndexer.GetReadyClients(true)
+			if len(clients) == 0 {
+				return fmt.Errorf("no clients available")
 			}
-		}
-		if cachedBlock == nil {
-			cachedBlock = cachedBlocks[0]
-			isOrphaned = true
-		}
-		result = &CombinedBlockResponse{
-			Root:            cachedBlock.Root,
-			Header:          cachedBlock.GetHeader(),
-			Block:           cachedBlock.GetBlock(),
-			Orphaned:        isOrphaned,
-			ExecutionBlocks: cachedBlock.ExecutionBlocks,
-		}
-	} else {
-
-		var header *phase0.SignedBeaconBlockHeader
-		var blockRoot phase0.Root
-		var orphaned bool
-		var err error
-
-		clients := bs.beaconIndexer.GetReadyClients(true)
-		if len(clients) == 0 {
-			return nil, fmt.Errorf("no clients available")
 		}
 
 		headRetry := 0
+		var err error
 		for ; headRetry < 3; headRetry++ {
 			client := clients[headRetry%len(clients)]
 			header, blockRoot, orphaned, err = beacon.LoadBeaconHeaderBySlot(ctx, client, slot)
@@ -193,12 +216,53 @@ func (bs *ChainService) GetSlotDetailsBySlot(ctx context.Context, slot phase0.Sl
 			}
 		}
 		if err != nil || header == nil {
-			return nil, err
+			return err
+		}
+		return nil
+	}
+
+	// try loading from cache
+	if cachedBlocks := bs.beaconIndexer.GetBlocksBySlot(slot); len(cachedBlocks) > 0 {
+		var cachedBlock *beacon.Block
+		isOrphaned := false
+		for _, block := range cachedBlocks {
+			if bs.beaconIndexer.IsCanonicalBlock(block, nil) {
+				cachedBlock = block
+				break
+			}
+		}
+		if cachedBlock == nil {
+			cachedBlock = cachedBlocks[0]
+			isOrphaned = true
 		}
 
+		blockHeader := cachedBlock.GetHeader()
+		blockBody := cachedBlock.GetBlock()
+		if blockHeader != nil && blockBody != nil {
+			result = &CombinedBlockResponse{
+				Root:            cachedBlock.Root,
+				Header:          blockHeader,
+				Block:           blockBody,
+				Orphaned:        isOrphaned,
+				ExecutionBlocks: cachedBlock.ExecutionBlocks,
+			}
+		}
+	}
+
+	// try loading from connected clients
+	if result == nil {
+		if header == nil {
+			err := loadBlockHeader()
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		var err error
 		var block *spec.VersionedSignedBeaconBlock
-		for retry := headRetry; retry < headRetry+3; retry++ {
-			client := clients[headRetry%len(clients)]
+		bodyRetry := 0
+		for ; bodyRetry < 3; bodyRetry++ {
+			client := clients[bodyRetry%len(clients)]
 			block, err = beacon.LoadBeaconBlock(ctx, client, blockRoot)
 			if block != nil {
 				break
@@ -210,16 +274,36 @@ func (bs *ChainService) GetSlotDetailsBySlot(ctx context.Context, slot phase0.Sl
 				log.Warnf("Error loading block body for slot %v", slot)
 			}
 		}
-		if err != nil || block == nil {
-			return nil, err
+		executionBlocks := beacon.RestoreExecutionBlocksFromDB(blockRoot, bs.logger)
+		if err == nil && block != nil {
+			result = &CombinedBlockResponse{
+				Root:            blockRoot,
+				Header:          header,
+				Block:           block,
+				Orphaned:        orphaned,
+				ExecutionBlocks: executionBlocks,
+			}
 		}
+	}
 
-		result = &CombinedBlockResponse{
-			Root:     blockRoot,
-			Header:   header,
-			Block:    block,
-			Orphaned: orphaned,
-			//todo	ExecutionBlocks: cachedBlock.ExecutionBlocks,
+	// try loading from block db
+	if result == nil && header != nil && blockdb.GlobalBlockDb != nil {
+		blockData, err := blockdb.GlobalBlockDb.GetBlock(ctx, uint64(slot), blockRoot[:], func(version uint64, block []byte) (interface{}, error) {
+			return beacon.UnmarshalVersionedSignedBeaconBlockSSZ(bs.beaconIndexer.GetDynSSZ(), version, block)
+		})
+		if err == nil && blockData != nil {
+			header := &phase0.SignedBeaconBlockHeader{}
+			err = header.UnmarshalSSZ(blockData.HeaderData)
+			if err != nil {
+				return nil, err
+			}
+
+			result = &CombinedBlockResponse{
+				Root:     blockRoot,
+				Header:   header,
+				Block:    blockData.Body.(*spec.VersionedSignedBeaconBlock),
+				Orphaned: false,
+			}
 		}
 	}
 
@@ -286,16 +370,21 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 	}
 
 	// get blocks from cache
+	lastCanonicalBlock := bs.beaconIndexer.GetCanonicalHead(nil)
 	slot := phase0.Slot(firstSlot)
 	if slot >= prunedSlot {
 		for slotIdx := int64(slot); slotIdx >= int64(prunedSlot) && slotIdx >= int64(lastSlot); slotIdx-- {
 			slot = phase0.Slot(slotIdx)
 			blocks := bs.beaconIndexer.GetBlocksBySlot(slot)
 			for _, block := range blocks {
-				if !withOrphaned && !bs.beaconIndexer.IsCanonicalBlock(block, nil) {
+				isCanonical := bs.beaconIndexer.IsCanonicalBlockByHead(block, lastCanonicalBlock)
+				if isCanonical {
+					lastCanonicalBlock = block
+				}
+				if !withOrphaned && !isCanonical {
 					continue
 				}
-				dbBlock := block.GetDbBlock(bs.beaconIndexer)
+				dbBlock := block.GetDbBlock(bs.beaconIndexer, isCanonical)
 				if dbBlock != nil {
 					var j = 0
 					var blocksCount = 1
@@ -391,7 +480,11 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 					continue
 				}
 
-				isCanonical := bs.beaconIndexer.IsCanonicalBlock(block, nil)
+				isCanonical := bs.beaconIndexer.IsCanonicalBlockByHead(block, lastCanonicalBlock)
+				if isCanonical {
+					lastCanonicalBlock = block
+				}
+
 				if !withOrphaned && !isCanonical {
 					continue
 				}
@@ -587,6 +680,8 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 
 	// get blocks from cache
 	// iterate from current slot to finalized slot
+	lastCanonicalBlock := bs.beaconIndexer.GetCanonicalHead(nil)
+
 	for slotIdx := int64(startSlot); slotIdx >= int64(finalizedSlot); slotIdx-- {
 		slot := phase0.Slot(slotIdx)
 		blocks := bs.beaconIndexer.GetBlocksBySlot(slot)
@@ -600,13 +695,31 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 				continue
 			}
 
-			isOrphaned := !bs.beaconIndexer.IsCanonicalBlock(block, nil)
+			// filter by specific slot number
+			if filter.Slot != nil {
+				if uint64(block.Slot) != *filter.Slot {
+					continue
+				}
+			}
+
+			// filter by specific block root
+			if len(filter.BlockRoot) > 0 {
+				if !bytes.Equal(block.Root[:], filter.BlockRoot) {
+					continue
+				}
+			}
+
+			isCanonical := bs.beaconIndexer.IsCanonicalBlockByHead(block, lastCanonicalBlock)
+			if isCanonical {
+				lastCanonicalBlock = block
+			}
+
 			if filter.WithOrphaned != 1 {
-				if filter.WithOrphaned == 0 && isOrphaned {
+				if filter.WithOrphaned == 0 && !isCanonical {
 					// only canonical blocks, skip
 					continue
 				}
-				if filter.WithOrphaned == 2 && !isOrphaned {
+				if filter.WithOrphaned == 2 && isCanonical {
 					// only orphaned blocks, skip
 					continue
 				}
@@ -620,16 +733,32 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 			// filter by graffiti
 			if filter.Graffiti != "" {
 				blockGraffiti := string(blockIndex.Graffiti[:])
-				if !strings.Contains(blockGraffiti, filter.Graffiti) {
-					continue
+				graffitiMatches := strings.Contains(blockGraffiti, filter.Graffiti)
+				if filter.InvertGraffiti {
+					// For inverted filter, include empty/null graffiti AND non-matching graffiti
+					if blockGraffiti != "" && graffitiMatches {
+						continue
+					}
+				} else {
+					if !graffitiMatches {
+						continue
+					}
 				}
 			}
 
 			// filter by extra data
 			if filter.ExtraData != "" {
 				blockExtraData := string(blockIndex.ExecutionExtraData)
-				if !strings.Contains(blockExtraData, filter.ExtraData) {
-					continue
+				extraDataMatches := strings.Contains(blockExtraData, filter.ExtraData)
+				if filter.InvertExtraData {
+					// For inverted filter, include empty/null extra data AND non-matching extra data
+					if blockExtraData != "" && extraDataMatches {
+						continue
+					}
+				} else {
+					if !extraDataMatches {
+						continue
+					}
 				}
 			}
 
@@ -642,7 +771,74 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 			}
 			if filter.ProposerName != "" {
 				proposerName := bs.validatorNames.GetValidatorName(proposer)
-				if !strings.Contains(proposerName, filter.ProposerName) {
+				nameMatches := strings.Contains(proposerName, filter.ProposerName)
+				if filter.InvertProposer {
+					// For inverted filter, include empty/null names AND non-matching names
+					if proposerName != "" && nameMatches {
+						continue
+					}
+				} else {
+					if !nameMatches {
+						continue
+					}
+				}
+			}
+
+			// filter by sync participation
+			if filter.MinSyncParticipation != nil || filter.MaxSyncParticipation != nil {
+				syncParticipation := blockIndex.SyncParticipation
+				if filter.MinSyncParticipation != nil && syncParticipation < *filter.MinSyncParticipation {
+					continue
+				}
+				if filter.MaxSyncParticipation != nil && syncParticipation > *filter.MaxSyncParticipation {
+					continue
+				}
+			}
+
+			// filter by execution time
+			if filter.MinExecTime != nil || filter.MaxExecTime != nil {
+				maxExecTime := block.GetMaxExecutionTime()
+				if filter.MinExecTime != nil && maxExecTime < *filter.MinExecTime {
+					continue
+				}
+				if filter.MaxExecTime != nil && maxExecTime > *filter.MaxExecTime {
+					continue
+				}
+			}
+
+			// filter by transaction count
+			if filter.MinTxCount != nil || filter.MaxTxCount != nil {
+				txCount := blockIndex.EthTransactionCount
+				if filter.MinTxCount != nil && txCount < *filter.MinTxCount {
+					continue
+				}
+				if filter.MaxTxCount != nil && txCount > *filter.MaxTxCount {
+					continue
+				}
+			}
+
+			// filter by blob count
+			if filter.MinBlobCount != nil || filter.MaxBlobCount != nil {
+				blobCount := blockIndex.BlobCount
+				if filter.MinBlobCount != nil && blobCount < *filter.MinBlobCount {
+					continue
+				}
+				if filter.MaxBlobCount != nil && blobCount > *filter.MaxBlobCount {
+					continue
+				}
+			}
+
+			// filter by fork IDs
+			if len(filter.ForkIds) > 0 {
+				blockForkId := uint64(block.GetForkId())
+				found := false
+				for _, forkId := range filter.ForkIds {
+					if blockForkId == forkId {
+						found = true
+						break
+					}
+				}
+				if !found {
 					continue
 				}
 			}
@@ -650,13 +846,26 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 			cachedMatches = append(cachedMatches, cachedDbBlock{
 				slot:     uint64(block.Slot),
 				proposer: uint64(blockHeader.Message.ProposerIndex),
-				orphaned: isOrphaned,
+				orphaned: !isCanonical,
 				block:    block,
 			})
 		}
 
 		// reconstruct missing blocks from epoch duties
-		if filter.WithMissing != 0 && filter.Graffiti == "" && filter.ExtraData == "" && filter.WithOrphaned != 2 {
+		// For slot/root filtering, we still need to check if we need missing blocks for that specific slot
+		shouldCheckMissing := filter.WithMissing != 0 && filter.Graffiti == "" && filter.ExtraData == "" && filter.WithOrphaned != 2 && filter.MinSyncParticipation == nil && filter.MaxSyncParticipation == nil && filter.MinExecTime == nil && filter.MaxExecTime == nil && filter.MinTxCount == nil && filter.MaxTxCount == nil && filter.MinBlobCount == nil && filter.MaxBlobCount == nil && len(filter.ForkIds) == 0
+
+		// If filtering by slot, only check missing for that specific slot
+		if filter.Slot != nil {
+			shouldCheckMissing = shouldCheckMissing && uint64(slot) == *filter.Slot
+		}
+
+		// If filtering by block root, don't check missing (missing blocks don't have roots)
+		if len(filter.BlockRoot) > 0 {
+			shouldCheckMissing = false
+		}
+
+		if shouldCheckMissing {
 			hasCanonicalProposer := false
 			canonicalProposer := getCanonicalProposer(slot)
 
@@ -692,8 +901,16 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 				}
 				if filter.ProposerName != "" {
 					assignedName := bs.validatorNames.GetValidatorName(uint64(canonicalProposer))
-					if assignedName == "" || !strings.Contains(assignedName, filter.ProposerName) {
-						continue
+					nameMatches := assignedName != "" && strings.Contains(assignedName, filter.ProposerName)
+					if filter.InvertProposer {
+						// For inverted filter, include empty/null names AND non-matching names
+						if assignedName != "" && nameMatches {
+							continue
+						}
+					} else {
+						if !nameMatches {
+							continue
+						}
 					}
 				}
 
@@ -742,8 +959,7 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 			}
 			if block.block != nil {
 				if block.slot >= uint64(prunedSlot) {
-					assignedBlock.Block = block.block.GetDbBlock(bs.beaconIndexer)
-
+					assignedBlock.Block = block.block.GetDbBlock(bs.beaconIndexer, !block.orphaned)
 				} else {
 					blockRoots = append(blockRoots, block.block.Root[:])
 					blockRootsIdx = append(blockRootsIdx, resIdx)
@@ -770,6 +986,13 @@ func (bs *ChainService) GetDbBlocksByFilter(filter *dbtypes.BlockFilter, pageIdx
 								ExecutionBlocksCount: blocksCount,
 								ExecutionBlocksIdx:   0, //i,
 								EthBlockNumber:       &number,
+							}
+							if i == 5 {
+								contractAddress := bs.beaconIndexer.GetPinnedContract(assignedBlock.Block.Proposer)
+								if contractAddress != "" {
+									assignedBlock1.Block.GraffitiText = contractAddress
+									assignedBlock1.Block.Graffiti = []byte(contractAddress)
+								}
 							}
 							resBlocks = append(resBlocks, &assignedBlock1)
 						}
@@ -827,7 +1050,8 @@ func (bs *ChainService) GetDbBlocksByParentRoot(parentRoot phase0.Root) []*dbtyp
 	cachedMatches := bs.beaconIndexer.GetBlockByParentRoot(parentRoot)
 	resBlocks := make([]*dbtypes.Slot, len(cachedMatches))
 	for idx, block := range cachedMatches {
-		resBlocks[idx] = block.GetDbBlock(bs.beaconIndexer)
+		isCanonical := bs.beaconIndexer.IsCanonicalBlock(block, nil)
+		resBlocks[idx] = block.GetDbBlock(bs.beaconIndexer, isCanonical)
 	}
 	if parentBlock == nil {
 		resBlocks = append(resBlocks, db.GetSlotsByParentRoot(parentRoot[:])...)
@@ -852,8 +1076,36 @@ func (bs *ChainService) CheckBlockOrphanedStatus(blockRoot phase0.Root) dbtypes.
 	return dbtypes.Missing
 }
 
-func (bs *ChainService) GetTransactionsForAddress(address string, offset uint64, pageSize uint64) []*dbtypes.Transaction {
-	return db.GetTransactions(address, offset, pageSize)
+func (bs *ChainService) GetHighestElBlockNumber(overrideForkId *beacon.ForkKey) uint64 {
+	canonicalHead := bs.beaconIndexer.GetCanonicalHead(overrideForkId)
+	for {
+		if canonicalHead == nil {
+			break
+		}
+		if canonicalHead.GetBlockIndex() != nil {
+			return canonicalHead.GetBlockIndex().ExecutionNumber
+		}
+
+		parentRoot := canonicalHead.GetParentRoot()
+		if parentRoot == nil {
+			break
+		}
+
+		canonicalHead = bs.beaconIndexer.GetBlockByRoot(*parentRoot)
+		if canonicalHead == nil || canonicalHead.Slot == 0 {
+			break
+		}
+	}
+
+	return 0
+}
+
+func (bs *ChainService) GetTransactionsForAddress(address string, offset uint64, pageSize uint64, count uint64) []*dbtypes.Transaction {
+	return db.GetTransactions(address, offset, pageSize, count)
+}
+
+func (bs *ChainService) GetTransactionsForAddressAfter(address string, after time.Time) []*dbtypes.Transaction {
+	return db.GetTransactionsAfter(address, after)
 }
 
 func (bs *ChainService) GetTransactionsErc20ForAddress(address string, contract string, offset uint64, pageSize uint64) []*dbtypes.Transaction {
@@ -872,8 +1124,8 @@ func (bs *ChainService) GetContracts() map[string]*dbtypes.Contract {
 	return bs.txIndexer.GetContracts()
 }
 
-func (bs *ChainService) GetAllTransactionsForAddress(address string) []*dbtypes.Transaction {
-	return db.GetTransactions(address, 0, 100000000)
+func (bs *ChainService) GetLogger() logrus.FieldLogger {
+	return bs.logger
 }
 
 func (bs *ChainService) GetTransactionByHash(hash string) *dbtypes.Transaction {
@@ -882,7 +1134,6 @@ func (bs *ChainService) GetTransactionByHash(hash string) *dbtypes.Transaction {
 		return dbTransaction
 	}
 
-	bs.logger.Infof("tx not in db %v", hash)
 	clients := GlobalBeaconService.GetExecutionClients()
 	if len(clients) == 0 {
 		bs.logger.Warnf("no clients for read tx  %v", hash)

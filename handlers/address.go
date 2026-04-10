@@ -63,8 +63,7 @@ func Address(w http.ResponseWriter, r *http.Request) {
 	var account Account
 	account.AccountAddress = address
 
-	//todo:
-	//initTransactions(&account, start, pageSize, currentPage)
+	initTransactions(&account, start, pageSize, currentPage)
 
 	//initTransactionsErc20(&account, start, pageSize, currentPage)
 	//todo:
@@ -130,7 +129,7 @@ func initTransactions(account *Account, start uint64, pageSize uint64, currentPa
 	transactionsCount, _ := services.GlobalBeaconService.GetTransactionsCountForAddress(account.AccountAddress)
 	totalPages := transactionsCount / pageSize
 	start = pageSize * (currentPage - 1)
-	transactions := services.GlobalBeaconService.GetTransactionsForAddress(account.AccountAddress, start, pageSize)
+	transactions := services.GlobalBeaconService.GetTransactionsForAddress(account.AccountAddress, start, pageSize, transactionsCount)
 
 	for _, dbTransaction := range transactions {
 

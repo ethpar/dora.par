@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"math"
-	"strings"
-
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"math"
+	"strings"
+	"time"
 
 	"github.com/ethpandaops/dora/blockdb"
 	"github.com/ethpandaops/dora/db"
@@ -1100,8 +1100,12 @@ func (bs *ChainService) GetHighestElBlockNumber(overrideForkId *beacon.ForkKey) 
 	return 0
 }
 
-func (bs *ChainService) GetTransactionsForAddress(address string, offset uint64, pageSize uint64) []*dbtypes.Transaction {
-	return db.GetTransactions(address, offset, pageSize)
+func (bs *ChainService) GetTransactionsForAddress(address string, offset uint64, pageSize uint64, count uint64) []*dbtypes.Transaction {
+	return db.GetTransactions(address, offset, pageSize, count)
+}
+
+func (bs *ChainService) GetTransactionsForAddressAfter(address string, after time.Time) []*dbtypes.Transaction {
+	return db.GetTransactionsAfter(address, after)
 }
 
 func (bs *ChainService) GetTransactionsErc20ForAddress(address string, contract string, offset uint64, pageSize uint64) []*dbtypes.Transaction {
@@ -1122,10 +1126,6 @@ func (bs *ChainService) GetContracts() map[string]*dbtypes.Contract {
 
 func (bs *ChainService) GetLogger() logrus.FieldLogger {
 	return bs.logger
-}
-
-func (bs *ChainService) GetAllTransactionsForAddress(address string) []*dbtypes.Transaction {
-	return db.GetTransactions(address, 0, 100000000)
 }
 
 func (bs *ChainService) GetTransactionByHash(hash string) *dbtypes.Transaction {

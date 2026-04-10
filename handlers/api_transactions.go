@@ -32,7 +32,7 @@ func ApiTransactions(w http.ResponseWriter, r *http.Request) {
 
 	transactionsCount, _ := services.GlobalBeaconService.GetTransactionsCountForAddress(address)
 
-	transactions := services.GlobalBeaconService.GetTransactionsForAddress(address, offset, pageSize)
+	transactions := services.GlobalBeaconService.GetTransactionsForAddress(address, offset, pageSize, transactionsCount)
 
 	var result models.APITransactionsList
 

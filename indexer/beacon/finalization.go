@@ -153,7 +153,7 @@ func (indexer *Indexer) finalizeEpoch(epoch phase0.Epoch, justifiedRoot phase0.R
 			canonicalBlocks = append(canonicalBlocks, block)
 		} else {
 			if block.block == nil {
-				indexer.logger.Warnf("missing block body for orphaned block %v (%v)", block.Slot, block.Root.String())
+				indexer.logger.Warnf("missing block body for orphaned block %v %v (%v)", block.Slot, block.Rank, block.Root.String())
 				continue
 			}
 

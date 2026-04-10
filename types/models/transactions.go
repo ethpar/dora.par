@@ -1,6 +1,7 @@
 package models
 
 import (
+	"github.com/ethpandaops/dora/dbtypes"
 	"math/big"
 	"time"
 )
@@ -110,4 +111,8 @@ type APITransactionsErc20List struct {
 	TotalCount uint64                            `json:"totalCount"`
 	PageSize   uint64                            `json:"pageSize"`
 	Offset     uint64                            `json:"offset"`
+}
+
+type APITransactionsAfterList struct {
+	Transactions []dbtypes.Transaction `json:"transactions"`
 }

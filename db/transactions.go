@@ -5,10 +5,45 @@ import (
 	"github.com/ethpandaops/dora/dbtypes"
 	"github.com/jmoiron/sqlx"
 	"strings"
+	"time"
 )
 
-func GetTransactions(address string, start uint64, pageSize uint64) []*dbtypes.Transaction {
-	lowerAddress := strings.ToLower(address)
+func GetTransactions(address string, start uint64, pageSize uint64, count uint64) []*dbtypes.Transaction {
+	transactions := []*dbtypes.Transaction{}
+	if pageSize < count {
+		err := ReaderDb.Select(&transactions, `
+	SELECT
+		"hash","block_number",block_rank,created_at,nonce,block_hash,transaction_index,"from","to",value,gas,gas_price,
+			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations, 
+			                          erc20_method, erc20_address_to, erc20_value
+	FROM transactions
+	WHERE "to" = $1 or "from"=$2
+	ORDER BY block_number desc, block_rank desc LIMIT $3 OFFSET $4
+	`, address, address, pageSize, start)
+		if err != nil {
+			logger.Errorf("Error while fetching Transactions: %v", err)
+			return nil
+		}
+	} else {
+		err := ReaderDb.Select(&transactions, `
+	SELECT
+		"hash","block_number",block_rank,created_at,nonce,block_hash,transaction_index,"from","to",value,gas,gas_price,
+			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations, 
+			                          erc20_method, erc20_address_to, erc20_value
+	FROM transactions
+	WHERE "to" = $1 or "from"=$2
+	ORDER BY block_number desc, block_rank desc
+	`, address, address)
+		if err != nil {
+			logger.Errorf("Error while fetching Transactions: %v", err)
+			return nil
+		}
+	}
+
+	return transactions
+}
+
+func GetTransactionsAfter(address string, after time.Time) []*dbtypes.Transaction {
 	transactions := []*dbtypes.Transaction{}
 	err := ReaderDb.Select(&transactions, `
 	SELECT
@@ -16,9 +51,9 @@ func GetTransactions(address string, start uint64, pageSize uint64) []*dbtypes.T
 			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations, 
 			                          erc20_method, erc20_address_to, erc20_value
 	FROM transactions
-	WHERE LOWER("to") = $1 or LOWER("from")=$2
-	ORDER BY block_number desc, block_rank desc LIMIT $3 OFFSET $4
-	`, lowerAddress, lowerAddress, pageSize, start)
+	WHERE created_at>$1 and ("to" = $2 or "from"=$3 or erc20_address_to=$4)
+	ORDER BY created_at desc
+	`, after, address, address, address)
 	if err != nil {
 		logger.Errorf("Error while fetching Transactions: %v", err)
 		return nil
@@ -63,8 +98,7 @@ func GetTransactionsErc20(address string, contract string, start uint64, pageSiz
 }
 
 func GetTransactionsCount(address string) (uint64, error) {
-	lowerAddress := strings.ToLower(address)
-	query := fmt.Sprintf("SELECT count(*)  FROM transactions WHERE LOWER(\"to\") = '%s' or LOWER(\"from\")='%s'", lowerAddress, lowerAddress)
+	query := fmt.Sprintf("SELECT count(*)  FROM transactions WHERE \"to\" = '%s' or \"from\"='%s'", address, address)
 
 	var count uint64
 	err := ReaderDb.DB.QueryRow(query).Scan(&count)

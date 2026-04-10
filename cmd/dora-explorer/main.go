@@ -197,6 +197,7 @@ func startFrontend(router *mux.Router) {
 	router.HandleFunc("/api/account/balance/{address}", handlers.EtherscanAPI).Methods("GET")
 	router.HandleFunc("/api/account/txlist/{address}", handlers.ApiTransactions).Methods("GET")
 	router.HandleFunc("/api/account/txlist/erc20/{address}", handlers.ApiTransactionsErc20).Methods("GET")
+	router.HandleFunc("/api/account/txlist/{address}/after", handlers.ApiTransactionsAfter).Methods("GET")
 
 	router.HandleFunc("/api/tx/{hash}", handlers.ApiTransaction).Methods("GET")
 

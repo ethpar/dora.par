@@ -158,6 +158,13 @@ type Config struct {
 		DoraUrl  string `yaml:"doraUrl" envconfig:"DORA_URL_PASSWORD"`
 	} `yaml:"email"`
 
+	Slack struct {
+		Enabled  bool   `yaml:"enabled"  envconfig:"SLACK_ENABLED"`
+		Subject  string `yaml:"subject" envconfig:"SLACK_SUBJECT"`
+		SlackUrl string `yaml:"slackUrl" envconfig:"SLACK_URL"`
+		DoraUrl  string `yaml:"doraUrl" envconfig:"DORA_URL"`
+	} `yaml:"slack"`
+
 	KillSwitch struct {
 		DisableSSZEncoding      bool `yaml:"disableSSZEncoding" envconfig:"KILLSWITCH_DISABLE_SSZ_ENCODING"`
 		DisableSSZRequests      bool `yaml:"disableSSZRequests" envconfig:"KILLSWITCH_DISABLE_SSZ_REQUESTS"`

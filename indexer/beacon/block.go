@@ -68,12 +68,12 @@ type BlockBodyIndex struct {
 // newBlock creates a new Block instance.
 func newBlock(dynSsz *dynssz.DynSsz, root phase0.Root, slot phase0.Slot) *Block {
 	block := &Block{
-		Root:       root,
-		Slot:       slot,
-		dynSsz:     dynSsz,
-		seenMap:    make(map[uint16]*Client),
-		headerChan: make(chan bool),
-		blockChan:  make(chan bool),
+		Root:            root,
+		Slot:            slot,
+		dynSsz:          dynSsz,
+		seenMap:         make(map[uint16]*Client),
+		headerChan:      make(chan bool),
+		blockChan:       make(chan bool),
 		ExecutionBlocks: make(map[uint64]ExecutionBlock),
 	}
 
@@ -296,9 +296,9 @@ func (block *Block) EnsureBlock(loadBlock func() (*spec.VersionedSignedBeaconBlo
 		block.blockChan = nil
 	}
 
-	//rank, _ := blockBody.Rank();
-	//block.rank = rank;
-	block.Rank = 0
+	rank, _ := blockBody.Rank()
+	block.Rank = rank
+	//block.Rank = 0
 
 	return true, nil
 }
@@ -394,7 +394,7 @@ func (block *Block) buildUnfinalizedBlock(compress bool) (*dbtypes.UnfinalizedBl
 		MinExecTime: uint32(block.minExecutionTime),
 		MaxExecTime: uint32(block.maxExecutionTime),
 		ExecTimes:   execTimesSSZ,
-		Rank:      0,
+		Rank:        0,
 	}, nil
 }
 

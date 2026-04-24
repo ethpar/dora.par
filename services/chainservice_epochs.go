@@ -4,6 +4,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethpandaops/dora/db"
 	"github.com/ethpandaops/dora/dbtypes"
+	"github.com/sirupsen/logrus"
 )
 
 func (bs *ChainService) GetDbEpochs(firstEpoch uint64, limit uint32) []*dbtypes.Epoch {
@@ -31,6 +32,7 @@ func (bs *ChainService) GetDbEpochs(firstEpoch uint64, limit uint32) []*dbtypes.
 		}
 		if epoch >= finalizedEpoch && epoch <= currentEpoch {
 			if epochStats := bs.beaconIndexer.GetEpochStats(epoch, nil); epochStats != nil {
+				logrus.Infof("last currentEpoch %v epoch %v", currentEpoch, epoch, epochStats)
 				resEpoch = epochStats.GetDbEpoch(bs.beaconIndexer, nil)
 			}
 		}

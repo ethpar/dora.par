@@ -165,6 +165,13 @@ type Config struct {
 		DoraUrl  string `yaml:"doraUrl" envconfig:"DORA_URL"`
 	} `yaml:"slack"`
 
+	Monitor struct {
+		Enabled    bool   `yaml:"enabled"  envconfig:"MONITOR_ENABLED"`
+		Subject    string `yaml:"subject" envconfig:"MONITOR_SUBJECT"`
+		MonitorUrl string `yaml:"monitorUrl" envconfig:"MONITOR_URL"`
+		DoraUrl    string `yaml:"doraUrl" envconfig:"MONITOR_URL"`
+	} `yaml:"monitor"`
+
 	KillSwitch struct {
 		DisableSSZEncoding      bool `yaml:"disableSSZEncoding" envconfig:"KILLSWITCH_DISABLE_SSZ_ENCODING"`
 		DisableSSZRequests      bool `yaml:"disableSSZRequests" envconfig:"KILLSWITCH_DISABLE_SSZ_REQUESTS"`

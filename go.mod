@@ -35,6 +35,7 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.10.1
+	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/http-swagger v1.3.4
 	github.com/swaggo/swag v1.16.6
 	github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a
@@ -158,7 +159,6 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/swaggo/files v1.0.1 // indirect
 	github.com/thomaso-mirodin/intmath v0.0.0-20160323211736-5dc6d854e46e // indirect
 	github.com/tinylib/msgp v1.3.0 // indirect
@@ -179,12 +179,7 @@ require (
 )
 
 //todo:
-require (
-	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/senseyeio/roger v0.0.0-20191009211040-43e330bee47f
-	github.com/stretchr/objx v0.5.2 // indirect
-)
+require github.com/senseyeio/roger v0.0.0-20191009211040-43e330bee47f
 
 require (
 	dario.cat/mergo v1.0.1 // indirect
@@ -268,8 +263,10 @@ require (
 
 //replace github.com/ethereum/go-ethereum => github.com/s1na/go-ethereum v0.0.0-20250103133732-7e1b0ba7e83f
 
-replace github.com/ethereum/go-ethereum => github.com/ethpar/go-ethereum.par v0.0.0-20250701102112-92c94765f9f9
+// --replace github.com/ethereum/go-ethereum => github.com/ethpar/go-ethereum.par v0.0.0-20250701102112-92c94765f9f9
+
 //replace github.com/attestantio/go-eth2-client => github.com/ethpar/go-eth2-client.par v0.0.0-20250630164224-122d2d5be490
 
 replace github.com/attestantio/go-eth2-client => d:/projects/ethpar/go-eth2-client.par
-//replace github.com/ethereum/go-ethereum => d:/projects/ethpar/go-ethereum.par
+
+replace github.com/ethereum/go-ethereum => d:/projects/ethpar/go-ethereum.par

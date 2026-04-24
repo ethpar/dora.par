@@ -62,6 +62,7 @@ type Indexer struct {
 	lastPrunedEpoch       phase0.Epoch
 	lastPruneRunEpoch     phase0.Epoch
 	lastPrecalcRunEpoch   phase0.Epoch
+	currentSavedEpoch     phase0.Epoch
 	finalitySubscription  *utils.Subscription[*v1.Finality]
 	wallclockSubscription *utils.Subscription[*ethwallclock.Slot]
 
@@ -490,6 +491,18 @@ func (indexer *Indexer) runIndexerLoop() {
 			slotIndex := chainState.SlotToSlotIndex(phase0.Slot(slotEvent.Number()))
 			slotProgress := uint8(100 / chainState.GetSpecs().SlotsPerEpoch * uint64(slotIndex))
 
+			if indexer.currentSavedEpoch == 0 {
+				indexer.currentSavedEpoch = epoch
+			}
+
+			if slotIndex > 27 {
+				indexer.logger.Infof("epochAlert new slot epoch %v lastPrecalcRunEpoch %v slotIndex %v", epoch, indexer.lastPrecalcRunEpoch, slotIndex)
+			}
+			if epoch != indexer.currentSavedEpoch && slotIndex > 2 {
+				indexer.logger.Infof("epochAlert new epoch %v slotIndex %v", epoch, slotIndex)
+				indexer.alertsSender.checkAndSendAlertC(indexer.currentSavedEpoch)
+				indexer.currentSavedEpoch = epoch
+			}
 			// precalc next canonical duties on epoch start
 			if epoch >= indexer.lastPrecalcRunEpoch {
 				err := indexer.precalcNextEpochStats(epoch)

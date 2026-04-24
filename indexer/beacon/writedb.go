@@ -164,7 +164,7 @@ func (dbw *dbWriter) persistEpochData(tx *sqlx.Tx, epoch phase0.Epoch, blocks []
 		return fmt.Errorf("error while saving epoch to db: %w", err)
 	}
 
-	dbw.indexer.alertsSender.checkAndSendAlert(tx, epoch, blocks, epochStats, epochVotes)
+	//dbw.indexer.alertsSender.checkAndSendAlert(tx, epoch, blocks, epochStats, epochVotes)
 	return nil
 }
 
@@ -231,7 +231,7 @@ func (dbw *dbWriter) buildDbBlock(block *Block, epochStats *EpochStats, override
 
 	blockBody := block.GetBlock()
 	if blockBody == nil {
-		dbw.indexer.logger.Warnf("building db blocks: block body not found: %v:%v", block.Slot, block.Rank) //todo
+		dbw.indexer.logger.Debugf("building db blocks: block body not found: %v:%v %v", block.Slot, block.Rank, block.Root.String()) //todo
 		return nil
 	}
 

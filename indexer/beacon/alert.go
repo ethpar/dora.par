@@ -19,6 +19,13 @@ type alertsSender struct {
 	indexer *Indexer
 }
 
+type monitorMessage struct {
+	Status                  string  `json:"status"`
+	Network                 string  `json:"network"`
+	Epoch                   uint64  `json:"epoch"`
+	ParticipationPercentage float64 `json:"participationPercentage"`
+}
+
 func newAlertsSender(indexer *Indexer) *alertsSender {
 	emailConfig := utils.Config.Email
 	indexer.logger.Infof("emailConfig: %v", emailConfig)
@@ -30,9 +37,52 @@ func newAlertsSender(indexer *Indexer) *alertsSender {
 	}
 	//d1 := 3.344565656565
 	//d.sendEmail(uint64(1), uint64(98), float64(d1))
+	//d.sendMonitor(uint64(1), uint64(98), float64(d1))
 	return d
 }
 
+func (al *alertsSender) checkAndSendAlertC(epoch phase0.Epoch) {
+	if epochStats := al.indexer.GetEpochStats(epoch, nil); epochStats != nil {
+		//al.indexer.logger.Infof("epochAlert %v epoch %v ", epoch, epochStats)
+		resEpoch := epochStats.GetDbEpoch(al.indexer, nil)
+		al.indexer.logger.Infof("epochAlert %v Eligible %v ", epoch, resEpoch.Eligible)
+		voteParticipation := float64(1)
+		if resEpoch.Eligible > 0 {
+			voteParticipation = float64(resEpoch.VotedTarget) * 100.0 / float64(resEpoch.Eligible)
+
+			epochAlert := dbtypes.EpochAlertState{}
+			db.GetExplorerState("alert.epoch", &epochAlert)
+			al.indexer.logger.Infof("epochAlert: %v", epochAlert)
+			al.indexer.logger.Infof("epochAlert: epoch: %v vote: %v", epoch, voteParticipation)
+			epochAlert.Epoch = uint64(epoch)
+			var vote = 100
+			if voteParticipation <= 90 {
+				vote = 90
+			} else if voteParticipation <= 95 {
+				vote = 95
+			} else if voteParticipation <= 98 {
+				vote = 98
+			}
+			if vote != epochAlert.Percent {
+				epochAlert.Percent = vote
+				err := db.RunDBTransaction(func(tx *sqlx.Tx) error {
+					db.SetExplorerState("alert.epoch", epochAlert, tx)
+					return nil
+				})
+				if err != nil {
+
+				}
+				if vote != 100 {
+					al.sendEmail(uint64(epoch), uint64(vote), voteParticipation)
+					al.sendSlack(uint64(epoch), uint64(vote), voteParticipation)
+				}
+				al.sendMonitor(uint64(epoch), uint64(vote), voteParticipation)
+			}
+		}
+	} else {
+		al.indexer.logger.Infof("epochAlert: not found epoch: %v vote: %v", epoch)
+	}
+}
 func (al *alertsSender) checkAndSendAlert(tx *sqlx.Tx, epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes) {
 
 	epochAlert := dbtypes.EpochAlertState{}
@@ -78,6 +128,36 @@ func (al *alertsSender) sendSlack(epoch uint64, vote uint64, targetVotePercent f
 	url := utils.Config.Slack.SlackUrl
 	data := map[string]string{"text": body}
 	jsonData, _ := json.Marshal(data)
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		al.indexer.logger.Fatal(err)
+	}
+	defer resp.Body.Close()
+}
+
+func (al *alertsSender) sendMonitor(epoch uint64, vote uint64, targetVotePercent float64) {
+	if !utils.Config.Monitor.Enabled {
+		return
+	}
+
+	subject := utils.Config.Monitor.Subject
+
+	status := "success"
+	if vote == 95 || vote == 90 {
+		status = "error"
+	}
+	if vote == 98 {
+		status = "warning"
+	}
+
+	body := monitorMessage{status, subject, epoch, targetVotePercent}
+	//	body := circle + "  " + subject + "  Epoch " + strconv.FormatUint(epoch, 10) + " voted " + votedString + "%  " +
+	//		doraUrl + "/epoch/" + strconv.FormatUint(epoch, 10)
+
+	url := utils.Config.Monitor.MonitorUrl
+	//data := map[string]string{"text": body}
+	jsonData, _ := json.Marshal(body)
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {

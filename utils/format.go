@@ -186,6 +186,19 @@ func formatBitvectorValidators(bits []byte, validators []types.NamedValidator) t
 	return template.HTML(buf.String())
 }
 
+func formatValidatorsList(validators []types.NamedValidator) template.HTML {
+	var buf strings.Builder
+	if validators != nil {
+		for i := 0; i < len(validators); i++ {
+			{
+				val := validators[i]
+				buf.WriteString(fmt.Sprintf("<span class=\"validator-label validator-index\"><i class=\"fas %v\"></i> <a href=\"/validator/%v\">%v</a></span>", "fa-male mr-2", val.Index, val.Index))
+			}
+		}
+	}
+	return template.HTML(buf.String())
+}
+
 func FormatParticipation(v float64) template.HTML {
 	return template.HTML(fmt.Sprintf("<span>%.2f %%</span>", v*100.0))
 }

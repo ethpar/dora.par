@@ -86,6 +86,9 @@ type SlotPageBlockData struct {
 	DepositRequests       []*SlotPageDepositRequest       `json:"deposit_receipts"`       // DepositRequests included in this block
 	WithdrawalRequests    []*SlotPageWithdrawalRequest    `json:"withdrawal_requests"`    // WithdrawalRequests included in this block
 	ConsolidationRequests []*SlotPageConsolidationRequest `json:"consolidation_requests"` // ConsolidationRequests included in this block
+
+	SyncAggCommitteeMissed []types.NamedValidator `json:"syncaggregate_committee_missed"`
+	BCWMissed              []types.NamedValidator `json:"bsw_committee_missed"`
 }
 
 type SlotPageExecutionData struct {
@@ -121,12 +124,12 @@ type SlotPageAttestation struct {
 
 	Signature []byte `json:"signature"`
 
-	BeaconBlockRoot []byte `json:"beaconblockroot"`
-	BeaconBlockSlot uint64 `json:"beaconblockslot"`
-	SourceEpoch     uint64 `json:"source_epoch"`
-	SourceRoot      []byte `json:"source_root"`
-	TargetEpoch     uint64 `json:"target_epoch"`
-	TargetRoot      []byte `json:"target_root"`
+	BeaconBlockRoot []byte   `json:"beaconblockroot"`
+	BeaconBlockSlot uint64   `json:"beaconblockslot"`
+	SourceEpoch     uint64   `json:"source_epoch"`
+	SourceRoot      []byte   `json:"source_root"`
+	TargetEpoch     uint64   `json:"target_epoch"`
+	TargetRoot      []byte   `json:"target_root"`
 	ExecutionHashes []string `json:"execution_hashes"`
 }
 

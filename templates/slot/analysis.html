@@ -1,0 +1,19 @@
+{{ define "analysis" }}
+<div class="card-body px-0 py-1">
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Validators who did not vote">Validators who did not vote:</span></div>
+        <div class="col-md-10 d-flex flex-wrap">
+            {{ formatValidatorsList .Block.SyncAggCommitteeMissed }}
+        </div>
+    </div>
+</div>
+<div class="card-body px-0 py-1">
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="BCW validators who did not vote">BCW validators who did not vote:</span></div>
+        <div class="col-md-10 d-flex flex-wrap">
+            {{ formatValidatorsList .Block.BCWMissed }}
+        </div>
+    </div>
+</div>
+
+{{ end }}

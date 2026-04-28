@@ -236,7 +236,8 @@ func (indexer *Indexer) aggregateEpochVotesAndActivity(epoch phase0.Epoch, chain
 }
 
 // aggregateVotes aggregates the votes for a specific slot and committee based on the provided epoch statistics, aggregation bits, and offset.
-func (votes *EpochVotes) aggregateVotes(epochStatsValues *EpochStatsValues, slotIndex phase0.Slot, committee uint64, aggregationBits bitfield.Bitfield, aggregationBitsOffset uint64, activityBitlist *bitfield.Bitlist, updateActivity func(validatorIndex phase0.ValidatorIndex)) (phase0.Gwei, uint64) {
+func (votes *EpochVotes) aggregateVotes(epochStatsValues *EpochStatsValues, slotIndex phase0.Slot, committee uint64, aggregationBits bitfield.Bitfield,
+	aggregationBitsOffset uint64, activityBitlist *bitfield.Bitlist, updateActivity func(validatorIndex phase0.ValidatorIndex)) (phase0.Gwei, uint64) {
 	voteAmount := phase0.Gwei(0)
 
 	voteDuties := epochStatsValues.AttesterDuties[slotIndex][committee]

@@ -101,6 +101,9 @@
             <a class="nav-link" id="consolidationRequests-tab" data-bs-toggle="tab" href="#consolidationRequests" role="tab" aria-controls="consolidationRequests" aria-selected="false">Consolidation Requests <span class="badge bg-secondary text-white">{{ .Block.ConsolidationRequestsCount }}</span></a>
           </li>
         {{ end }}
+      <li class="nav-item">
+        <a class="nav-link" id="analysis-tab" data-bs-toggle="tab" href="#analysis" role="tab" aria-controls="analysis" aria-selected="false">Analysis</a>
+      </li>
         {{ if .Block }}
           <li class="nav-item ms-auto">
             <a class="nav-link" id="download-tab" data-bs-toggle="tab" href="#download" role="tab" aria-controls="download" aria-selected="false">
@@ -276,6 +279,9 @@
           </div>
         {{ end }}
         {{ if .Block }}
+      <div class="tab-pane fade show active" id="analysis" role="tabpanel" aria-labelledby="analysis-tab">
+        {{ template "analysis" . }}
+      </div>
           <div class="tab-pane fade" id="download" role="tabpanel" aria-labelledby="download-tab">
             <div class="card block-card">
               <div class="card-body">

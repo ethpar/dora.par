@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"math"
 	"math/big"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -48,6 +50,7 @@ func Slot(w http.ResponseWriter, r *http.Request) {
 		"slot/withdrawal_requests.html",
 		"slot/consolidation_requests.html",
 		"slot/parallel_blocks.html",
+		"slot/analysis.html",
 	)
 	var notfoundTemplateFiles = append(layoutTemplateFiles,
 		"slot/notfound.html",
@@ -651,15 +654,45 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 
 		if len(syncAssignments) != 0 {
 			pageData.SyncAggCommittee = make([]types.NamedValidator, len(syncAssignments))
+			pageData.SyncAggCommitteeMissed = []types.NamedValidator{}
+			pageData.BCWMissed = []types.NamedValidator{}
 			for idx, vidx := range syncAssignments {
 				pageData.SyncAggCommittee[idx] = types.NamedValidator{
 					Index: vidx,
 					Name:  services.GlobalBeaconService.GetValidatorName(vidx),
 				}
+				if !utils.BitAtVector(pageData.SyncAggregateBits, idx) {
+					v := types.NamedValidator{
+						Index: vidx,
+						Name:  services.GlobalBeaconService.GetValidatorName(vidx),
+					}
+
+					if vidx > 1566 && vidx < 1688 {
+						pageData.BCWMissed = append(pageData.BCWMissed, v)
+					} else {
+						pageData.SyncAggCommitteeMissed = append(pageData.SyncAggCommitteeMissed, v)
+					}
+				}
 			}
 		} else {
 			pageData.SyncAggCommittee = []types.NamedValidator{}
+			pageData.SyncAggCommitteeMissed = []types.NamedValidator{}
+			pageData.BCWMissed = []types.NamedValidator{}
+			/*for i := 0; i < 30; i++ {
+				pageData.SyncAggCommitteeMissed = append(pageData.SyncAggCommitteeMissed, types.NamedValidator{
+					Index: uint64(i),
+					Name:  services.GlobalBeaconService.GetValidatorName(uint64(i)),
+				})
+			}*/
+
 		}
+		slices.SortFunc(pageData.SyncAggCommitteeMissed, func(a, b types.NamedValidator) int {
+			return cmp.Compare(a.Index, b.Index)
+		})
+
+		slices.SortFunc(pageData.BCWMissed, func(a, b types.NamedValidator) int {
+			return cmp.Compare(a.Index, b.Index)
+		})
 		pageData.SyncAggParticipation = utils.SyncCommitteeParticipation(pageData.SyncAggregateBits, specs.SyncCommitteeSize)
 	}
 

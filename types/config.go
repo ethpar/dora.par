@@ -172,6 +172,11 @@ type Config struct {
 		DoraUrl    string `yaml:"doraUrl" envconfig:"MONITOR_URL"`
 	} `yaml:"monitor"`
 
+	Alert struct {
+		Enabled bool   `yaml:"enabled"  envconfig:"ALERT_ENABLED"`
+		RootDir string `yaml:"rootDir" envconfig:"ALERT_ROOTDIR"`
+	} `yaml:"alert"`
+
 	KillSwitch struct {
 		DisableSSZEncoding      bool `yaml:"disableSSZEncoding" envconfig:"KILLSWITCH_DISABLE_SSZ_ENCODING"`
 		DisableSSZRequests      bool `yaml:"disableSSZRequests" envconfig:"KILLSWITCH_DISABLE_SSZ_REQUESTS"`

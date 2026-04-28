@@ -182,7 +182,7 @@ func processExecutionBlock(c *Client, block *Block, parallelExecutionBlock *type
 					return err
 				}
 				//c.logger.Debugf("saved execution block: slot: %v  %v:%v", block.Slot, parallelExecutionBlock.Number(), rank)
-				c.logger.Infof("saved slot: %v exec block:%v:%v %v", block.Slot, parallelExecutionBlock.Number(), rank, isAsync)
+				c.logger.Debugf("saved slot: %v exec block:%v:%v %v", block.Slot, parallelExecutionBlock.Number(), rank, isAsync)
 				return nil
 			})
 			//SaveTransaction(c, parallelExecutionBlock, rank)

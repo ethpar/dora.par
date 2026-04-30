@@ -186,15 +186,20 @@ func formatBitvectorValidators(bits []byte, validators []types.NamedValidator) t
 	return template.HTML(buf.String())
 }
 
-func formatValidatorsList(validators []types.NamedValidator) template.HTML {
+func formatValidatorsList(validatorsMap map[string][]*types.NamedValidator) template.HTML {
 	var buf strings.Builder
-	if validators != nil {
-		for i := 0; i < len(validators); i++ {
-			{
-				val := validators[i]
-				buf.WriteString(fmt.Sprintf("<span class=\"validator-label validator-index\"><i class=\"fas %v\"></i> <a href=\"/validator/%v\">%v</a></span>", "fa-male mr-2", val.Index, val.Index))
+	if validatorsMap != nil {
+		for IP, validators := range validatorsMap {
+			buf.WriteString(fmt.Sprintf("%v:", IP))
+			for i := 0; i < len(validators); i++ {
+				{
+					val := validators[i]
+					buf.WriteString(fmt.Sprintf("<span class=\"validator-label validator-index\"><i class=\"fas %v\"></i> <a href=\"/validator/%v\">%v</a></span>", "fa-male mr-2", val.Index, val.Index))
+				}
 			}
+			buf.WriteString(fmt.Sprintf("<br>"))
 		}
+
 	}
 	return template.HTML(buf.String())
 }
@@ -394,7 +399,7 @@ func formatValidator(index uint64, name string, icon string, withIndex bool) tem
 	} else if name != "" {
 		var nameLabel string
 		if withIndex {
-			nameLabel = fmt.Sprintf("%v (%v)", html.EscapeString(name), index)
+			nameLabel = fmt.Sprintf("%v (%v)", index, html.EscapeString(name))
 		} else {
 			nameLabel = html.EscapeString(name)
 		}

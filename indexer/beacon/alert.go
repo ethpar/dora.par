@@ -3,6 +3,7 @@ package beacon
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethpandaops/dora/db"
 	"github.com/ethpandaops/dora/dbtypes"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"net/mail"
 	"net/smtp"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -41,12 +43,117 @@ func newAlertsSender(indexer *Indexer) *alertsSender {
 	return d
 }
 
+func (al *alertsSender) checkAndSendAlertSlot(epoch phase0.Epoch, slotIndex phase0.Slot) {
+	if !utils.Config.Alert.Enabled {
+		return
+	}
+	al.indexer.logger.Infof("epochAlert slotIndex %v ", slotIndex)
+	slotIndex = slotIndex - 2
+	al.indexer.logger.Infof("epochAlert slotIndex for check %v ", slotIndex)
+
+	slots := al.indexer.blockCache.getBlocksBySlot(slotIndex)
+	for i, slot := range slots {
+		al.indexer.logger.Infof("epochAlert ind %v:%v slot %v  i %v ", slotIndex, slot.Rank, slot.Root.String(), i)
+	}
+
+	isWriteToDisc := al.folderExists(utils.Config.Alert.RootDir)
+	al.indexer.logger.Infof(">>RootDir '%v' %v", utils.Config.Alert.RootDir, isWriteToDisc)
+
+	/*	if epochStats := al.indexer.GetEpochStats(epoch, nil); epochStats != nil {
+			//al.indexer.logger.Infof("epochAlert %v epoch %v ", epoch, epochStats)
+			resEpoch := epochStats.GetDbEpoch(al.indexer, nil)
+			al.indexer.logger.Infof("epochAlert %v Eligible %v ", epoch, resEpoch.Eligible)
+			//voteParticipation := float64(1)
+			epochStr := strconv.FormatUint(uint64(epoch), 10)
+
+			if isWriteToDisc {
+				al.indexer.logger.Infof("write slotInfo")
+				dirName := utils.Config.Alert.RootDir + "/" + epochStr
+				if !al.folderExists(dirName) {
+					err := os.Mkdir(dirName, 0755)
+					if err != nil {
+						al.indexer.logger.Fatal(err)
+					}
+				}
+				slotFileName := dirName + "/" + strconv.FormatUint(uint64(slotIndex), 10) + ".json"
+				al.indexer.logger.Infof("epochAlert %v", slotFileName)
+				file, err := os.Create(slotFileName)
+				if err != nil {
+					al.indexer.logger.Fatal(err)
+				}
+				defer file.Close()
+
+				encoder := json.NewEncoder(file)
+				encoder.Encode(resEpoch)
+			}
+
+				if resEpoch.Eligible > 0 {
+				voteParticipation = float64(resEpoch.VotedTarget) * 100.0 / float64(resEpoch.Eligible)
+
+				epochAlert := dbtypes.EpochAlertState{}
+				db.GetExplorerState("alert.epoch", &epochAlert)
+				al.indexer.logger.Infof("epochAlert: %v", epochAlert)
+				al.indexer.logger.Infof("epochAlert: epoch: %v vote: %v", epoch, voteParticipation)
+				epochAlert.Epoch = uint64(epoch)
+				var vote = 100
+				if voteParticipation <= 90 {
+					vote = 90
+				} else if voteParticipation <= 95 {
+					vote = 95
+				} else if voteParticipation <= 98 {
+					vote = 98
+				}
+				if vote != epochAlert.Percent {
+					epochAlert.Percent = vote
+					err := db.RunDBTransaction(func(tx *sqlx.Tx) error {
+						db.SetExplorerState("alert.epoch", epochAlert, tx)
+						return nil
+					})
+					if err != nil {
+
+					}
+					if vote != 100 {
+						al.sendEmail(uint64(epoch), uint64(vote), voteParticipation)
+						al.sendSlack(uint64(epoch), uint64(vote), voteParticipation)
+					}
+					al.sendMonitor(uint64(epoch), uint64(vote), voteParticipation)
+				}
+			}
+		} else {
+			al.indexer.logger.Infof("epochAlert: not found epoch: %v slot: %v", epoch, slotIndex)
+		}*/
+}
 func (al *alertsSender) checkAndSendAlertC(epoch phase0.Epoch) {
+	if !utils.Config.Alert.Enabled {
+		return
+	}
 	if epochStats := al.indexer.GetEpochStats(epoch, nil); epochStats != nil {
 		//al.indexer.logger.Infof("epochAlert %v epoch %v ", epoch, epochStats)
 		resEpoch := epochStats.GetDbEpoch(al.indexer, nil)
 		al.indexer.logger.Infof("epochAlert %v Eligible %v ", epoch, resEpoch.Eligible)
 		voteParticipation := float64(1)
+
+		/*epochStr := strconv.FormatUint(uint64(epoch), 10)
+			if utils.Config.Alert.RootDir != '' {}
+		dirName := utils.Config.Alert.RootDir + "/" + epochStr
+		if !al.folderExists(dirName) {
+
+			err := os.Mkdir(dirName, 0755)
+			if err != nil {
+				al.indexer.logger.Fatal(err)
+			}
+		}
+		fileEpo := utils.Config.Alert.RootDir + "/" + epochStr + "/epoch" + epochStr + ".json"
+		al.indexer.logger.Infof("epochAlert %v", fileEpo)
+		file, err := os.Create(fileEpo)
+		if err != nil {
+			al.indexer.logger.Fatal(err)
+		}
+		defer file.Close()
+
+		encoder := json.NewEncoder(file)
+		encoder.Encode(resEpoch)*/
+
 		if resEpoch.Eligible > 0 {
 			voteParticipation = float64(resEpoch.VotedTarget) * 100.0 / float64(resEpoch.Eligible)
 
@@ -80,7 +187,7 @@ func (al *alertsSender) checkAndSendAlertC(epoch phase0.Epoch) {
 			}
 		}
 	} else {
-		al.indexer.logger.Infof("epochAlert: not found epoch: %v vote: %v", epoch)
+		al.indexer.logger.Infof("epochAlert: not found epoch: %v ", epoch)
 	}
 }
 func (al *alertsSender) checkAndSendAlert(tx *sqlx.Tx, epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes) {
@@ -152,11 +259,8 @@ func (al *alertsSender) sendMonitor(epoch uint64, vote uint64, targetVotePercent
 	}
 
 	body := monitorMessage{status, subject, epoch, targetVotePercent}
-	//	body := circle + "  " + subject + "  Epoch " + strconv.FormatUint(epoch, 10) + " voted " + votedString + "%  " +
-	//		doraUrl + "/epoch/" + strconv.FormatUint(epoch, 10)
 
 	url := utils.Config.Monitor.MonitorUrl
-	//data := map[string]string{"text": body}
 	jsonData, _ := json.Marshal(body)
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
@@ -210,4 +314,16 @@ func (al *alertsSender) sendEmail(epoch uint64, vote uint64, targetVotePercent f
 	}
 
 	al.indexer.logger.Println("Email sent successfully!")
+}
+
+func (al *alertsSender) folderExists(path string) bool {
+	info, err := os.Stat(path)
+	if err == nil {
+		return info.IsDir()
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	// Other errors (e.g., permissions) might mean it exists but isn't accessible
+	return false
 }

@@ -388,7 +388,8 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 				if dbBlock != nil {
 					var j = 0
 					var blocksCount = 1
-					if block.ExecutionBlocks != nil && len(block.ExecutionBlocks) > 0 {
+
+					if block.ExecutionBlocks != nil && len(block.ExecutionBlocks) > 0 && dbBlock.Status != dbtypes.Orphaned {
 						blocksCount = len(block.ExecutionBlocks) + 1
 						for i := 5; i >= 0; i-- {
 							var executionBlock, ok = block.ExecutionBlocks[uint64(i)]
@@ -571,7 +572,7 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 			if dbBlock.Block != nil {
 				var j = 0
 				var blocksCount = 1
-				if dbBlock.Block.ExecutionBlocks != nil && len(dbBlock.Block.ExecutionBlocks) > 0 {
+				if dbBlock.Block.ExecutionBlocks != nil && len(dbBlock.Block.ExecutionBlocks) > 0 && dbBlock.Block.Status != dbtypes.Orphaned {
 					blocksCount = len(dbBlock.Block.ExecutionBlocks) + 1
 					for i := range dbBlock.Block.ExecutionBlocks {
 						var executionBlock = dbBlock.Block.ExecutionBlocks[i]

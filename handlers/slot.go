@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"bytes"
-	"cmp"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -10,7 +9,6 @@ import (
 	"math"
 	"math/big"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -284,7 +282,11 @@ func buildSlotPageData(ctx context.Context, blockSlot int64, blockRoot []byte, r
 		if pageData.Proposer == math.MaxInt64 {
 			pageData.Proposer = db.GetSlotAssignment(uint64(slot))
 		}
-		pageData.ProposerName = services.GlobalBeaconService.GetValidatorName(pageData.Proposer)
+		if services.GlobalBeaconService.GetENode(pageData.Proposer) != "" {
+			pageData.ProposerName = services.GlobalBeaconService.GetENode(pageData.Proposer)
+		} else {
+			pageData.ProposerName = services.GlobalBeaconService.GetValidatorName(pageData.Proposer)
+		}
 	} else {
 		if blockData.Orphaned {
 			pageData.Status = uint16(models.SlotStatusOrphaned)
@@ -292,7 +294,11 @@ func buildSlotPageData(ctx context.Context, blockSlot int64, blockRoot []byte, r
 			pageData.Status = uint16(models.SlotStatusFound)
 		}
 		pageData.Proposer = uint64(blockData.Header.Message.ProposerIndex)
-		pageData.ProposerName = services.GlobalBeaconService.GetValidatorName(pageData.Proposer)
+		if blockData.Orphaned && services.GlobalBeaconService.GetENode(pageData.Proposer) != "" {
+			pageData.ProposerName = services.GlobalBeaconService.GetENode(pageData.Proposer)
+		} else {
+			pageData.ProposerName = services.GlobalBeaconService.GetValidatorName(pageData.Proposer)
+		}
 		pageData.Block = getSlotPageBlockData(blockData, epochStatsValues, rank)
 
 		// check mev block
@@ -320,7 +326,8 @@ func buildSlotPageData(ctx context.Context, blockSlot int64, blockRoot []byte, r
 	return pageData, cacheTimeout
 }
 
-func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsValues *beacon.EpochStatsValues, rank uint64) *models.SlotPageBlockData {
+func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsValues *beacon.EpochStatsValues,
+	rank uint64) *models.SlotPageBlockData {
 	chainState := services.GlobalBeaconService.GetChainState()
 	specs := chainState.GetSpecs()
 	graffiti, _ := blockData.Block.Graffiti()
@@ -654,45 +661,67 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 
 		if len(syncAssignments) != 0 {
 			pageData.SyncAggCommittee = make([]types.NamedValidator, len(syncAssignments))
-			pageData.SyncAggCommitteeMissed = []types.NamedValidator{}
-			pageData.BCWMissed = []types.NamedValidator{}
+			pageData.SyncAggCommitteeMissed = map[string][]*types.NamedValidator{}
+			pageData.BCWMissed = map[string][]*types.NamedValidator{}
 			for idx, vidx := range syncAssignments {
 				pageData.SyncAggCommittee[idx] = types.NamedValidator{
 					Index: vidx,
 					Name:  services.GlobalBeaconService.GetValidatorName(vidx),
 				}
+
+				IP := services.GlobalBeaconService.GetENode(vidx)
 				if !utils.BitAtVector(pageData.SyncAggregateBits, idx) {
 					v := types.NamedValidator{
 						Index: vidx,
 						Name:  services.GlobalBeaconService.GetValidatorName(vidx),
+						IP:    IP,
 					}
 
 					if vidx > 1566 && vidx < 1688 {
-						pageData.BCWMissed = append(pageData.BCWMissed, v)
+						if pageData.BCWMissed[IP] == nil {
+							pageData.BCWMissed[IP] = []*types.NamedValidator{}
+						}
+						pageData.BCWMissed[IP] = append(pageData.BCWMissed[IP], &v)
 					} else {
-						pageData.SyncAggCommitteeMissed = append(pageData.SyncAggCommitteeMissed, v)
+						if pageData.SyncAggCommitteeMissed[IP] == nil {
+							pageData.SyncAggCommitteeMissed[IP] = []*types.NamedValidator{}
+						}
+						pageData.SyncAggCommitteeMissed[IP] = append(pageData.SyncAggCommitteeMissed[IP], &v)
 					}
 				}
 			}
 		} else {
 			pageData.SyncAggCommittee = []types.NamedValidator{}
-			pageData.SyncAggCommitteeMissed = []types.NamedValidator{}
-			pageData.BCWMissed = []types.NamedValidator{}
-			/*for i := 0; i < 30; i++ {
-				pageData.SyncAggCommitteeMissed = append(pageData.SyncAggCommitteeMissed, types.NamedValidator{
+			pageData.SyncAggCommitteeMissed = map[string][]*types.NamedValidator{}
+			pageData.BCWMissed = map[string][]*types.NamedValidator{}
+
+			/*	for i := 0; i < 30; i++ {
+				enode := ""
+				IP := ""
+				if enodes.EnodesMap[uint64(i)] != nil {
+					enode = enodes.EnodesMap[uint64(i)].Value
+					IP = enodes.EnodesMap[uint64(i)].IP
+				}
+				v1 := types.NamedValidator{
 					Index: uint64(i),
 					Name:  services.GlobalBeaconService.GetValidatorName(uint64(i)),
-				})
+					Enode: enode,
+					IP:    IP,
+				}
+				if pageData.SyncAggCommitteeMissed[IP] == nil {
+					pageData.SyncAggCommitteeMissed[IP] = []*types.NamedValidator{}
+				}
+				pageData.SyncAggCommitteeMissed[IP] = append(pageData.SyncAggCommitteeMissed[IP], &v1)
 			}*/
 
 		}
-		slices.SortFunc(pageData.SyncAggCommitteeMissed, func(a, b types.NamedValidator) int {
-			return cmp.Compare(a.Index, b.Index)
-		})
+		/*	slices.SortFunc(pageData.SyncAggCommitteeMissed, func(a, b types.NamedValidator) int {
+				return cmp.Compare(a.Index, b.Index)
+			})
 
-		slices.SortFunc(pageData.BCWMissed, func(a, b types.NamedValidator) int {
-			return cmp.Compare(a.Index, b.Index)
-		})
+			slices.SortFunc(pageData.BCWMissed, func(a, b types.NamedValidator) int {
+				return cmp.Compare(a.Index, b.Index)
+			})*/
 		pageData.SyncAggParticipation = utils.SyncCommitteeParticipation(pageData.SyncAggregateBits, specs.SyncCommitteeSize)
 	}
 

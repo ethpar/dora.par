@@ -173,8 +173,9 @@ type Config struct {
 	} `yaml:"monitor"`
 
 	Alert struct {
-		Enabled bool   `yaml:"enabled"  envconfig:"ALERT_ENABLED"`
-		RootDir string `yaml:"rootDir" envconfig:"ALERT_ROOTDIR"`
+		Enabled       bool   `yaml:"enabled"  envconfig:"ALERT_ENABLED"`
+		RootDir       string `yaml:"rootDir" envconfig:"ALERT_ROOTDIR"`
+		EnodesDataDir string `yaml:"enodes" envconfig:"ALERT_ENODES"`
 	} `yaml:"alert"`
 
 	KillSwitch struct {

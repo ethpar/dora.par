@@ -267,6 +267,11 @@ func buildSlotsPageData(firstSlot uint64, pageSize uint64, displayColumns string
 			if dbSlot.EthBlockNumber != nil {
 				blockNumber = *dbSlot.EthBlockNumber
 			}
+			proposerName := services.GlobalBeaconService.GetValidatorName(dbSlot.Proposer)
+			if proposerName == "" && (dbSlot.Status == dbtypes.Missing || dbSlot.Status == dbtypes.Orphaned) {
+				proposerName = services.GlobalBeaconService.GetENode(dbSlot.Proposer)
+			}
+
 			slotData := &models.SlotsPageDataSlot{
 				Slot:                  slot,
 				Epoch:                 uint64(chainState.EpochOfSlot(phase0.Slot(slot))),
@@ -276,7 +281,7 @@ func buildSlotsPageData(firstSlot uint64, pageSize uint64, displayColumns string
 				Scheduled:             slot >= uint64(currentSlot) && dbSlot.Status == dbtypes.Missing,
 				Synchronized:          dbSlot.SyncParticipation != -1,
 				Proposer:              dbSlot.Proposer,
-				ProposerName:          services.GlobalBeaconService.GetValidatorName(dbSlot.Proposer),
+				ProposerName:          proposerName,
 				AttestationCount:      dbSlot.AttestationCount,
 				DepositCount:          dbSlot.DepositCount,
 				ExitCount:             dbSlot.ExitCount,

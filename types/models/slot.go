@@ -87,8 +87,8 @@ type SlotPageBlockData struct {
 	WithdrawalRequests    []*SlotPageWithdrawalRequest    `json:"withdrawal_requests"`    // WithdrawalRequests included in this block
 	ConsolidationRequests []*SlotPageConsolidationRequest `json:"consolidation_requests"` // ConsolidationRequests included in this block
 
-	SyncAggCommitteeMissed []types.NamedValidator `json:"syncaggregate_committee_missed"`
-	BCWMissed              []types.NamedValidator `json:"bsw_committee_missed"`
+	SyncAggCommitteeMissed map[string][]*types.NamedValidator `json:"syncaggregate_committee_missed"`
+	BCWMissed              map[string][]*types.NamedValidator `json:"bsw_committee_missed"`
 }
 
 type SlotPageExecutionData struct {

@@ -190,6 +190,7 @@ func startFrontend(router *mux.Router) {
 	router.HandleFunc("/blocks", handlers.Blocks).Methods("GET")
 	router.HandleFunc("/mev/blocks", handlers.MevBlocks).Methods("GET")
 	router.HandleFunc("/pool/{slot}", handlers.Pool).Methods("GET")
+	router.HandleFunc("/pool/inline/{slot}", handlers.PoolInline).Methods("GET")
 	//router.HandleFunc("/transaction/{txHash}", handlers.Transaction).Methods("GET")
 
 	// Etherscan-compatible API endpoints

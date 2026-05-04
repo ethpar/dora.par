@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -187,9 +188,17 @@ func formatBitvectorValidators(bits []byte, validators []types.NamedValidator) t
 }
 
 func formatValidatorsList(validatorsMap map[string][]*types.NamedValidator) template.HTML {
+
 	var buf strings.Builder
 	if validatorsMap != nil {
-		for IP, validators := range validatorsMap {
+		keys := make([]string, 0, len(validatorsMap))
+		for k := range validatorsMap {
+			keys = append(keys, k)
+		}
+		slices.Sort(keys)
+
+		for _, IP := range keys {
+			validators := validatorsMap[IP]
 			buf.WriteString(fmt.Sprintf("%v:", IP))
 			for i := 0; i < len(validators); i++ {
 				{

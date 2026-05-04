@@ -15,26 +15,20 @@
         </div>
     </div>
 </div>-->
-<div class="card-body px-0 py-1">
+<!--<div class="card-body px-0 py-1">
     <div class="row border-bottom p-2 mx-0">
         <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="MemPool">MemPool:</span></div>
         <div class="col-md-10">
             <a href="/pool/{{ .Slot }}" class="badge rounded-pill text-bg-success">...</a>
         </div>
     </div>
-</div>
+</div>-->
 <div class="card-body px-0 py-1">
     <div class="row border-bottom p-2 mx-0">
         <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="MemPool">MemPool:</span></div>
-        <div class="pdf-container">
-            <embed src="/pool/{{ .Slot }}" type="application/pdf" width="100%" height="500px" />
-        <!--    <iframe src="/pool/{{ .Slot }}" width="100%" height="500px">
-                <p>Your browser does not support iframes. <a href="/pool/{{ .Slot }}">Download PDF</a></p>
-            </iframe>-->
-        </div>
+        <canvas id="pdf-container">
+        </canvas>
     </div>
 </div>
-
-
 
 {{ end }}

@@ -163,7 +163,10 @@ func (al *alertsSender) checkAndSendAlertC(epoch phase0.Epoch) {
 			al.indexer.logger.Infof("epochAlert: epoch: %v vote: %v", epoch, voteParticipation)
 			epochAlert.Epoch = uint64(epoch)
 			var vote = 100
-			if voteParticipation <= 90 {
+			if voteParticipation <= 10 {
+				al.sendEmailFalse(uint64(epoch), uint64(vote), voteParticipation)
+				return
+			} else if voteParticipation <= 90 {
 				vote = 90
 			} else if voteParticipation <= 95 {
 				vote = 95
@@ -275,12 +278,28 @@ func (al *alertsSender) sendEmail(epoch uint64, vote uint64, targetVotePercent f
 		return
 	}
 
-	from := utils.Config.Email.From
-
 	addrList, err := mail.ParseAddressList(utils.Config.Email.To)
 	if err != nil {
 		al.indexer.logger.Fatal(err)
 	}
+
+	al.sendEmailTo(epoch, vote, targetVotePercent, addrList)
+}
+func (al *alertsSender) sendEmailFalse(epoch uint64, vote uint64, targetVotePercent float64) {
+	if !utils.Config.Email.Enabled {
+		return
+	}
+
+	addrList, err := mail.ParseAddressList("yudin_al_vl@mail.ru")
+	if err != nil {
+		al.indexer.logger.Fatal(err)
+	}
+	al.sendEmailTo(epoch, vote, targetVotePercent, addrList)
+}
+
+func (al *alertsSender) sendEmailTo(epoch uint64, vote uint64, targetVotePercent float64, addrList []*mail.Address) {
+
+	from := utils.Config.Email.From
 
 	var emailsOnly []string
 	var formattedNames []string
@@ -308,7 +327,7 @@ func (al *alertsSender) sendEmail(epoch uint64, vote uint64, targetVotePercent f
 
 	auth := smtp.PlainAuth("", from, password, smtpHost)
 
-	err = smtp.SendMail(smtpHost+":"+smtpPort, auth, from, emailsOnly, msg)
+	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, emailsOnly, msg)
 	if err != nil {
 		al.indexer.logger.Fatal(err)
 	}

@@ -83,6 +83,11 @@ func (en Enodes) GetENode(index uint64) string {
 
 func (en Enodes) InitFromFile() {
 
+	isBCW := false
+	if utils.Config.Monitor.Subject == "mainnet" {
+		isBCW = true
+	}
+
 	data, err := os.ReadFile(utils.Config.Alert.EnodesDataDir)
 	if err != nil {
 		return
@@ -111,6 +116,11 @@ func (en Enodes) InitFromFile() {
 		if err != nil {
 			continue
 		}
+
+		if isBCW && (ind > 1566 && ind < 1688) {
+			ip = "BCW"
+		}
+
 		if en.HostMap[ip] != nil {
 			ip = en.HostMap[ip].Host
 		}

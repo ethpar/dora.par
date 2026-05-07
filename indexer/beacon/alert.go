@@ -13,6 +13,7 @@ import (
 	"net/mail"
 	"net/smtp"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -123,7 +124,7 @@ func (al *alertsSender) checkAndSendAlertSlot(epoch phase0.Epoch, slotIndex phas
 			al.indexer.logger.Infof("epochAlert: not found epoch: %v slot: %v", epoch, slotIndex)
 		}*/
 }
-func (al *alertsSender) checkAndSendAlertC(epoch phase0.Epoch) {
+func (al *alertsSender) checkAndSendAlertEpoch(epoch phase0.Epoch, slotNumber phase0.Slot) {
 	if !utils.Config.Alert.Enabled {
 		return
 	}
@@ -132,27 +133,6 @@ func (al *alertsSender) checkAndSendAlertC(epoch phase0.Epoch) {
 		resEpoch := epochStats.GetDbEpoch(al.indexer, nil)
 		al.indexer.logger.Infof("epochAlert %v Eligible %v ", epoch, resEpoch.Eligible)
 		voteParticipation := float64(1)
-
-		/*epochStr := strconv.FormatUint(uint64(epoch), 10)
-			if utils.Config.Alert.RootDir != '' {}
-		dirName := utils.Config.Alert.RootDir + "/" + epochStr
-		if !al.folderExists(dirName) {
-
-			err := os.Mkdir(dirName, 0755)
-			if err != nil {
-				al.indexer.logger.Fatal(err)
-			}
-		}
-		fileEpo := utils.Config.Alert.RootDir + "/" + epochStr + "/epoch" + epochStr + ".json"
-		al.indexer.logger.Infof("epochAlert %v", fileEpo)
-		file, err := os.Create(fileEpo)
-		if err != nil {
-			al.indexer.logger.Fatal(err)
-		}
-		defer file.Close()
-
-		encoder := json.NewEncoder(file)
-		encoder.Encode(resEpoch)*/
 
 		if resEpoch.Eligible > 0 {
 			voteParticipation = float64(resEpoch.VotedTarget) * 100.0 / float64(resEpoch.Eligible)
@@ -192,6 +172,59 @@ func (al *alertsSender) checkAndSendAlertC(epoch phase0.Epoch) {
 	} else {
 		al.indexer.logger.Infof("epochAlert: not found epoch: %v ", epoch)
 	}
+	go al.saveEpochGraph(epoch, slotNumber)
+}
+func (al *alertsSender) saveEpochGraph(epoch phase0.Epoch, slot phase0.Slot) {
+	epochStr := strconv.FormatUint(uint64(epoch), 10)
+	al.indexer.logger.Infof("script: saveEpochGraph %v", epochStr)
+	if utils.Config.Alert.RootDir == "" {
+		return
+	}
+	dirName := utils.Config.Alert.RootDir + "/" + epochStr
+	if !al.folderExists(dirName) {
+
+		err := os.Mkdir(dirName, 0755)
+		if err != nil {
+			al.indexer.logger.Errorf("script: %v", err)
+		}
+	}
+	tekuLogFile := utils.Config.Alert.TekuLogDir + "/teku.log"
+	dotFile := dirName + "/chain_tree.dot"
+	svgFile := dirName + "/chain_tree.svg"
+	//slotStr := strconv.FormatUint(uint64(3122588), 10)
+	slotStr := strconv.FormatUint(uint64(slot)-1, 10)
+	cmd := exec.Command("python3", utils.Config.Alert.DotScript, tekuLogFile, "--out", dotFile, "--max-slots", "32", "--start-slot", slotStr, "--epoch", epochStr)
+
+	// Получаем объединенный вывод stdout и stderr
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		al.indexer.logger.Errorf("script: Error: %s", err)
+		al.indexer.logger.Infof("script: Error: %v", string(output))
+		return
+	}
+
+	al.indexer.logger.Infof("script: %v", string(output))
+
+	cmd = exec.Command("dot", "-Tsvg", dotFile, "-o", svgFile)
+
+	// Получаем объединенный вывод stdout и stderr
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		al.indexer.logger.Errorf("script: Error: %s", err)
+	}
+
+	al.indexer.logger.Infof("script: %v", string(output))
+	/*fileEpo := utils.Config.Alert.RootDir + "/" + epochStr + "/epoch" + epochStr + ".json"
+	al.indexer.logger.Infof("epochAlert %v", fileEpo)
+	file, err := os.Create(fileEpo)
+	if err != nil {
+		al.indexer.logger.Fatal(err)
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.Encode(resEpoch)*/
+
 }
 func (al *alertsSender) checkAndSendAlert(tx *sqlx.Tx, epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes) {
 

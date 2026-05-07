@@ -500,9 +500,11 @@ func (indexer *Indexer) runIndexerLoop() {
 			}
 			if epoch != indexer.currentSavedEpoch && slotIndex > 2 {
 				indexer.logger.Infof("epochAlert new epoch %v slotIndex %v", epoch, slotIndex)
-				indexer.alertsSender.checkAndSendAlertC(indexer.currentSavedEpoch)
+				indexer.alertsSender.checkAndSendAlertEpoch(indexer.currentSavedEpoch, chainState.EpochStartSlot(indexer.currentSavedEpoch))
 				indexer.currentSavedEpoch = epoch
 			}
+			//indexer.alertsSender.checkAndSendAlertSlot(epoch, phase0.Slot(slotEvent.Number()))
+
 			// precalc next canonical duties on epoch start
 			if epoch >= indexer.lastPrecalcRunEpoch {
 				err := indexer.precalcNextEpochStats(epoch)

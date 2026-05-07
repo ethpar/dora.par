@@ -175,6 +175,8 @@ type Config struct {
 	Alert struct {
 		Enabled       bool   `yaml:"enabled"  envconfig:"ALERT_ENABLED"`
 		RootDir       string `yaml:"rootDir" envconfig:"ALERT_ROOTDIR"`
+		TekuLogDir    string `yaml:"tekuLogDir" envconfig:"ALERT_TEKULOG"`
+		DotScript     string `yaml:"dotScript" envconfig:"ALERT_DOTSCRIPT"`
 		EnodesDataDir string `yaml:"enodes" envconfig:"ALERT_ENODES"`
 	} `yaml:"alert"`
 

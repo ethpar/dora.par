@@ -140,6 +140,24 @@
     </div>
 
     <div class="card my-3">
+      <!--<img src="inline/100492/graph" alt="Description of image">-->
+      <!--<img src="inline/{{ .Epoch }}/graph" alt="">-->
+      <div id="panzoom-parent" style="border: 1px solid #dee2e6; overflow: hidden; height: 500px;">
+        <div id="panzoom-element">
+          <!--<svg>...</svg>-->
+        </div>
+      </div>
+      <div class="mt-3">
+        <a href="/epoch/{{ .Epoch }}/graph" >Download</a>
+     <!--   <button id="zoom-in" class="btn btn-outline-primary">+</button>
+        <button id="zoom-out" class="btn btn-outline-primary">-</button>
+       <button id="reset" class="btn btn-secondary">Reset</button>-->
+      </div>
+    </div>
+
+
+
+    <div class="card my-3">
       <div class="card-body px-0 py-0">
         <div class="table-responsive px-0 py-1">
           <table class="table" id="slots">
@@ -211,8 +229,124 @@
     </div>
     <div id="footer-placeholder" style="height:71px;"></div>
   </div>
+<script  src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script type="text/javascript">
+
+ /* const svgUrl = '/epoch/inline/{{ .Epoch }}/dot';
+  fetch(svgUrl)
+          .then(response => response.text())
+          .then(svgCode => {
+            var dotData = 'dinetwork {node[shape=box]; 1 -> 2; 2 -> 3; 3 -> 1; 4 -> 2; 5 -> 3; 6 -> 4; 7 -> 5;}';
+
+            // Парсим DOT и отрисовываем
+            var parsedData = vis.parseDOTNetwork(svgCode);
+            var data = {
+              nodes: parsedData.nodes,
+              edges: parsedData.edges
+            };
+
+            var options = {
+              nodes: {color: '#0d6efd'}, // Цвет primary из Bootstrap 5
+              physics: {
+                enabled: false // Полностью отключает «пружинки»
+              },
+              interaction: {
+                dragNodes: true // Перетаскивание при этом остается рабочим
+              }
+            };
+
+            var network = new vis.Network(document.getElementById('panzoom-parent'), data, options);
+          });*/
+
+ function openGraph(epochForOpen) {
+   const container = document.getElementById('panzoom-element');
+   const svgUrl = '/epoch/inline/'+epochForOpen+'/graph';
+   fetch(svgUrl)
+           .then(response => response.text())
+           .then(svgCode => {
+             const parser = new DOMParser();
+             const doc = parser.parseFromString(svgCode, "image/svg+xml");
+             const svgElement = doc.querySelector('svg');
+
+             // Set responsive attributes
+             svgElement.setAttribute('width', '100%');
+             svgElement.setAttribute('height', '100%');
+
+             svgElement.style.maxWidth = '100%';
+             svgElement.style.height = 'auto';
+
+             // Inject into your Panzoom container
+             container.innerHTML = ''; // Clear previous content
+             container.appendChild(svgElement);
+
+             //container.innerHTML = svgCode;
+
+             const panzoom = Panzoom(container, {
+               maxScale: 5,
+               canvas: true
+             });
+
+             //document.getElementById('zoom-in').addEventListener('click', panzoom.zoomIn)
+             //document.getElementById('zoom-out').addEventListener('click', panzoom.zoomOut)
+             //document.getElementById('reset').addEventListener('click', panzoom.reset)
+             container.parentElement.addEventListener('wheel', panzoom.zoomWithWheel);
+           });
+
+ }
+
+  const container = document.getElementById('panzoom-element');
+  const svgUrl = '/epoch/inline/{{ .Epoch }}/graph';
+  fetch(svgUrl)
+          .then(response => response.text())
+          .then(svgCode => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(svgCode, "image/svg+xml");
+            const svgElement = doc.querySelector('svg');
+
+            // Set responsive attributes
+            svgElement.setAttribute('width', '100%');
+            svgElement.setAttribute('height', '100%');
+
+            svgElement.style.maxWidth = '100%';
+            svgElement.style.height = 'auto';
+
+            // Inject into your Panzoom container
+            container.innerHTML = ''; // Clear previous content
+            container.appendChild(svgElement);
+
+            //container.innerHTML = svgCode;
+
+            const panzoom = Panzoom(container, {
+              maxScale: 5,
+              canvas: true
+            });
+
+            //document.getElementById('zoom-in').addEventListener('click', panzoom.zoomIn)
+            //document.getElementById('zoom-out').addEventListener('click', panzoom.zoomOut)
+            //document.getElementById('reset').addEventListener('click', panzoom.reset)
+            container.parentElement.addEventListener('wheel', panzoom.zoomWithWheel);
+          });
+
+
+</script>
 {{ end }}
 {{ define "js" }}
+<script src="https://unpkg.com/@panzoom/panzoom@4.6.2/dist/panzoom.min.js"></script>
+<!--<script  src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>-->
 {{ end }}
 {{ define "css" }}
+<style>
+  /* Находим ссылки внутри SVG */
+  svg a {
+    cursor: pointer;
+  }
+
+  /* Опционально: подсвечиваем узел при наведении */
+  svg a:hover .node polygon,
+  svg a:hover .node ellipse,
+  svg a:hover .node path {
+    filter: brightness(0.9);
+    transition: filter 0.2s;
+  }
+</style>
 {{ end }}

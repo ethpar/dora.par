@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/big"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -659,10 +660,10 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 			syncAssignments = db.GetSyncAssignmentsForPeriod(syncPeriod)
 		}
 
+		pageData.SyncAggCommitteeMissed = map[string][]*types.NamedValidator{}
+		pageData.SyncAggCommitteeVoted = map[string][]*types.NamedValidator{}
 		if len(syncAssignments) != 0 {
 			pageData.SyncAggCommittee = make([]types.NamedValidator, len(syncAssignments))
-			pageData.SyncAggCommitteeMissed = map[string][]*types.NamedValidator{}
-			pageData.BCWMissed = map[string][]*types.NamedValidator{}
 			for idx, vidx := range syncAssignments {
 				pageData.SyncAggCommittee[idx] = types.NamedValidator{
 					Index: vidx,
@@ -670,31 +671,25 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 				}
 
 				IP := services.GlobalBeaconService.GetENode(vidx)
+				v := types.NamedValidator{
+					Index: vidx,
+					Name:  services.GlobalBeaconService.GetValidatorName(vidx),
+					IP:    IP,
+				}
 				if !utils.BitAtVector(pageData.SyncAggregateBits, idx) {
-					v := types.NamedValidator{
-						Index: vidx,
-						Name:  services.GlobalBeaconService.GetValidatorName(vidx),
-						IP:    IP,
+					if pageData.SyncAggCommitteeMissed[IP] == nil {
+						pageData.SyncAggCommitteeMissed[IP] = []*types.NamedValidator{}
 					}
-
-					if vidx > 1566 && vidx < 1688 {
-						if pageData.BCWMissed[IP] == nil {
-							pageData.BCWMissed[IP] = []*types.NamedValidator{}
-						}
-						pageData.BCWMissed[IP] = append(pageData.BCWMissed[IP], &v)
-					} else {
-						if pageData.SyncAggCommitteeMissed[IP] == nil {
-							pageData.SyncAggCommitteeMissed[IP] = []*types.NamedValidator{}
-						}
-						pageData.SyncAggCommitteeMissed[IP] = append(pageData.SyncAggCommitteeMissed[IP], &v)
+					pageData.SyncAggCommitteeMissed[IP] = append(pageData.SyncAggCommitteeMissed[IP], &v)
+				} else {
+					if pageData.SyncAggCommitteeVoted[IP] == nil {
+						pageData.SyncAggCommitteeVoted[IP] = []*types.NamedValidator{}
 					}
+					pageData.SyncAggCommitteeVoted[IP] = append(pageData.SyncAggCommitteeVoted[IP], &v)
 				}
 			}
 		} else {
 			pageData.SyncAggCommittee = []types.NamedValidator{}
-			pageData.SyncAggCommitteeMissed = map[string][]*types.NamedValidator{}
-			pageData.BCWMissed = map[string][]*types.NamedValidator{}
-
 			/*	for i := 0; i < 30; i++ {
 				enode := ""
 				IP := ""
@@ -715,6 +710,19 @@ func getSlotPageBlockData(blockData *services.CombinedBlockResponse, epochStatsV
 			}*/
 
 		}
+		keys := make([]string, 0, len(pageData.SyncAggCommitteeMissed))
+		differentVotesServers := []string{}
+		for k := range pageData.SyncAggCommitteeMissed {
+			keys = append(keys, k)
+			if pageData.SyncAggCommitteeVoted[k] != nil {
+				differentVotesServers = append(differentVotesServers, k)
+			}
+		}
+		/*differentVotesServers = append(differentVotesServers, "run")
+		differentVotesServers = append(differentVotesServers, "bear")
+		differentVotesServers = append(differentVotesServers, "fox")*/
+		slices.Sort(differentVotesServers)
+		pageData.DifferentVotesServers = differentVotesServers
 		/*	slices.SortFunc(pageData.SyncAggCommitteeMissed, func(a, b types.NamedValidator) int {
 				return cmp.Compare(a.Index, b.Index)
 			})

@@ -1101,6 +1101,10 @@ func (bs *ChainService) GetHighestElBlockNumber(overrideForkId *beacon.ForkKey) 
 	return 0
 }
 
+func (bs *ChainService) GetTransactionsForBlocks(startBlock uint64, endBlock uint64) []*dbtypes.Transaction {
+	return db.GetTransactionsForBlocks(startBlock, endBlock)
+}
+
 func (bs *ChainService) GetTransactionsForAddress(address string, offset uint64, pageSize uint64, count uint64) []*dbtypes.Transaction {
 	return db.GetTransactions(address, offset, pageSize, count)
 }

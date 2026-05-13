@@ -187,6 +187,16 @@ func formatBitvectorValidators(bits []byte, validators []types.NamedValidator) t
 	return template.HTML(buf.String())
 }
 
+func formatServersNames(serverNames []string) template.HTML {
+	var buf strings.Builder
+	for i := 0; i < len(serverNames); i++ {
+		val := serverNames[i]
+		buf.WriteString(fmt.Sprintf("<span>%v</span>", val))
+		buf.WriteString(fmt.Sprintf("<br>"))
+	}
+	return template.HTML(buf.String())
+}
+
 func formatValidatorsList(validatorsMap map[string][]*types.NamedValidator) template.HTML {
 
 	var buf strings.Builder

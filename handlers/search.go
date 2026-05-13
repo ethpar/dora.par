@@ -458,24 +458,19 @@ func SearchAhead(w http.ResponseWriter, r *http.Request) {
 		}
 	case "tx":
 		txs := &dbtypes.SearchAheadTransactionResult{}
+		searchX := "0x" + search
 		err = db.ReaderDb.Select(txs, db.EngineQuery(map[dbtypes.DBEngineType]string{
 			dbtypes.DBEnginePgsql: `
-SELECT
-		"hash", count(*) as count
-	FROM transactions
-				WHERE "hash" ILIKE LOWER($1)
-				GROUP BY "hash"
-				ORDER BY count desc
-				LIMIT 10`,
+                SELECT
+		        "hash", 1 as count
+	            FROM transactions
+				WHERE "hash" = $1`,
 			dbtypes.DBEngineSqlite: `
-				SELECT name, count(*) as count
-				FROM validator_names
-				LEFT JOIN slots ON validator_names."index" = slots.proposer
-				WHERE name LIKE LOWER($1)
-				GROUP BY name
-				ORDER BY count desc
-				LIMIT 10`,
-		}), "%"+search+"%")
+                SELECT
+		        "hash", 1 as count
+	            FROM transactions
+				WHERE "hash" = $1`,
+		}), searchX)
 		if err == nil {
 			model := make([]models.SearchAheadTransactionResult, len(*txs))
 			for i, entry := range *txs {
@@ -488,25 +483,26 @@ SELECT
 		}
 	case "address":
 		addresses := &dbtypes.SearchAheadAddressResult{}
+		searchX := "0x" + search
 		err = db.ReaderDb.Select(addresses, db.EngineQuery(map[dbtypes.DBEngineType]string{
 			dbtypes.DBEnginePgsql: `
 SELECT "from" as address
 	FROM public.transactions
-	WHERE "from" ILIKE LOWER($1)
+	WHERE "from"  = $1
 union 	
 SELECT "to"  as address
 	FROM public.transactions
-	WHERE "to" ILIKE LOWER($2)
+	WHERE "to" = $2
 				LIMIT 10`,
 			dbtypes.DBEngineSqlite: `
-				SELECT name, count(*) as count
-				FROM validator_names
-				LEFT JOIN slots ON validator_names."index" = slots.proposer
-				WHERE name LIKE LOWER($1)
-				GROUP BY name
-				ORDER BY count desc
-				LIMIT 10`,
-		}), "%"+search+"%", "%"+search+"%")
+SELECT "from" as address
+	FROM public.transactions
+	WHERE "from"  = $1
+union 	
+SELECT "to"  as address
+	FROM public.transactions
+	WHERE "to" = $2`,
+		}), searchX, searchX)
 		if err == nil {
 			cnt := len(*addresses)
 			model := make([]models.SearchAheadAddressResult, len(*addresses))

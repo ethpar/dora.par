@@ -139,162 +139,237 @@
       </div>
     </div>
 
-    <div class="card my-3">
-      <!--<img src="inline/100492/graph" alt="Description of image">-->
-      <!--<img src="inline/{{ .Epoch }}/graph" alt="">-->
-      <div id="panzoom-parent" style="border: 1px solid #dee2e6; overflow: hidden; height: 500px;">
-        <div id="panzoom-element">
-          <!--<svg>...</svg>-->
-        </div>
-      </div>
-      <div class="mt-3">
-        <a href="/epoch/{{ .Epoch }}/graph" >Download</a>
-     <!--   <button id="zoom-in" class="btn btn-outline-primary">+</button>
-        <button id="zoom-out" class="btn btn-outline-primary">-</button>
-       <button id="reset" class="btn btn-secondary">Reset</button>-->
-      </div>
-    </div>
+    <ul class="nav nav-tabs justify-content-start mt-3" id="tab" role="tablist">
+      <li class="nav-item">
+        <a class="nav-link active" id="overview-tab" data-bs-toggle="tab" href="#table" role="tab" aria-controls="table" aria-selected="true">Slots</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="parallel-blocks-tab" data-bs-toggle="tab" href="#graph" role="tab" aria-controls="graph" aria-selected="false">Graph</a>
+      </li>
+    </ul>
 
 
-
-    <div class="card my-3">
-      <div class="card-body px-0 py-0">
-        <div class="table-responsive px-0 py-1">
-          <table class="table" id="slots">
-            <thead>
-              <tr>
-                <th>Epoch</th>
-                <th>Slot</th>
-                <th>Rank</th>
-                <th>Status</th>
-                <th style="min-width: 125px">Time</th>
-                <th>Prop<span class="d-none d-lg-inline">oser</span></th>
-                <th class="d-none d-md-table-cell">Att<span class="d-none d-lg-inline">estations</span></th>
-                <th>
-                  <nobr><span data-toggle="tooltip" data-placement="top" title="Deposits">D<span class="d-none d-lg-inline">ep</span> </span> / 
-                  <span data-toggle="tooltip" data-placement="top" title="Exits">E<span class="d-none d-lg-inline">x</span> </span></nobr>
-                </th>
-                <th><span data-toggle="tooltip" data-placement="top" title="Proposer Slashings / Attester Slashings">Slashings</span></th>
-                <th>Txs / Blobs</th>
-                <th>Sync<span class="d-none d-lg-inline"> Agg</span> %</th>
-                <th>Graffiti</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{$epoch:=.}}
-              {{ range $i, $slot := .Slots }}
+    <div class="tab-content" id="myTabContent">
+      <div class="tab-pane fade show active" id="table" role="tabpanel" aria-labelledby="home-tab">
+        <div class="card my-3">
+          <div class="card-body px-0 py-0">
+            <div class="table-responsive px-0 py-1">
+              <table class="table" id="slots">
+                <thead>
+                <tr>
+                  <th>Epoch</th>
+                  <th>Slot</th>
+                  <th>Rank</th>
+                  <th>Status</th>
+                  <th style="min-width: 125px">Time</th>
+                  <th>Prop<span class="d-none d-lg-inline">oser</span></th>
+                  <th class="d-none d-md-table-cell">Att<span class="d-none d-lg-inline">estations</span></th>
+                  <th>
+                    <nobr><span data-toggle="tooltip" data-placement="top" title="Deposits">D<span class="d-none d-lg-inline">ep</span> </span> /
+                      <span data-toggle="tooltip" data-placement="top" title="Exits">E<span class="d-none d-lg-inline">x</span> </span></nobr>
+                  </th>
+                  <th><span data-toggle="tooltip" data-placement="top" title="Proposer Slashings / Attester Slashings">Slashings</span></th>
+                  <th>Txs / Blobs</th>
+                  <th>Sync<span class="d-none d-lg-inline"> Agg</span> %</th>
+                  <th>Graffiti</th>
+                </tr>
+                </thead>
+                <tbody>
+                {{$epoch:=.}}
+                {{ range $i, $slot := .Slots }}
                 <tr>
                   <td><a href="/epoch/{{ $slot.Epoch }}">{{ formatAddCommas $slot.Epoch }}</a></td>
                   {{ if eq $slot.Status 2 }}
-                    <td><a href="/slot/0x{{ printf "%x" $slot.BlockRoot }}">{{ formatAddCommas $slot.Slot }}</a></td>
+                  <td><a href="/slot/0x{{ printf "%x" $slot.BlockRoot }}">{{ formatAddCommas $slot.Slot }}</a></td>
                   {{ else }}
-                    <td><a href="/slot/{{ $slot.Slot }}">{{ formatAddCommas $slot.Slot }}</a></td>
+                  <td><a href="/slot/{{ $slot.Slot }}">{{ formatAddCommas $slot.Slot }}</a></td>
                   {{ end }}
                   <td>{{ formatAddCommas $slot.Rank }}</td>
                   <td>
                     {{ if eq $slot.Slot 0 }}
-                      <span class="badge rounded-pill text-bg-info">Genesis</span>
+                    <span class="badge rounded-pill text-bg-info">Genesis</span>
                     {{ else if $slot.Scheduled }}
-                      <span class="badge rounded-pill text-bg-secondary">Scheduled</span>
+                    <span class="badge rounded-pill text-bg-secondary">Scheduled</span>
                     {{ else if eq $slot.Status 1 }}
-                      <span class="badge rounded-pill text-bg-success">Proposed</span>
+                    <span class="badge rounded-pill text-bg-success">Proposed</span>
                     {{ else if eq $slot.Status 2 }}
-                      <span class="badge rounded-pill text-bg-info">Orphaned</span>
+                    <span class="badge rounded-pill text-bg-info">Orphaned</span>
                     {{ else if not $epoch.Synchronized }}
-                      <span class="badge rounded-pill text-bg-secondary">?</span>
+                    <span class="badge rounded-pill text-bg-secondary">?</span>
                     {{ else if eq $slot.Status 0 }}
-                      <span class="badge rounded-pill text-bg-warning">Missed</span>
+                    <span class="badge rounded-pill text-bg-warning">Missed</span>
                     {{ else }}
-                      <span class="badge rounded-pill text-bg-dark">Unknown</span>
+                    <span class="badge rounded-pill text-bg-dark">Unknown</span>
                     {{ end }}
                   </td>
                   <td data-timer="{{ $slot.Ts.Unix }}"><span data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="{{ $slot.Ts }}">{{ formatRecentTimeShort $slot.Ts }}</span></td>
                   <td>{{ if gt $slot.Slot 0 }}{{ formatValidatorWithIndex $slot.Proposer $slot.ProposerName }}{{ end }}</td>
                   {{ if or $epoch.Synchronized (not (eq $slot.Status 0)) }}
-                    <td class="d-none d-md-table-cell">{{ if not (eq $slot.Status 0) }}{{ $slot.AttestationCount }}{{ end }}</td>
-                    <td>{{ if not (eq $slot.Status 0) }}{{ $slot.DepositCount }} / {{ $slot.ExitCount }}{{ end }}</td>
-                    <td>{{ if not (eq $slot.Status 0) }}{{ $slot.ProposerSlashingCount }} / {{ $slot.AttesterSlashingCount }}{{ end }}</td>
-                    <td>{{ if not (eq $slot.Status 0) }}{{ $slot.EthTransactionCount }} / {{ $slot.BlobCount }}{{ end }}</td>
-                    <td>{{ if not (eq $slot.Status 0) }}{{ formatFloat $slot.SyncParticipation 2 }}%{{ end }}</td>
-                    <td>{{ if not (eq $slot.Status 0) }}{{ formatGraffiti $slot.Graffiti }}{{ end }}</td>
+                  <td class="d-none d-md-table-cell">{{ if not (eq $slot.Status 0) }}{{ $slot.AttestationCount }}{{ end }}</td>
+                  <td>{{ if not (eq $slot.Status 0) }}{{ $slot.DepositCount }} / {{ $slot.ExitCount }}{{ end }}</td>
+                  <td>{{ if not (eq $slot.Status 0) }}{{ $slot.ProposerSlashingCount }} / {{ $slot.AttesterSlashingCount }}{{ end }}</td>
+                  <td>{{ if not (eq $slot.Status 0) }}{{ $slot.EthTransactionCount }} / {{ $slot.BlobCount }}{{ end }}</td>
+                  <td>{{ if not (eq $slot.Status 0) }}{{ formatFloat $slot.SyncParticipation 2 }}%{{ end }}</td>
+                  <td>{{ if not (eq $slot.Status 0) }}{{ formatGraffiti $slot.Graffiti }}{{ end }}</td>
                   {{ else }}
-                    <td colspan="6">Not indexed yet</td>
+                  <td colspan="6">Not indexed yet</td>
                   {{ end }}
                 </tr>
-              {{ end }}
-            </tbody>
-          </table>
+                {{ end }}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tab-pane fade" id="graph" role="tabpanel" aria-labelledby="profile-tab">
+        <div class="card-body px-0 py-0">
+          <svg id="graph-svg"><g/></svg>
+          <!--<img src="inline/100492/graph" alt="Description of image">-->
+          <!--<img src="inline/{{ .Epoch }}/graph" alt="">-->
+          <!--<div id="panzoom-parent" style="border: 1px solid #dee2e6; overflow: hidden; height: 500px;">
+            <div id="panzoom-element">
+              <svg>...</svg>
+            </div>
+          </div>-->
+          <div class="mt-3">
+            <a href="/epoch/{{ .Epoch }}/graph" >Download</a>
+            <!--   <button id="zoom-in" class="btn btn-outline-primary">+</button>
+               <button id="zoom-out" class="btn btn-outline-primary">-</button>
+              <button id="reset" class="btn btn-secondary">Reset</button>-->
+          </div>
         </div>
       </div>
     </div>
+
+
+
+
+
     <div id="footer-placeholder" style="height:71px;"></div>
   </div>
+<!--<link href="https://jsdelivr.net" rel="stylesheet">-->
+<!--<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://dagrejs.github.io/project/graphlib-dot/latest/graphlib-dot.min.js"></script>
+<script src="https://dagrejs.github.io/project/dagre-d3/latest/dagre-d3.min.js"></script>-->
+<script src="//d3js.org/d3.v7.min.js"></script>
+<script src="https://unpkg.com/@hpcc-js/wasm@2.20.0/dist/graphviz.umd.js"></script>
+<script src="https://unpkg.com/d3-graphviz@5.6.0/build/d3-graphviz.js"></script>
 <script  src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-<script type="text/javascript">
 
- /* const svgUrl = '/epoch/inline/{{ .Epoch }}/dot';
+<script type="text/javascript">
+  const svgUrl = '/epoch/inline/{{ .Epoch }}/dot';
+
   fetch(svgUrl)
           .then(response => response.text())
-          .then(svgCode => {
-            var dotData = 'dinetwork {node[shape=box]; 1 -> 2; 2 -> 3; 3 -> 1; 4 -> 2; 5 -> 3; 6 -> 4; 7 -> 5;}';
+          .then(dotString => {
+            var graphviz = d3.select("#graph-svg").graphviz()
+                    .transition(function () {
+                      return d3.transition("main")
+                              .ease(d3.easeLinear);
+                              //.delay(500)
+                              //.duration(1500);
+                    });
+                    //.logEvents(true);
+                    //.on("initEnd", {
 
-            // Парсим DOT и отрисовываем
-            var parsedData = vis.parseDOTNetwork(svgCode);
-            var data = {
-              nodes: parsedData.nodes,
-              edges: parsedData.edges
-            };
+                  graphviz.renderDot(dotString);
 
-            var options = {
-              nodes: {color: '#0d6efd'}, // Цвет primary из Bootstrap 5
-              physics: {
-                enabled: false // Полностью отключает «пружинки»
-              },
-              interaction: {
-                dragNodes: true // Перетаскивание при этом остается рабочим
+
+          /*  const g = graphlibDot.read(dotString);
+            const render = new dagreD3.render();
+            const svg = d3.select("#graph-svg");
+            const svgGroup = svg.select("g");
+
+            g.nodes().forEach(function(v) {
+              const item = g.node(v);
+              const isCluster = g.children(v).length > 0;
+
+              if (isCluster) {
+                const bgColor = item.fillcolor || "#f8f9fa";
+                item.style = `fill: ${bgColor}; stroke: #dee2e6; stroke-width: 2px; fill-opacity: 0.4;`;
+                item.clusterLabelPos = 'top'; // Заголовок сверху
+              } else {
+                item.labelType = "html";
+                if (item.label) {
+                  item.label = item.label.replace("\n", "<br/>");
+                }
+                const cleanLabel = item.label ? item.label.replace(/\n/g, "<br/>") : "";
+                item.label = `<div style="padding: 10px; text-align: center; font-size: 12px; font-family: sans-serif; line-height: 1.2;">${cleanLabel}</div>`;
+                const bgColor = item.fillcolor || "#ffffff";
+                const borderColor = item.color || "#0d6efd";
+                const borderWidth = item.penwidth || 1;
+                item.style = `fill: ${bgColor}; stroke: ${borderColor}; stroke-width: ${borderWidth}px;`;
+                item.paddingX = 10;
+                item.paddingY = 10;
+                item.rx = 5;
+                item.ry = 5;
+                //item.width = 100;
+                //item.height = 40;
               }
-            };
+              item.paddingX = 15;
+              item.paddingY = 15;
+            });
 
-            var network = new vis.Network(document.getElementById('panzoom-parent'), data, options);
-          });*/
+            //render(svgGroup, g);
+            setTimeout(() => {
+              render(svgGroup, g);
 
- function openGraph(epochForOpen) {
-   const container = document.getElementById('panzoom-element');
-   const svgUrl = '/epoch/inline/'+epochForOpen+'/graph';
+              svgGroup.selectAll("g.node text").attr("transform", "translate(0,0)");
+            }, 100);
+            const xCenterOffset = (svg.node().getBoundingClientRect().width - g.graph().width) / 2;
+            svgGroup.attr("transform", "translate(" + xCenterOffset + ", 20)");
+            const zoom = d3.zoom().on("zoom", (event) => {
+              svgGroup.attr("transform", event.transform);
+            });
+            svg.call(zoom);*/
+          });
+  /* const dotString =
+
+
+   const svgUrl = '/epoch/inline/{{ .Epoch }}/dot';
    fetch(svgUrl)
            .then(response => response.text())
            .then(svgCode => {
-             const parser = new DOMParser();
-             const doc = parser.parseFromString(svgCode, "image/svg+xml");
-             const svgElement = doc.querySelector('svg');
+             var dotData = 'dinetwork {node[shape=box]; 1 -> 2; 2 -> 3; 3 -> 1; 4 -> 2; 5 -> 3; 6 -> 4; 7 -> 5;}';
 
-             // Set responsive attributes
-             svgElement.setAttribute('width', '100%');
-             svgElement.setAttribute('height', '100%');
+             // Парсим DOT и отрисовываем
+             var parsedData = vis.parseDOTNetwork(svgCode);
+             var data = {
+               nodes: parsedData.nodes,
+               edges: parsedData.edges
+             };
 
-             svgElement.style.maxWidth = '100%';
-             svgElement.style.height = 'auto';
+             var options = {
+               nodes: {color: '#0d6efd'}, // Цвет primary из Bootstrap 5
+               physics: {
+                 enabled: false // Полностью отключает «пружинки»
+               },
+               interaction: {
+                 dragNodes: true // Перетаскивание при этом остается рабочим
+               }
+             };
 
-             // Inject into your Panzoom container
-             container.innerHTML = ''; // Clear previous content
-             container.appendChild(svgElement);
+             var network = new vis.Network(document.getElementById('panzoom-parent'), data, options);
+           });*/
 
-             //container.innerHTML = svgCode;
+ function openGraph(epochForOpen) {
+   fetch(svgUrl)
+           .then(response => response.text())
+           .then(dotString => {
+             var graphviz = d3.select("#graph-svg").graphviz()
+                     .transition(function () {
+                       return d3.transition("main")
+                               .ease(d3.easeLinear);
+                     });
+             //.on("initEnd", {
 
-             const panzoom = Panzoom(container, {
-               maxScale: 5,
-               canvas: true
-             });
-
-             //document.getElementById('zoom-in').addEventListener('click', panzoom.zoomIn)
-             //document.getElementById('zoom-out').addEventListener('click', panzoom.zoomOut)
-             //document.getElementById('reset').addEventListener('click', panzoom.reset)
-             container.parentElement.addEventListener('wheel', panzoom.zoomWithWheel);
-           });
+             graphviz.renderDot(dotString);
+           })
 
  }
 
-  const container = document.getElementById('panzoom-element');
+  /*const container = document.getElementById('panzoom-element');
   const svgUrl = '/epoch/inline/{{ .Epoch }}/graph';
   fetch(svgUrl)
           .then(response => response.text())
@@ -325,28 +400,20 @@
             //document.getElementById('zoom-out').addEventListener('click', panzoom.zoomOut)
             //document.getElementById('reset').addEventListener('click', panzoom.reset)
             container.parentElement.addEventListener('wheel', panzoom.zoomWithWheel);
-          });
+          });*/
 
 
 </script>
 {{ end }}
 {{ define "js" }}
-<script src="https://unpkg.com/@panzoom/panzoom@4.6.2/dist/panzoom.min.js"></script>
-<!--<script  src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>-->
+<!--<script src="https://unpkg.com/@panzoom/panzoom@4.6.2/dist/panzoom.min.js"></script>
+<script  src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>-->
 {{ end }}
 {{ define "css" }}
 <style>
-  /* Находим ссылки внутри SVG */
-  svg a {
-    cursor: pointer;
-  }
-
-  /* Опционально: подсвечиваем узел при наведении */
-  svg a:hover .node polygon,
-  svg a:hover .node ellipse,
-  svg a:hover .node path {
-    filter: brightness(0.9);
-    transition: filter 0.2s;
-  }
+  .node rect { stroke: #333; fill: #fff; stroke-width: 1.5px; }
+  .edgePath path { stroke: #333; stroke-width: 1.5px; fill: none; }
+  #graph-svg { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; }
+  #graph-svg { width: 100%; height: 500px; }
 </style>
 {{ end }}

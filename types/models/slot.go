@@ -88,7 +88,8 @@ type SlotPageBlockData struct {
 	ConsolidationRequests []*SlotPageConsolidationRequest `json:"consolidation_requests"` // ConsolidationRequests included in this block
 
 	SyncAggCommitteeMissed map[string][]*types.NamedValidator `json:"syncaggregate_committee_missed"`
-	BCWMissed              map[string][]*types.NamedValidator `json:"bsw_committee_missed"`
+	SyncAggCommitteeVoted  map[string][]*types.NamedValidator `json:"syncaggregate_committee_voted"`
+	DifferentVotesServers  []string                           `json:"different_votes_servers"`
 }
 
 type SlotPageExecutionData struct {

@@ -4,18 +4,22 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethpandaops/dora/db"
 	"github.com/ethpandaops/dora/dbtypes"
 	"github.com/ethpandaops/dora/utils"
 	"github.com/jmoiron/sqlx"
+	"io"
 	"net/http"
 	"net/mail"
 	"net/smtp"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type alertsSender struct {
@@ -124,7 +128,7 @@ func (al *alertsSender) checkAndSendAlertSlot(epoch phase0.Epoch, slotIndex phas
 			al.indexer.logger.Infof("epochAlert: not found epoch: %v slot: %v", epoch, slotIndex)
 		}*/
 }
-func (al *alertsSender) checkAndSendAlertEpoch(epoch phase0.Epoch, slotNumber phase0.Slot) {
+func (al *alertsSender) checkAndSendAlertEpoch(epoch phase0.Epoch, slotNumber phase0.Slot, time time.Time) {
 	if !utils.Config.Alert.Enabled {
 		return
 	}
@@ -173,6 +177,7 @@ func (al *alertsSender) checkAndSendAlertEpoch(epoch phase0.Epoch, slotNumber ph
 		al.indexer.logger.Infof("epochAlert: not found epoch: %v ", epoch)
 	}
 	go al.saveEpochGraph(epoch, slotNumber)
+	go al.getLogs(epoch, time)
 }
 func (al *alertsSender) saveEpochGraph(epoch phase0.Epoch, slot phase0.Slot) {
 	epochStr := strconv.FormatUint(uint64(epoch), 10)
@@ -225,6 +230,68 @@ func (al *alertsSender) saveEpochGraph(epoch phase0.Epoch, slot phase0.Slot) {
 	encoder := json.NewEncoder(file)
 	encoder.Encode(resEpoch)*/
 
+}
+func (al *alertsSender) getLogs(epoch phase0.Epoch, time time.Time) {
+
+	utcTime := time.UTC()
+	baseURI := utils.Config.Alert.LogUrl
+	token := utils.Config.Alert.LogToken
+
+	epochStr := strconv.FormatUint(uint64(epoch), 10)
+	period := utcTime.Format("2006-01-02 15:04:05")
+
+	params := url.Values{}
+	params.Add("epoch", epochStr)
+	params.Add("period", period)
+	al.indexer.logger.Infof("epochAlert get logs for  %v  time %v", epochStr, period)
+
+	fullURL := fmt.Sprintf("%s?%s", baseURI, params.Encode())
+
+	client := &http.Client{
+		//Timeout: 30 * time.Second,
+	}
+
+	//ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	//defer cancel()
+
+	//req, err := http.NewRequestWithContext(ctx, "GET", fullURL, nil)
+	req, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		al.indexer.logger.Warnf("epochAlert Error: %v\n", err)
+		return
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := client.Do(req)
+	if err != nil {
+		al.indexer.logger.Warnf("epochAlert Error: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	// 5. Обработка специфических HTTP-статусов авторизации
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// all normal
+	case http.StatusUnauthorized:
+		al.indexer.logger.Warnf("epochAlert Error 401: Wrong or missing Bearer Token.")
+		return
+	case http.StatusBadRequest:
+		al.indexer.logger.Warnf("epochAlert Error 400: Wrong parameters.")
+		return
+	default:
+		al.indexer.logger.Warnf("SepochAlert erver error. Статус: %s (%d)", resp.Status, resp.StatusCode)
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		al.indexer.logger.Warnf("epochAlert error: %v", err)
+		return
+	}
+
+	al.indexer.logger.Infof("epochAlert Logs read:")
+	al.indexer.logger.Infof(string(body))
 }
 func (al *alertsSender) checkAndSendAlert(tx *sqlx.Tx, epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes) {
 

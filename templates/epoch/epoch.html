@@ -144,7 +144,10 @@
         <a class="nav-link active" id="overview-tab" data-bs-toggle="tab" href="#table" role="tab" aria-controls="table" aria-selected="true">Slots</a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" id="parallel-blocks-tab" data-bs-toggle="tab" href="#graph" role="tab" aria-controls="graph" aria-selected="false">Graph</a>
+        <a class="nav-link" id="ai-tab" data-bs-toggle="tab" href="#ai" role="tab" aria-controls="ai" aria-selected="false">AI description</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="graph-tab" data-bs-toggle="tab" href="#graph" role="tab" aria-controls="graph" aria-selected="false">Graph</a>
       </li>
     </ul>
 
@@ -222,6 +225,14 @@
           </div>
         </div>
       </div>
+      <div class="tab-pane fade" id="ai" role="tabpanel" aria-labelledby="profile-tab">
+        <div class="card-body px-0 py-0">
+          <div class="mt-3">
+            <script type="module" src="https://cdn.jsdelivr.net/gh/zerodevx/zero-md@2/dist/zero-md.min.js"></script>
+            <zero-md src="/epoch/inline/{{ .Epoch }}/ai"></zero-md>
+          </div>
+        </div>
+      </div>
       <div class="tab-pane fade" id="graph" role="tabpanel" aria-labelledby="profile-tab">
         <div class="card-body px-0 py-0">
           <svg id="graph-svg"><g/></svg>
@@ -241,10 +252,6 @@
         </div>
       </div>
     </div>
-
-
-
-
 
     <div id="footer-placeholder" style="height:71px;"></div>
   </div>

@@ -132,6 +132,8 @@ func (al *alertsSender) checkAndSendAlertEpoch(epoch phase0.Epoch, slotNumber ph
 	if !utils.Config.Alert.Enabled {
 		return
 	}
+
+	isAI := false
 	if epochStats := al.indexer.GetEpochStats(epoch, nil); epochStats != nil {
 		//al.indexer.logger.Infof("epochAlert %v epoch %v ", epoch, epochStats)
 		resEpoch := epochStats.GetDbEpoch(al.indexer, nil)
@@ -158,6 +160,9 @@ func (al *alertsSender) checkAndSendAlertEpoch(epoch phase0.Epoch, slotNumber ph
 				vote = 98
 			}
 			if vote != epochAlert.Percent {
+				if vote < 90 {
+					isAI = true
+				}
 				epochAlert.Percent = vote
 				err := db.RunDBTransaction(func(tx *sqlx.Tx) error {
 					db.SetExplorerState("alert.epoch", epochAlert, tx)
@@ -177,7 +182,7 @@ func (al *alertsSender) checkAndSendAlertEpoch(epoch phase0.Epoch, slotNumber ph
 		al.indexer.logger.Infof("epochAlert: not found epoch: %v ", epoch)
 	}
 	go al.saveEpochGraph(epoch, slotNumber)
-	go al.getLogs(epoch, time)
+	go al.getLogs(epoch, time, isAI)
 }
 func (al *alertsSender) saveEpochGraph(epoch phase0.Epoch, slot phase0.Slot) {
 	epochStr := strconv.FormatUint(uint64(epoch), 10)
@@ -231,7 +236,7 @@ func (al *alertsSender) saveEpochGraph(epoch phase0.Epoch, slot phase0.Slot) {
 	encoder.Encode(resEpoch)*/
 
 }
-func (al *alertsSender) getLogs(epoch phase0.Epoch, time time.Time) {
+func (al *alertsSender) getLogs(epoch phase0.Epoch, time time.Time, isAI bool) {
 
 	utcTime := time.UTC()
 	baseURI := utils.Config.Alert.LogUrl
@@ -291,6 +296,64 @@ func (al *alertsSender) getLogs(epoch phase0.Epoch, time time.Time) {
 	}
 
 	al.indexer.logger.Infof("epochAlert Logs read:")
+	al.indexer.logger.Infof(string(body))
+	if isAI && utils.Config.Alert.AiEnabled {
+		al.getAi(epoch)
+	}
+}
+
+func (al *alertsSender) getAi(epoch phase0.Epoch) {
+
+	baseURI := utils.Config.Alert.AiUrl
+	token := utils.Config.Alert.LogToken
+	epochStr := strconv.FormatUint(uint64(epoch), 10)
+
+	params := url.Values{}
+	params.Add("epoch", epochStr)
+	al.indexer.logger.Infof("epochAlert get ai for  %v", epochStr)
+
+	fullURL := fmt.Sprintf("%s?%s", baseURI, params.Encode())
+
+	client := &http.Client{
+		//Timeout: 30 * time.Second,
+	}
+
+	req, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		al.indexer.logger.Warnf("epochAlert Error: %v\n", err)
+		return
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := client.Do(req)
+	if err != nil {
+		al.indexer.logger.Warnf("epochAlert Error: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	// 5. Обработка специфических HTTP-статусов авторизации
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// all normal
+	case http.StatusUnauthorized:
+		al.indexer.logger.Warnf("epochAlert Error 401: Wrong or missing Bearer Token.")
+		return
+	case http.StatusBadRequest:
+		al.indexer.logger.Warnf("epochAlert Error 400: Wrong parameters.")
+		return
+	default:
+		al.indexer.logger.Warnf("SepochAlert erver error. Статус: %s (%d)", resp.Status, resp.StatusCode)
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		al.indexer.logger.Warnf("epochAlert error: %v", err)
+		return
+	}
+
+	al.indexer.logger.Infof("epochAlert Logs ai complete:")
 	al.indexer.logger.Infof(string(body))
 }
 func (al *alertsSender) checkAndSendAlert(tx *sqlx.Tx, epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes) {

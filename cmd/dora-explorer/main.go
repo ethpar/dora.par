@@ -194,6 +194,7 @@ func startFrontend(router *mux.Router) {
 	router.HandleFunc("/epoch/{epoch}/graph", handlers.EpochGraph).Methods("GET")
 	router.HandleFunc("/epoch/inline/{epoch}/graph", handlers.EpochGraphInline).Methods("GET")
 	router.HandleFunc("/epoch/inline/{epoch}/dot", handlers.EpochDotInline).Methods("GET")
+	router.HandleFunc("/epoch/inline/{epoch}/ai", handlers.EpochAiInline).Methods("GET")
 	//router.HandleFunc("/transaction/{txHash}", handlers.Transaction).Methods("GET")
 
 	// Etherscan-compatible API endpoints

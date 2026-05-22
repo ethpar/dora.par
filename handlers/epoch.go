@@ -154,6 +154,7 @@ func buildEpochPageData(epoch uint64) (*models.EpochPageData, time.Duration) {
 	dbIdx := 0
 	dbCnt := len(dbSlots)
 	blockCount := uint64(0)
+	pageData.EthTransactionCount = 0
 	for slotIdx := int64(lastSlot); slotIdx >= int64(firstSlot); slotIdx-- {
 		slot := uint64(slotIdx)
 		for dbIdx < dbCnt && dbSlots[dbIdx] != nil && dbSlots[dbIdx].Slot == slot {
@@ -194,6 +195,7 @@ func buildEpochPageData(epoch uint64) (*models.EpochPageData, time.Duration) {
 				BlockRoot:             dbSlot.Root,
 				Rank:                  dbSlot.Rank,
 			}
+			pageData.EthTransactionCount = pageData.EthTransactionCount + dbSlot.EthTransactionCount
 			if dbSlot.EthBlockNumber != nil {
 				slotData.WithEthBlock = true
 				slotData.EthBlockNumber = *dbSlot.EthBlockNumber

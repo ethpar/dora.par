@@ -179,7 +179,9 @@ type Config struct {
 		DotScript     string `yaml:"dotScript" envconfig:"ALERT_DOTSCRIPT"`
 		EnodesDataDir string `yaml:"enodes" envconfig:"ALERT_ENODES"`
 		LogToken      string `yaml:"logToken" envconfig:"ALERT_LOG_TOKEN"`
-		LogUrl        string `yaml:"logUrl" envconfig:"ALERT_ENODES"`
+		LogUrl        string `yaml:"logUrl" envconfig:"ALERT_LOG"`
+		AiEnabled     bool   `yaml:"aiEnabled"  envconfig:"ALERT_AIENABLED"`
+		AiUrl         string `yaml:"aiUrl" envconfig:"ALERT_ID"`
 	} `yaml:"alert"`
 
 	KillSwitch struct {

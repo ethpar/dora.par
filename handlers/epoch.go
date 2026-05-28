@@ -153,6 +153,7 @@ func buildEpochPageData(epoch uint64) (*models.EpochPageData, time.Duration) {
 	dbSlots := services.GlobalBeaconService.GetDbBlocksForSlots(uint64(lastSlot), uint32(specs.SlotsPerEpoch), true, true)
 	dbIdx := 0
 	dbCnt := len(dbSlots)
+	slotCount := uint64(0)
 	blockCount := uint64(0)
 	pageData.EthTransactionCount = 0
 	for slotIdx := int64(lastSlot); slotIdx >= int64(firstSlot); slotIdx-- {
@@ -161,13 +162,15 @@ func buildEpochPageData(epoch uint64) (*models.EpochPageData, time.Duration) {
 			dbSlot := dbSlots[dbIdx]
 			dbIdx++
 
-			switch dbSlot.Status {
-			case dbtypes.Orphaned:
-				pageData.OrphanedCount++
-			case dbtypes.Canonical:
-				pageData.CanonicalCount++
-			case dbtypes.Missing:
-				pageData.MissedCount++
+			if dbSlot.Rank == 0 {
+				switch dbSlot.Status {
+				case dbtypes.Orphaned:
+					pageData.OrphanedCount++
+				case dbtypes.Canonical:
+					pageData.CanonicalCount++
+				case dbtypes.Missing:
+					pageData.MissedCount++
+				}
 			}
 
 			proposerName := services.GlobalBeaconService.GetValidatorName(dbSlot.Proposer)
@@ -200,14 +203,18 @@ func buildEpochPageData(epoch uint64) (*models.EpochPageData, time.Duration) {
 				slotData.WithEthBlock = true
 				slotData.EthBlockNumber = *dbSlot.EthBlockNumber
 			}
-			if slotData.Scheduled {
-				pageData.ScheduledCount++
-				pageData.MissedCount--
-			}
 			pageData.Slots = append(pageData.Slots, slotData)
 			blockCount++
+			if dbSlot.Rank == 0 {
+				slotCount++
+				if slotData.Scheduled {
+					pageData.ScheduledCount++
+					pageData.MissedCount--
+				}
+			}
 		}
 	}
+	pageData.SlotCount = uint64(slotCount)
 	pageData.BlockCount = uint64(blockCount)
 
 	var cacheTimeout time.Duration

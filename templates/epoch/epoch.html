@@ -129,11 +129,17 @@
           <div class="col-md-3">Avg. Validator Balance:</div>
           <div class="col-md-9">{{ formatEthFromGwei .AverageValidatorBalance }}</div>
         </div>
-        <div class="row p-2 mx-0 collapsed">
+        <div class="row border-bottom p-2 mx-0">
           <div style="position:relative" class="col-md-3">Slots:</div>
           <div class="col-md-9">
-            {{ .BlockCount }}
+            {{ .SlotCount }}
             <small class="text-muted"> ({{ if gt .CanonicalCount 0 }}{{ .CanonicalCount }} Proposed{{ end }}{{ if gt .MissedCount 0 }}, {{ .MissedCount }} Missed{{ end }}{{ if gt .ScheduledCount 0 }}, {{ .ScheduledCount }} Pending{{ end }}{{ if gt .OrphanedCount 0 }}, {{ .OrphanedCount }} Orphaned{{ end }}) </small>
+          </div>
+        </div>
+        <div class="row p-2 mx-0 collapsed">
+          <div style="position:relative" class="col-md-3">Blocks:</div>
+          <div class="col-md-9">
+            {{ .BlockCount }}
           </div>
         </div>
       </div>
@@ -175,6 +181,7 @@
                   <th>Txs / Blobs</th>
                   <th>Sync<span class="d-none d-lg-inline"> Agg</span> %</th>
                   <th>Graffiti</th>
+                  <th>Pool</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -214,6 +221,7 @@
                   <td>{{ if not (eq $slot.Status 0) }}{{ $slot.EthTransactionCount }} / {{ $slot.BlobCount }}{{ end }}</td>
                   <td>{{ if not (eq $slot.Status 0) }}{{ formatFloat $slot.SyncParticipation 2 }}%{{ end }}</td>
                   <td>{{ if not (eq $slot.Status 0) }}{{ formatGraffiti $slot.Graffiti }}{{ end }}</td>
+                  <td><a href="/pool/{{ $slot.Slot }}" class="badge rounded-pill text-bg-success">...</a></td>
                   {{ else }}
                   <td colspan="6">Not indexed yet</td>
                   {{ end }}
@@ -259,7 +267,7 @@
 <!--<script src="https://d3js.org/d3.v7.min.js"></script>
 <script src="https://dagrejs.github.io/project/graphlib-dot/latest/graphlib-dot.min.js"></script>
 <script src="https://dagrejs.github.io/project/dagre-d3/latest/dagre-d3.min.js"></script>-->
-<script src="//d3js.org/d3.v7.min.js"></script>
+<script src="/js/d3.v7.min.js"></script>
 <script src="https://unpkg.com/@hpcc-js/wasm@2.20.0/dist/graphviz.umd.js"></script>
 <script src="https://unpkg.com/d3-graphviz@5.6.0/build/d3-graphviz.js"></script>
 <script  src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>

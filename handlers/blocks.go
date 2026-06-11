@@ -257,6 +257,7 @@ func buildBlocksPageData(firstSlot uint64, pageSize uint64, displayColumns strin
 
 			slotData := &models.BlocksPageDataSlot{
 				Slot:                  slot,
+				Rank:                  dbSlot.Rank,
 				Epoch:                 uint64(chainState.EpochOfSlot(phase0.Slot(slot))),
 				Ts:                    chainState.SlotToTime(phase0.Slot(slot)),
 				Finalized:             finalized,

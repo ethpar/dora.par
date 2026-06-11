@@ -160,7 +160,7 @@ func (al *alertsSender) checkAndSendAlertEpoch(epoch phase0.Epoch, slotNumber ph
 				vote = 98
 			}
 			if vote != epochAlert.Percent {
-				if vote < 90 {
+				if vote < 98 {
 					isAI = true
 				}
 				epochAlert.Percent = vote
@@ -274,7 +274,6 @@ func (al *alertsSender) getLogs(epoch phase0.Epoch, time time.Time, isAI bool) {
 	}
 	defer resp.Body.Close()
 
-	// 5. Обработка специфических HTTP-статусов авторизации
 	switch resp.StatusCode {
 	case http.StatusOK:
 		// all normal
@@ -295,7 +294,7 @@ func (al *alertsSender) getLogs(epoch phase0.Epoch, time time.Time, isAI bool) {
 		return
 	}
 
-	al.indexer.logger.Infof("epochAlert Logs read:")
+	al.indexer.logger.Infof("epochAlert Logs read isAi:%v", isAI)
 	al.indexer.logger.Infof(string(body))
 	if isAI && utils.Config.Alert.AiEnabled {
 		al.getAi(epoch)
@@ -332,7 +331,6 @@ func (al *alertsSender) getAi(epoch phase0.Epoch) {
 	}
 	defer resp.Body.Close()
 
-	// 5. Обработка специфических HTTP-статусов авторизации
 	switch resp.StatusCode {
 	case http.StatusOK:
 		// all normal

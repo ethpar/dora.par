@@ -334,7 +334,7 @@
                       {{ end }}</td>
                     {{- end }}
                     {{- if $g.DisplaySyncAgg }}
-                      <td>{{ if not (eq $slot.Status 0) }}{{ formatPercentageAlert $slot.SyncParticipation 2 95 80 }}{{ end }}</td>
+                      <td>{{ if not (eq $slot.Status 0) }}{{ formatPercentageAlert $slot.SyncParticipation 2 95 80 $slot.Rank}}{{ end }}</td>
                     {{- end }}
                     {{- if $g.DisplayMevBlock }}
                       <td>{{ if not (eq $slot.Status 0) }}

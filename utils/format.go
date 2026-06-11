@@ -68,18 +68,22 @@ func FormatBaseFee(weiValue uint64) template.HTML {
 	}
 }
 
-func formatPercentageAlert(num float64, precision int, warnBelow float64, errBelow float64) template.HTML {
+func formatPercentageAlert(num float64, precision int, warnBelow float64, errBelow float64, rank uint64) template.HTML {
 	p := message.NewPrinter(language.English)
 	f := fmt.Sprintf("%%.%vf", precision)
 	s := strings.TrimRight(strings.TrimRight(p.Sprintf(f, num), "0"), ".")
 	r := []rune(p.Sprintf(s, num))
-	switch {
-	case num < errBelow:
-		return template.HTML(fmt.Sprintf("<span class=\"text-danger\">%s%%</span>", string(r)))
-	case num < warnBelow:
-		return template.HTML(fmt.Sprintf("<span class=\"text-warning\">%s%%</span>", string(r)))
-	default:
-		return template.HTML(fmt.Sprintf("%s%%", string(r)))
+	if rank == 0 {
+		switch {
+		case num < errBelow:
+			return template.HTML(fmt.Sprintf("<span class=\"text-danger\">%s%%</span>", string(r)))
+		case num < warnBelow:
+			return template.HTML(fmt.Sprintf("<span class=\"text-warning\">%s%%</span>", string(r)))
+		default:
+			return template.HTML(fmt.Sprintf("%s%%", string(r)))
+		}
+	} else {
+		return ""
 	}
 }
 

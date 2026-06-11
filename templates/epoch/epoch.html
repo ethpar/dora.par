@@ -215,11 +215,11 @@
                   <td data-timer="{{ $slot.Ts.Unix }}"><span data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="{{ $slot.Ts }}">{{ formatRecentTimeShort $slot.Ts }}</span></td>
                   <td>{{ if gt $slot.Slot 0 }}{{ formatValidatorWithIndex $slot.Proposer $slot.ProposerName }}{{ end }}</td>
                   {{ if or $epoch.Synchronized (not (eq $slot.Status 0)) }}
-                  <td class="d-none d-md-table-cell">{{ if not (eq $slot.Status 0) }}{{ $slot.AttestationCount }}{{ end }}</td>
-                  <td>{{ if not (eq $slot.Status 0) }}{{ $slot.DepositCount }} / {{ $slot.ExitCount }}{{ end }}</td>
-                  <td>{{ if not (eq $slot.Status 0) }}{{ $slot.ProposerSlashingCount }} / {{ $slot.AttesterSlashingCount }}{{ end }}</td>
+                  <td class="d-none d-md-table-cell">{{ if and (not (eq $slot.Status 0)) (eq $slot.Rank 0) }}{{ $slot.AttestationCount }}{{ end }}</td>
+                  <td>{{ if and (not (eq $slot.Status 0)) (eq $slot.Rank 0) }}{{ $slot.DepositCount }} / {{ $slot.ExitCount }}{{ end }}</td>
+                  <td>{{ if and (not (eq $slot.Status 0)) (eq $slot.Rank 0) }}{{ $slot.ProposerSlashingCount }} / {{ $slot.AttesterSlashingCount }}{{ end }}</td>
                   <td>{{ if not (eq $slot.Status 0) }}{{ $slot.EthTransactionCount }} / {{ $slot.BlobCount }}{{ end }}</td>
-                  <td>{{ if not (eq $slot.Status 0) }}{{ formatFloat $slot.SyncParticipation 2 }}%{{ end }}</td>
+                  <td>{{ if and (not (eq $slot.Status 0)) (eq $slot.Rank 0) }}{{ formatFloat $slot.SyncParticipation 2 }}%{{ end }}</td>
                   <td>{{ if not (eq $slot.Status 0) }}{{ formatGraffiti $slot.Graffiti }}{{ end }}</td>
                   <td><a href="/pool/{{ $slot.Slot }}" class="badge rounded-pill text-bg-success">...</a></td>
                   {{ else }}

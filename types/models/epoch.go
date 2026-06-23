@@ -29,6 +29,7 @@ type EpochPageData struct {
 	SyncParticipation       float64              `json:"sync_participation"`
 	ValidatorCount          uint64               `json:"validator_count"`
 	AverageValidatorBalance uint64               `json:"avg_validator_balance"`
+	SlotCount               uint64               `json:"slot_count"`
 	BlockCount              uint64               `json:"block_count"`
 	CanonicalCount          uint64               `json:"canonical_count"`
 	MissedCount             uint64               `json:"missed_count"`

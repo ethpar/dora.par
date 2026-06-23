@@ -449,6 +449,7 @@ func buildFilteredSlotsPageData(pageIdx uint64, pageSize uint64, graffiti string
 
 		slotData := &models.SlotsFilteredPageDataSlot{
 			Slot:         uint64(slot),
+			Rank:         0,
 			Epoch:        uint64(chainState.EpochOfSlot(slot)),
 			Ts:           chainState.SlotToTime(slot),
 			Finalized:    finalizedEpoch >= chainState.EpochOfSlot(slot),
@@ -462,6 +463,7 @@ func buildFilteredSlotsPageData(pageIdx uint64, pageSize uint64, graffiti string
 			if dbBlock.Block.Status != dbtypes.Missing {
 				slotData.Scheduled = false
 			}
+			slotData.Rank = dbBlock.Block.Rank
 			slotData.Status = uint8(dbBlock.Block.Status)
 			slotData.AttestationCount = dbBlock.Block.AttestationCount
 			slotData.DepositCount = dbBlock.Block.DepositCount

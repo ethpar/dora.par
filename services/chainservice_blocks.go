@@ -388,6 +388,7 @@ func (bs *ChainService) GetDbBlocksForSlots(firstSlot uint64, slotLimit uint32, 
 				if dbBlock != nil {
 					var j = 0
 					var blocksCount = 1
+
 					if block.ExecutionBlocks != nil && len(block.ExecutionBlocks) > 0 {
 						blocksCount = len(block.ExecutionBlocks) + 1
 						for i := 5; i >= 0; i-- {
@@ -1098,6 +1099,10 @@ func (bs *ChainService) GetHighestElBlockNumber(overrideForkId *beacon.ForkKey) 
 	}
 
 	return 0
+}
+
+func (bs *ChainService) GetTransactionsForBlocks(startBlock uint64, endBlock uint64) []*dbtypes.Transaction {
+	return db.GetTransactionsForBlocks(startBlock, endBlock)
 }
 
 func (bs *ChainService) GetTransactionsForAddress(address string, offset uint64, pageSize uint64, count uint64) []*dbtypes.Transaction {

@@ -88,6 +88,7 @@
     formatEth: function(x) { return formatFloat(x / 1000000000, 4); },
     formatFloat: function(x) { return formatFloat(x, 2); },
     formatValidator: function(idx, name) { return formatValidator(idx, name); },
+    formatValidatorWithIndex: function(idx, name) { return formatValidatorWithIndex(idx, name); },
     hexstr: function(x) { return "0x" + base64ToHex(x); },
   };
 
@@ -208,6 +209,17 @@
     }
     if(name != "") {
       return `<span class="validator-label validator-name" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="` + idx + `"><i class="fas ` + icon + `"></i> <a href="/validator/` + idx + `">` + escapeHtml(name) + `</a></span>`;
+    }
+    return `<span class="validator-label validator-index"><i class="fas ` + icon + `"></i> <a href="/validator/` + idx + `">` + idx + `</a></span>`
+  }
+
+  function formatValidatorWithIndex(idx, name) {
+    var icon = "fa-male mr-2";
+    if(idx >= 9223372036854775807n) {
+      return `<span class="validator-label validator-index"><i class="fas ` + icon + `"></i> unknown</span>`;
+    }
+    if(name != "") {
+      return `<span class="validator-label validator-name" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="` + idx + `"><i class="fas ` + icon + `"></i> <a href="/validator/` + idx + `">` +  idx + `(`+escapeHtml(name) + `)`+ `</a></span>`;
     }
     return `<span class="validator-label validator-index"><i class="fas ` + icon + `"></i> <a href="/validator/` + idx + `">` + idx + `</a></span>`
   }

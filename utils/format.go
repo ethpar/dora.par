@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -67,18 +68,22 @@ func FormatBaseFee(weiValue uint64) template.HTML {
 	}
 }
 
-func formatPercentageAlert(num float64, precision int, warnBelow float64, errBelow float64) template.HTML {
+func formatPercentageAlert(num float64, precision int, warnBelow float64, errBelow float64, rank uint64) template.HTML {
 	p := message.NewPrinter(language.English)
 	f := fmt.Sprintf("%%.%vf", precision)
 	s := strings.TrimRight(strings.TrimRight(p.Sprintf(f, num), "0"), ".")
 	r := []rune(p.Sprintf(s, num))
-	switch {
-	case num < errBelow:
-		return template.HTML(fmt.Sprintf("<span class=\"text-danger\">%s%%</span>", string(r)))
-	case num < warnBelow:
-		return template.HTML(fmt.Sprintf("<span class=\"text-warning\">%s%%</span>", string(r)))
-	default:
-		return template.HTML(fmt.Sprintf("%s%%", string(r)))
+	if rank == 0 {
+		switch {
+		case num < errBelow:
+			return template.HTML(fmt.Sprintf("<span class=\"text-danger\">%s%%</span>", string(r)))
+		case num < warnBelow:
+			return template.HTML(fmt.Sprintf("<span class=\"text-warning\">%s%%</span>", string(r)))
+		default:
+			return template.HTML(fmt.Sprintf("%s%%", string(r)))
+		}
+	} else {
+		return ""
 	}
 }
 
@@ -186,15 +191,38 @@ func formatBitvectorValidators(bits []byte, validators []types.NamedValidator) t
 	return template.HTML(buf.String())
 }
 
-func formatValidatorsList(validators []types.NamedValidator) template.HTML {
+func formatServersNames(serverNames []string) template.HTML {
 	var buf strings.Builder
-	if validators != nil {
-		for i := 0; i < len(validators); i++ {
-			{
-				val := validators[i]
-				buf.WriteString(fmt.Sprintf("<span class=\"validator-label validator-index\"><i class=\"fas %v\"></i> <a href=\"/validator/%v\">%v</a></span>", "fa-male mr-2", val.Index, val.Index))
-			}
+	for i := 0; i < len(serverNames); i++ {
+		val := serverNames[i]
+		buf.WriteString(fmt.Sprintf("<span>%v</span>", val))
+		buf.WriteString(fmt.Sprintf("<br>"))
+	}
+	return template.HTML(buf.String())
+}
+
+func formatValidatorsList(validatorsMap map[string][]*types.NamedValidator) template.HTML {
+
+	var buf strings.Builder
+	if validatorsMap != nil {
+		keys := make([]string, 0, len(validatorsMap))
+		for k := range validatorsMap {
+			keys = append(keys, k)
 		}
+		slices.Sort(keys)
+
+		for _, IP := range keys {
+			validators := validatorsMap[IP]
+			buf.WriteString(fmt.Sprintf("%v:", IP))
+			for i := 0; i < len(validators); i++ {
+				{
+					val := validators[i]
+					buf.WriteString(fmt.Sprintf("<span class=\"validator-label validator-index\"><i class=\"fas %v\"></i> <a href=\"/validator/%v\">%v</a></span>", "fa-male mr-2", val.Index, val.Index))
+				}
+			}
+			buf.WriteString(fmt.Sprintf("<br>"))
+		}
+
 	}
 	return template.HTML(buf.String())
 }
@@ -394,7 +422,7 @@ func formatValidator(index uint64, name string, icon string, withIndex bool) tem
 	} else if name != "" {
 		var nameLabel string
 		if withIndex {
-			nameLabel = fmt.Sprintf("%v (%v)", html.EscapeString(name), index)
+			nameLabel = fmt.Sprintf("%v (%v)", index, html.EscapeString(name))
 		} else {
 			nameLabel = html.EscapeString(name)
 		}

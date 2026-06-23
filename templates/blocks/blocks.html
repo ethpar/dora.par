@@ -156,7 +156,7 @@
                           </div>
                         </div>
                       {{ end }}</td>{{ end }}
-                      {{ if $g.DisplaySyncAgg }}<td>{{ if not (eq $slot.Status 0) }}{{ formatPercentageAlert $slot.SyncParticipation 2 95 80 }}{{ end }}</td>{{ end }}
+                      {{ if $g.DisplaySyncAgg }}<td>{{ if not (eq $slot.Status 0) }}{{ formatPercentageAlert $slot.SyncParticipation 2 95 80 $slot.Rank}}{{ end }}</td>{{ end }}
                       {{ if $g.DisplayMevBlock }}<td>{{ if not (eq $slot.Status 0) }}
                         {{ if $slot.IsMevBlock }}
                           <span class="badge rounded-pill text-bg-success" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="{{ $slot.MevBlockRelays }}">Yes</span>

@@ -464,6 +464,14 @@ func (dbw *dbWriter) buildDbEpoch(epoch phase0.Epoch, blocks []*Block, epochStat
 			}
 
 			blockBody := block.GetBlock()
+			txCount := 0
+			if block.ExecutionBlocks != nil {
+				for _, executionBlock := range block.ExecutionBlocks {
+					if executionBlock.Block.Transactions() != nil {
+						txCount = txCount + executionBlock.Block.Transactions().Len()
+					}
+				}
+			}
 			if blockBody == nil {
 				dbw.indexer.logger.Warnf("building db epoch: block body not found for aggregation: %v", block.Slot) //todo
 				continue
@@ -510,6 +518,7 @@ func (dbw *dbWriter) buildDbEpoch(epoch phase0.Epoch, blocks []*Block, epochStat
 			}
 
 			dbEpoch.EthTransactionCount += uint64(len(executionTransactions))
+			dbEpoch.EthTransactionCount += uint64(txCount)
 			dbEpoch.BlobCount += uint64(len(blobKzgCommitments))
 			dbEpoch.WithdrawCount += uint64(len(executionWithdrawals))
 

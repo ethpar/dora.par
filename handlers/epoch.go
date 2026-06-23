@@ -83,7 +83,7 @@ func getEpochPageData(epoch uint64) (*models.EpochPageData, error) {
 }
 
 func buildEpochPageData(epoch uint64) (*models.EpochPageData, time.Duration) {
-	logrus.Debugf("epoch page called: %v", epoch)
+	logrus.Debugf("epoch page called: %v", epoch) //
 
 	beaconIndexer := services.GlobalBeaconService.GetBeaconIndexer()
 	chainState := services.GlobalBeaconService.GetChainState()
@@ -153,20 +153,29 @@ func buildEpochPageData(epoch uint64) (*models.EpochPageData, time.Duration) {
 	dbSlots := services.GlobalBeaconService.GetDbBlocksForSlots(uint64(lastSlot), uint32(specs.SlotsPerEpoch), true, true)
 	dbIdx := 0
 	dbCnt := len(dbSlots)
+	slotCount := uint64(0)
 	blockCount := uint64(0)
+	pageData.EthTransactionCount = 0
 	for slotIdx := int64(lastSlot); slotIdx >= int64(firstSlot); slotIdx-- {
 		slot := uint64(slotIdx)
 		for dbIdx < dbCnt && dbSlots[dbIdx] != nil && dbSlots[dbIdx].Slot == slot {
 			dbSlot := dbSlots[dbIdx]
 			dbIdx++
 
-			switch dbSlot.Status {
-			case dbtypes.Orphaned:
-				pageData.OrphanedCount++
-			case dbtypes.Canonical:
-				pageData.CanonicalCount++
-			case dbtypes.Missing:
-				pageData.MissedCount++
+			if dbSlot.Rank == 0 {
+				switch dbSlot.Status {
+				case dbtypes.Orphaned:
+					pageData.OrphanedCount++
+				case dbtypes.Canonical:
+					pageData.CanonicalCount++
+				case dbtypes.Missing:
+					pageData.MissedCount++
+				}
+			}
+
+			proposerName := services.GlobalBeaconService.GetValidatorName(dbSlot.Proposer)
+			if proposerName == "" && (dbSlot.Status == dbtypes.Missing || dbSlot.Status == dbtypes.Orphaned) {
+				proposerName = services.GlobalBeaconService.GetENode(dbSlot.Proposer)
 			}
 
 			slotData := &models.EpochPageDataSlot{
@@ -176,7 +185,7 @@ func buildEpochPageData(epoch uint64) (*models.EpochPageData, time.Duration) {
 				Scheduled:             slot >= uint64(currentSlot) && dbSlot.Status == dbtypes.Missing,
 				Status:                uint8(dbSlot.Status),
 				Proposer:              dbSlot.Proposer,
-				ProposerName:          services.GlobalBeaconService.GetValidatorName(dbSlot.Proposer),
+				ProposerName:          proposerName,
 				AttestationCount:      dbSlot.AttestationCount,
 				DepositCount:          dbSlot.DepositCount,
 				ExitCount:             dbSlot.ExitCount,
@@ -189,18 +198,23 @@ func buildEpochPageData(epoch uint64) (*models.EpochPageData, time.Duration) {
 				BlockRoot:             dbSlot.Root,
 				Rank:                  dbSlot.Rank,
 			}
+			pageData.EthTransactionCount = pageData.EthTransactionCount + dbSlot.EthTransactionCount
 			if dbSlot.EthBlockNumber != nil {
 				slotData.WithEthBlock = true
 				slotData.EthBlockNumber = *dbSlot.EthBlockNumber
 			}
-			if slotData.Scheduled {
-				pageData.ScheduledCount++
-				pageData.MissedCount--
-			}
 			pageData.Slots = append(pageData.Slots, slotData)
 			blockCount++
+			if dbSlot.Rank == 0 {
+				slotCount++
+				if slotData.Scheduled {
+					pageData.ScheduledCount++
+					pageData.MissedCount--
+				}
+			}
 		}
 	}
+	pageData.SlotCount = uint64(slotCount)
 	pageData.BlockCount = uint64(blockCount)
 
 	var cacheTimeout time.Duration

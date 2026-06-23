@@ -173,8 +173,15 @@ type Config struct {
 	} `yaml:"monitor"`
 
 	Alert struct {
-		Enabled bool   `yaml:"enabled"  envconfig:"ALERT_ENABLED"`
-		RootDir string `yaml:"rootDir" envconfig:"ALERT_ROOTDIR"`
+		Enabled       bool   `yaml:"enabled"  envconfig:"ALERT_ENABLED"`
+		RootDir       string `yaml:"rootDir" envconfig:"ALERT_ROOTDIR"`
+		TekuLogDir    string `yaml:"tekuLogDir" envconfig:"ALERT_TEKULOG"`
+		DotScript     string `yaml:"dotScript" envconfig:"ALERT_DOTSCRIPT"`
+		EnodesDataDir string `yaml:"enodes" envconfig:"ALERT_ENODES"`
+		LogToken      string `yaml:"logToken" envconfig:"ALERT_LOG_TOKEN"`
+		LogUrl        string `yaml:"logUrl" envconfig:"ALERT_LOG"`
+		AiEnabled     bool   `yaml:"aiEnabled"  envconfig:"ALERT_AIENABLED"`
+		AiUrl         string `yaml:"aiUrl" envconfig:"ALERT_ID"`
 	} `yaml:"alert"`
 
 	KillSwitch struct {

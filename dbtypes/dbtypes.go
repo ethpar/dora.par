@@ -133,7 +133,7 @@ type UnfinalizedBlock struct {
 	MinExecTime uint32                 `db:"min_exec_time"`
 	MaxExecTime uint32                 `db:"max_exec_time"`
 	ExecTimes   []byte                 `db:"exec_times"`
-	Rank      uint64                 `db:"rank"`
+	Rank        uint64                 `db:"rank"`
 }
 
 type UnfinalizedExecutionBlock struct {
@@ -482,4 +482,6 @@ type Validator struct {
 	ActivationEpoch            int64  `db:"activation_epoch"`
 	ExitEpoch                  int64  `db:"exit_epoch"`
 	WithdrawableEpoch          int64  `db:"withdrawable_epoch"`
+	Enode                      string `db:"enode"`
+	Ip                         string `db:"ip"`
 }

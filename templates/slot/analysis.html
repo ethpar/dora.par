@@ -2,17 +2,32 @@
 <div class="card-body px-0 py-1">
     <div class="row border-bottom p-2 mx-0">
         <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Validators who did not vote">Validators who did not vote:</span></div>
-        <div class="col-md-10 d-flex flex-wrap">
+        <div class="col-md-10">
             {{ formatValidatorsList .Block.SyncAggCommitteeMissed }}
         </div>
     </div>
 </div>
 <div class="card-body px-0 py-1">
     <div class="row border-bottom p-2 mx-0">
-        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="BCW validators who did not vote">BCW validators who did not vote:</span></div>
-        <div class="col-md-10 d-flex flex-wrap">
-            {{ formatValidatorsList .Block.BCWMissed }}
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="Servers whose validators had different votes">Servers whose validators had different votes:</span></div>
+        <div class="col-md-10">
+            {{ formatServersNames .Block.DifferentVotesServers }}
         </div>
+    </div>
+</div>
+<!--<div class="card-body px-0 py-1">
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="MemPool">MemPool:</span></div>
+        <div class="col-md-10">
+            <a href="/pool/{{ .Slot }}" class="badge rounded-pill text-bg-success">...</a>
+        </div>
+    </div>
+</div>-->
+<div class="card-body px-0 py-1">
+    <div class="row border-bottom p-2 mx-0">
+        <div class="col-md-2"><span data-bs-toggle="tooltip" data-bs-placement="top" title="MemPool">MemPool:</span></div>
+        <canvas id="pdf-container">
+        </canvas>
     </div>
 </div>
 

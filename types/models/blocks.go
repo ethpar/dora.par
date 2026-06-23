@@ -55,6 +55,7 @@ type BlocksPageData struct {
 
 type BlocksPageDataSlot struct {
 	Slot                  uint64                     `json:"slot"`
+	Rank                  uint64                     `json:"rank"`
 	Epoch                 uint64                     `json:"epoch"`
 	Ts                    time.Time                  `json:"ts"`
 	Finalized             bool                       `json:"scheduled"`

@@ -34,7 +34,7 @@ type ChainService struct {
 	consensusPool        *consensus.Pool
 	executionPool        *execution.Pool
 	beaconIndexer        *beacon.Indexer
-	txIndexer       *beacon.TxIndexer
+	txIndexer            *beacon.TxIndexer
 	validatorNames       *ValidatorNames
 	depositIndexer       *execindexer.DepositIndexer
 	consolidationIndexer *execindexer.ConsolidationIndexer
@@ -42,6 +42,7 @@ type ChainService struct {
 	mevRelayIndexer      *mevrelay.MevIndexer
 	snooperManager       *snooper.SnooperManager
 	started              bool
+	enodes               *db.Enodes
 }
 
 var GlobalBeaconService *ChainService
@@ -66,6 +67,8 @@ func InitChainService(ctx context.Context, logger logrus.FieldLogger) {
 	// Set execution time provider
 	beaconIndexer.SetExecutionTimeProvider(snooper.NewExecutionTimeProvider(snooperManager.GetCache()))
 
+	eNodes := db.InitEnodes()
+
 	GlobalBeaconService = &ChainService{
 		logger:          logger,
 		consensusPool:   consensusPool,
@@ -75,6 +78,7 @@ func InitChainService(ctx context.Context, logger logrus.FieldLogger) {
 		validatorNames:  validatorNames,
 		mevRelayIndexer: mevRelayIndexer,
 		snooperManager:  snooperManager,
+		enodes:          eNodes,
 	}
 }
 
@@ -420,6 +424,14 @@ func (bs *ChainService) isCanonicalForkId(forkId uint64, canonicalForkIds []uint
 }
 
 func (bs *ChainService) GetValidatorName(index uint64) string {
+	return bs.validatorNames.GetValidatorName(index)
+}
+
+func (bs *ChainService) GetENode(index uint64) string {
+	return bs.enodes.GetENode(index)
+}
+
+func (bs *ChainService) GetValidatorEnode(index uint64) string {
 	return bs.validatorNames.GetValidatorName(index)
 }
 

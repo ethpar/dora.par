@@ -411,13 +411,18 @@ func buildIndexPageRecentBlocksData(pageData *models.IndexPageData, recentBlockC
 		if blockData == nil {
 			continue
 		}
+		proposerName := services.GlobalBeaconService.GetValidatorName(blockData.Proposer)
+		if proposerName == "" && (blockData.Status == dbtypes.Missing || blockData.Status == dbtypes.Orphaned) {
+			proposerName = services.GlobalBeaconService.GetENode(blockData.Proposer)
+		}
+
 		blockModel := &models.IndexPageDataBlocks{
 			Epoch:        uint64(chainState.EpochOfSlot(phase0.Slot(blockData.Slot))),
 			Slot:         blockData.Slot,
 			Rank:         blockData.Rank,
 			Ts:           chainState.SlotToTime(phase0.Slot(blockData.Slot)),
 			Proposer:     blockData.Proposer,
-			ProposerName: services.GlobalBeaconService.GetValidatorName(blockData.Proposer),
+			ProposerName: proposerName,
 			Status:       uint64(blockData.Status),
 			BlockRoot:    blockData.Root,
 		}
@@ -460,6 +465,11 @@ func buildIndexPageRecentSlotsData(pageData *models.IndexPageData, firstSlot pha
 		for dbIdx < dbCnt && dbSlots[dbIdx] != nil && dbSlots[dbIdx].Slot == slot {
 			dbSlot := dbSlots[dbIdx]
 
+			proposerName := services.GlobalBeaconService.GetValidatorName(dbSlot.Proposer)
+			if proposerName == "" && (dbSlot.Status == dbtypes.Missing || dbSlot.Status == dbtypes.Orphaned) {
+				proposerName = services.GlobalBeaconService.GetENode(dbSlot.Proposer)
+			}
+
 			slotData := &models.IndexPageDataSlots{
 				Slot:         slot,
 				Rank:         dbSlot.Rank,
@@ -467,7 +477,7 @@ func buildIndexPageRecentSlotsData(pageData *models.IndexPageData, firstSlot pha
 				Ts:           chainState.SlotToTime(phase0.Slot(slot)),
 				Status:       uint64(dbSlot.Status),
 				Proposer:     dbSlot.Proposer,
-				ProposerName: services.GlobalBeaconService.GetValidatorName(dbSlot.Proposer),
+				ProposerName: proposerName,
 				BlockRoot:    dbSlot.Root,
 				ParentRoot:   dbSlot.ParentRoot,
 				ForkGraph:    make([]*models.IndexPageDataForkGraph, 0),

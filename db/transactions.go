@@ -8,6 +8,25 @@ import (
 	"time"
 )
 
+func GetTransactionsForBlocks(startBlock uint64, endBlock uint64) []*dbtypes.Transaction {
+	transactions := []*dbtypes.Transaction{}
+
+	err := ReaderDb.Select(&transactions, `
+	SELECT
+		"hash","block_number",block_rank,created_at,nonce,block_hash,transaction_index,"from","to",value,gas,gas_price,
+			                          is_error,receipt_status,input,contract_address,cumulative_gas_used,gas_used,confirmations, 
+			                          erc20_method, erc20_address_to, erc20_value
+	FROM transactions
+	WHERE "block_number" >= $1 and block_number <= $2
+	ORDER BY block_number desc, block_rank
+	`, startBlock, endBlock)
+	if err != nil {
+		logger.Errorf("Error while fetching Transactions: %v", err)
+		return nil
+	}
+	return transactions
+}
+
 func GetTransactions(address string, start uint64, pageSize uint64, count uint64) []*dbtypes.Transaction {
 	transactions := []*dbtypes.Transaction{}
 	if pageSize < count {

@@ -498,7 +498,7 @@ func (indexer *Indexer) runIndexerLoop() {
 			if slotIndex > 27 {
 				indexer.logger.Infof("epochAlert new slot epoch %v lastPrecalcRunEpoch %v slotIndex %v", epoch, indexer.lastPrecalcRunEpoch, slotIndex)
 			}
-			if epoch != indexer.currentSavedEpoch && slotIndex > 2 {
+			if epoch != indexer.currentSavedEpoch && slotIndex > 4 {
 				indexer.logger.Infof("epochAlert new epoch %v slotIndex %v", epoch, slotIndex)
 				indexer.alertsSender.checkAndSendAlertEpoch(indexer.currentSavedEpoch,
 					chainState.EpochStartSlot(indexer.currentSavedEpoch), chainState.SlotToTime(chainState.EpochToSlot(indexer.currentSavedEpoch)))

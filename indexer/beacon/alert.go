@@ -39,13 +39,15 @@ func newAlertsSender(indexer *Indexer) *alertsSender {
 	/*return &alertsSender{
 		indexer: indexer,
 	}*/
-	d := &alertsSender{
+	sender := &alertsSender{
 		indexer: indexer,
 	}
 	//d1 := 3.344565656565
+	//d.sendSlack(uint64(1), uint64(98), float64(d1))
 	//d.sendEmail(uint64(1), uint64(98), float64(d1))
 	//d.sendMonitor(uint64(1), uint64(98), float64(d1))
-	return d
+	//sender.getAi(phase0.Epoch(111331))
+	return sender
 }
 
 func (al *alertsSender) checkAndSendAlertSlot(epoch phase0.Epoch, slotIndex phase0.Slot) {
@@ -284,7 +286,7 @@ func (al *alertsSender) getLogs(epoch phase0.Epoch, time time.Time, isAI bool) {
 		al.indexer.logger.Warnf("epochAlert Error 400: Wrong parameters.")
 		return
 	default:
-		al.indexer.logger.Warnf("SepochAlert erver error. Статус: %s (%d)", resp.Status, resp.StatusCode)
+		al.indexer.logger.Warnf("SepochAlert erver error. Status: %s (%d)", resp.Status, resp.StatusCode)
 		return
 	}
 
@@ -341,7 +343,7 @@ func (al *alertsSender) getAi(epoch phase0.Epoch) {
 		al.indexer.logger.Warnf("epochAlert Error 400: Wrong parameters.")
 		return
 	default:
-		al.indexer.logger.Warnf("SepochAlert erver error. Статус: %s (%d)", resp.Status, resp.StatusCode)
+		al.indexer.logger.Warnf("SepochAlert erver error. Status: %s (%d)", resp.Status, resp.StatusCode)
 		return
 	}
 
@@ -353,6 +355,10 @@ func (al *alertsSender) getAi(epoch phase0.Epoch) {
 
 	al.indexer.logger.Infof("epochAlert Logs ai complete:")
 	al.indexer.logger.Infof(string(body))
+	err = os.WriteFile(utils.Config.Alert.RootDir+"/"+epochStr+"/report.md", body, 0644)
+	if err != nil {
+		al.indexer.logger.Warnf("epochAlert error: %v", err)
+	}
 }
 func (al *alertsSender) checkAndSendAlert(tx *sqlx.Tx, epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes) {
 

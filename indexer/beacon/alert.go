@@ -243,6 +243,7 @@ func (al *alertsSender) getLogs(epoch phase0.Epoch, time time.Time, isAI bool) {
 	utcTime := time.UTC()
 	baseURI := utils.Config.Alert.LogUrl
 	token := utils.Config.Alert.LogToken
+	network := utils.Config.Monitor.Subject
 
 	epochStr := strconv.FormatUint(uint64(epoch), 10)
 	period := utcTime.Format("2006-01-02 15:04:05")
@@ -250,6 +251,7 @@ func (al *alertsSender) getLogs(epoch phase0.Epoch, time time.Time, isAI bool) {
 	params := url.Values{}
 	params.Add("epoch", epochStr)
 	params.Add("period", period)
+	params.Add("network", network)
 	al.indexer.logger.Infof("epochAlert get logs for  %v  time %v", epochStr, period)
 
 	fullURL := fmt.Sprintf("%s?%s", baseURI, params.Encode())
@@ -307,10 +309,13 @@ func (al *alertsSender) getAi(epoch phase0.Epoch) {
 
 	baseURI := utils.Config.Alert.AiUrl
 	token := utils.Config.Alert.LogToken
+	network := utils.Config.Monitor.Subject
+
 	epochStr := strconv.FormatUint(uint64(epoch), 10)
 
 	params := url.Values{}
 	params.Add("epoch", epochStr)
+	params.Add("network", network)
 	al.indexer.logger.Infof("epochAlert get ai for  %v", epochStr)
 
 	fullURL := fmt.Sprintf("%s?%s", baseURI, params.Encode())

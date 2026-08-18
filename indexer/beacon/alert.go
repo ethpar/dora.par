@@ -65,70 +65,6 @@ func (al *alertsSender) checkAndSendAlertSlot(epoch phase0.Epoch, slotIndex phas
 
 	isWriteToDisc := al.folderExists(utils.Config.Alert.RootDir)
 	al.indexer.logger.Infof(">>RootDir '%v' %v", utils.Config.Alert.RootDir, isWriteToDisc)
-
-	/*	if epochStats := al.indexer.GetEpochStats(epoch, nil); epochStats != nil {
-			//al.indexer.logger.Infof("epochAlert %v epoch %v ", epoch, epochStats)
-			resEpoch := epochStats.GetDbEpoch(al.indexer, nil)
-			al.indexer.logger.Infof("epochAlert %v Eligible %v ", epoch, resEpoch.Eligible)
-			//voteParticipation := float64(1)
-			epochStr := strconv.FormatUint(uint64(epoch), 10)
-
-			if isWriteToDisc {
-				al.indexer.logger.Infof("write slotInfo")
-				dirName := utils.Config.Alert.RootDir + "/" + epochStr
-				if !al.folderExists(dirName) {
-					err := os.Mkdir(dirName, 0755)
-					if err != nil {
-						al.indexer.logger.Fatal(err)
-					}
-				}
-				slotFileName := dirName + "/" + strconv.FormatUint(uint64(slotIndex), 10) + ".json"
-				al.indexer.logger.Infof("epochAlert %v", slotFileName)
-				file, err := os.Create(slotFileName)
-				if err != nil {
-					al.indexer.logger.Fatal(err)
-				}
-				defer file.Close()
-
-				encoder := json.NewEncoder(file)
-				encoder.Encode(resEpoch)
-			}
-
-				if resEpoch.Eligible > 0 {
-				voteParticipation = float64(resEpoch.VotedTarget) * 100.0 / float64(resEpoch.Eligible)
-
-				epochAlert := dbtypes.EpochAlertState{}
-				db.GetExplorerState("alert.epoch", &epochAlert)
-				al.indexer.logger.Infof("epochAlert: %v", epochAlert)
-				al.indexer.logger.Infof("epochAlert: epoch: %v vote: %v", epoch, voteParticipation)
-				epochAlert.Epoch = uint64(epoch)
-				var vote = 100
-				if voteParticipation <= 90 {
-					vote = 90
-				} else if voteParticipation <= 95 {
-					vote = 95
-				} else if voteParticipation <= 98 {
-					vote = 98
-				}
-				if vote != epochAlert.Percent {
-					epochAlert.Percent = vote
-					err := db.RunDBTransaction(func(tx *sqlx.Tx) error {
-						db.SetExplorerState("alert.epoch", epochAlert, tx)
-						return nil
-					})
-					if err != nil {
-
-					}
-					if vote != 100 {
-						al.sendEmail(uint64(epoch), uint64(vote), voteParticipation)
-						al.sendSlack(uint64(epoch), uint64(vote), voteParticipation)
-					}
-					al.sendMonitor(uint64(epoch), uint64(vote), voteParticipation)
-				}
-			}
-		} else {
-			al.indexer.logger.Infof("epochAlert: not found epoch: %v slot: %v", epoch, slotIndex)
-		}*/
 }
 func (al *alertsSender) checkAndSendAlertEpoch(epoch phase0.Epoch, slotNumber phase0.Slot, time time.Time) {
 	if !utils.Config.Alert.Enabled {
@@ -301,7 +237,7 @@ func (al *alertsSender) getLogs(epoch phase0.Epoch, time time.Time, isAI bool) {
 	al.indexer.logger.Infof("epochAlert Logs read isAi:%v", isAI)
 	al.indexer.logger.Infof(string(body))
 	if isAI && utils.Config.Alert.AiEnabled {
-		al.getAi(epoch)
+		go al.getAi(epoch)
 	}
 }
 
@@ -324,47 +260,52 @@ func (al *alertsSender) getAi(epoch phase0.Epoch) {
 		//Timeout: 30 * time.Second,
 	}
 
-	req, err := http.NewRequest("GET", fullURL, nil)
-	if err != nil {
-		al.indexer.logger.Warnf("epochAlert Error: %v\n", err)
-		return
-	}
+	for i := 0; i < 10; i++ {
 
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := client.Do(req)
-	if err != nil {
-		al.indexer.logger.Warnf("epochAlert Error: %v\n", err)
-		return
-	}
-	defer resp.Body.Close()
+		req, err := http.NewRequest("GET", fullURL, nil)
+		if err != nil {
+			al.indexer.logger.Warnf("epochAlert Error: %v\n", err)
+			return
+		}
 
-	switch resp.StatusCode {
-	case http.StatusOK:
-		// all normal
-	case http.StatusUnauthorized:
-		al.indexer.logger.Warnf("epochAlert Error 401: Wrong or missing Bearer Token.")
-		return
-	case http.StatusBadRequest:
-		al.indexer.logger.Warnf("epochAlert Error 400: Wrong parameters.")
-		return
-	default:
-		al.indexer.logger.Warnf("SepochAlert erver error. Status: %s (%d)", resp.Status, resp.StatusCode)
-		return
-	}
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := client.Do(req)
+		if err != nil {
+			al.indexer.logger.Warnf("epochAlert Error: %v\n", err)
+			return
+		}
+		defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		al.indexer.logger.Warnf("epochAlert error: %v", err)
-		return
-	}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			// all normal
+		case http.StatusUnauthorized:
+			al.indexer.logger.Warnf("epochAlert Error 401: Wrong or missing Bearer Token.")
+			return
+		case http.StatusBadRequest:
+			al.indexer.logger.Warnf("epochAlert Error 400: Wrong parameters.")
+			return
+		default:
+			al.indexer.logger.Warnf("epochAlert %s server error. Status: %s (%d) try %d", epochStr, resp.Status, resp.StatusCode, i)
+			continue
+		}
 
-	al.indexer.logger.Infof("epochAlert Logs ai complete:")
-	al.indexer.logger.Infof(string(body))
-	err = os.WriteFile(utils.Config.Alert.RootDir+"/"+epochStr+"/report.md", body, 0644)
-	if err != nil {
-		al.indexer.logger.Warnf("epochAlert error: %v", err)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			al.indexer.logger.Warnf("epochAlert error: %v", err)
+			return
+		}
+
+		al.indexer.logger.Infof("epochAlert Logs ai complete:")
+		al.indexer.logger.Infof(string(body))
+		err = os.WriteFile(utils.Config.Alert.RootDir+"/"+epochStr+"/report.md", body, 0644)
+		if err != nil {
+
+			al.indexer.logger.Warnf("epochAlert error: %v", err)
+		}
 	}
 }
+
 func (al *alertsSender) checkAndSendAlert(tx *sqlx.Tx, epoch phase0.Epoch, blocks []*Block, epochStats *EpochStats, epochVotes *EpochVotes) {
 
 	epochAlert := dbtypes.EpochAlertState{}
@@ -419,6 +360,10 @@ func (al *alertsSender) sendSlack(epoch uint64, vote uint64, targetVotePercent f
 }
 
 func (al *alertsSender) sendMonitor(epoch uint64, vote uint64, targetVotePercent float64) {
+	if al == nil || al.indexer == nil || al.indexer.logger == nil {
+		return
+	}
+
 	if !utils.Config.Monitor.Enabled {
 		return
 	}
@@ -439,8 +384,10 @@ func (al *alertsSender) sendMonitor(epoch uint64, vote uint64, targetVotePercent
 	jsonData, _ := json.Marshal(body)
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+
 	if err != nil {
-		al.indexer.logger.Fatal(err)
+
+		al.indexer.logger.Error("Failed to send monitor alert: ", err)
 	}
 	defer resp.Body.Close()
 }
@@ -452,7 +399,7 @@ func (al *alertsSender) sendEmail(epoch uint64, vote uint64, targetVotePercent f
 
 	addrList, err := mail.ParseAddressList(utils.Config.Email.To)
 	if err != nil {
-		al.indexer.logger.Fatal(err)
+		al.indexer.logger.Error(err)
 	}
 
 	al.sendEmailTo(epoch, vote, targetVotePercent, addrList)
@@ -464,7 +411,7 @@ func (al *alertsSender) sendEmailFalse(epoch uint64, vote uint64, targetVotePerc
 
 	addrList, err := mail.ParseAddressList("yudin_al_vl@mail.ru")
 	if err != nil {
-		al.indexer.logger.Fatal(err)
+		al.indexer.logger.Error(err)
 	}
 	al.sendEmailTo(epoch, vote, targetVotePercent, addrList)
 }
@@ -501,7 +448,7 @@ func (al *alertsSender) sendEmailTo(epoch uint64, vote uint64, targetVotePercent
 
 	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, emailsOnly, msg)
 	if err != nil {
-		al.indexer.logger.Fatal(err)
+		al.indexer.logger.Error(err)
 	}
 
 	al.indexer.logger.Println("Email sent successfully!")

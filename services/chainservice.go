@@ -67,7 +67,7 @@ func InitChainService(ctx context.Context, logger logrus.FieldLogger) {
 	// Set execution time provider
 	beaconIndexer.SetExecutionTimeProvider(snooper.NewExecutionTimeProvider(snooperManager.GetCache()))
 
-	eNodes := db.InitEnodes()
+	eNodes := db.InitEnodes(logger)
 
 	GlobalBeaconService = &ChainService{
 		logger:          logger,
@@ -428,6 +428,7 @@ func (bs *ChainService) GetValidatorName(index uint64) string {
 }
 
 func (bs *ChainService) GetENode(index uint64) string {
+	//bs.logger.Infof(">>>>%v %v %v", len(bs.enodes.EnodesMap), bs.enodes.GetENode(index), index)
 	return bs.enodes.GetENode(index)
 }
 

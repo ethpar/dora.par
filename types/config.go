@@ -178,6 +178,7 @@ type Config struct {
 		TekuLogDir    string `yaml:"tekuLogDir" envconfig:"ALERT_TEKULOG"`
 		DotScript     string `yaml:"dotScript" envconfig:"ALERT_DOTSCRIPT"`
 		EnodesDataDir string `yaml:"enodes" envconfig:"ALERT_ENODES"`
+		EnodesUrl     string `yaml:"enodesUrl" envconfig:"ENODES_URL"`
 		LogToken      string `yaml:"logToken" envconfig:"ALERT_LOG_TOKEN"`
 		LogUrl        string `yaml:"logUrl" envconfig:"ALERT_LOG"`
 		AiEnabled     bool   `yaml:"aiEnabled"  envconfig:"ALERT_AIENABLED"`
